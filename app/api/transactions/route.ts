@@ -82,6 +82,31 @@ export const GET = withAuth(
               account: { select: { code: true, name: true } },
             },
           },
+          reconciliations: {
+            where: { status: "PROPOSED" },
+            take: 1,
+            orderBy: { createdAt: "desc" },
+            select: {
+              id: true,
+              type: true,
+              confidenceScore: true,
+              matchReason: true,
+              difference: true,
+              differenceReason: true,
+              resolution: true,
+              invoiceId: true,
+              invoiceAmount: true,
+              bankAmount: true,
+              invoice: {
+                select: {
+                  id: true,
+                  number: true,
+                  totalAmount: true,
+                  contact: { select: { name: true } },
+                },
+              },
+            },
+          },
           _count: {
             select: { reconciliations: true },
           },
@@ -93,8 +118,17 @@ export const GET = withAuth(
       prisma.bankTransaction.count({ where }),
     ]);
 
+    // Flatten reconciliations[0] → reconciliation for the frontend
+    const mapped = data.map((tx) => {
+      const { reconciliations, ...rest } = tx;
+      return {
+        ...rest,
+        reconciliation: reconciliations?.[0] ?? null,
+      };
+    });
+
     return NextResponse.json(
-      paginatedResponse(data, total, filters.page, filters.pageSize)
+      paginatedResponse(mapped, total, filters.page, filters.pageSize)
     );
   },
   "read:transactions"

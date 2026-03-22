@@ -101,7 +101,7 @@ export const PUT = withAuth(
       entityType: "Company",
       entityId: company.id,
       details: cleanUpdates,
-    }).catch(() => {});
+    }).catch((err) => console.warn("[company] Non-critical operation failed:", err instanceof Error ? err.message : err));
 
     return NextResponse.json({ company: updated });
   },

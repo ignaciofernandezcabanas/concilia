@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { anthropic } from "@/lib/ai/client";
 import { withRateLimit } from "@/lib/ai/rate-limiter";
 import type { BankTransaction, Invoice, Contact } from "@prisma/client";
 
@@ -69,7 +69,7 @@ export async function findLlmMatch(
     return null;
   }
 
-  const client = new Anthropic();
+  const client = anthropic;
 
   const invoiceList = pendingInvoices.slice(0, MAX_INVOICES_IN_PROMPT);
 

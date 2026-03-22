@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Scale,
 
+  ListFilter,
   Bell,
   Settings,
   LogOut,
@@ -29,6 +30,7 @@ const mainNav = [
 ];
 
 const secondaryNav = [
+  { label: "Reglas", icon: ListFilter, href: "/reglas" },
   { label: "Notificaciones", icon: Bell, href: "/notificaciones" },
   { label: "Ajustes", icon: Settings, href: "/ajustes" },
 ];

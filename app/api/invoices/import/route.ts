@@ -163,7 +163,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     entityType: "Invoice",
     entityId: "batch",
     details: { filesCount: files.length, created, skipped, errors: errors.length },
-  }).catch(() => {});
+  }).catch((err) => console.warn("[import] Non-critical operation failed:", err instanceof Error ? err.message : err));
 
   return NextResponse.json({
     success: true,

@@ -8,7 +8,7 @@
  * - Brief: max 2-3 sentences.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import { anthropic } from "@/lib/ai/client";
 import { withRateLimit } from "@/lib/ai/rate-limiter";
 import type { BankTransaction } from "@prisma/client";
 
@@ -82,7 +82,7 @@ function buildExplainerPrompt(ctx: ExplainContext): string {
 export async function generateExplanation(ctx: ExplainContext): Promise<string | null> {
   try {
     const response = await withRateLimit(() =>
-      new Anthropic().messages.create({
+      anthropic.messages.create({
         model: MODEL,
         max_tokens: 300,
         system: EXPLAINER_SYSTEM_PROMPT,

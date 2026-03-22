@@ -3,61 +3,26 @@
 import { useState, useMemo } from "react";
 import TopBar from "@/components/TopBar";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import Badge from "@/components/Badge";
-import { useInvoices, useTransactions } from "@/hooks/useApi";
+import { useFetch } from "@/hooks/useApi";
+import { qs } from "@/lib/api-client";
 import { formatAmount, formatMonth, getMonthRange } from "@/lib/format";
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, AlertCircle } from "lucide-react";
 import Link from "next/link";
+import type { DashboardResponse } from "@/lib/types/api";
 
 export default function Dashboard() {
   const [date, setDate] = useState(() => new Date());
   const { from, to } = useMemo(() => getMonthRange(date), [date]);
 
-  const { data: invoicesData, loading: invLoading } = useInvoices({
-    from,
-    to,
-    pageSize: 100,
-  });
-  const { data: txData, loading: txLoading } = useTransactions({
-    from,
-    to,
-    pageSize: 100,
-  });
-  const { data: pendingTx } = useTransactions({
-    status: "PENDING",
-    pageSize: 1,
-  });
-
-  const loading = invLoading || txLoading;
-
-  // Compute KPIs from real data
-  const invoices = invoicesData?.data ?? [];
-  const transactions = txData?.data ?? [];
-
-  const income = invoices
-    .filter((i) => i.type === "ISSUED" || i.type === "CREDIT_RECEIVED")
-    .reduce((sum, i) => sum + i.totalAmount, 0);
-
-  const expenses = invoices
-    .filter((i) => i.type === "RECEIVED" || i.type === "CREDIT_ISSUED")
-    .reduce((sum, i) => sum + i.totalAmount, 0);
-
-  const cashflow = transactions.reduce((sum, t) => sum + t.amount, 0);
-  const pendingCount = pendingTx?.pagination?.total ?? 0;
-
-  const reconciled = transactions.filter((t) => t.status === "RECONCILED");
-  const pendingMatch = transactions.filter((t) => t.status === "PENDING");
-  const unclassified = transactions.filter(
-    (t) => t.status !== "RECONCILED" && t.status !== "CLASSIFIED" && t.status !== "PENDING"
+  const { data, loading } = useFetch<DashboardResponse>(
+    `/api/reports/dashboard${qs({ from, to })}`
   );
-
-  const reconciledAmount = reconciled.reduce((s, t) => s + Math.abs(t.amount), 0);
-  const pendingMatchAmount = pendingMatch.reduce((s, t) => s + Math.abs(t.amount), 0);
-  const unclassifiedAmount = unclassified.reduce((s, t) => s + Math.abs(t.amount), 0);
 
   function shiftMonth(delta: number) {
     setDate((d) => new Date(d.getFullYear(), d.getMonth() + delta, 1));
   }
+
+  const d = data ?? { income: 0, expenses: 0, cashflow: 0, pendingCount: 0, reconciled: { count: 0, amount: 0 }, pendingMatch: { count: 0, amount: 0 }, unclassified: { count: 0, amount: 0 } };
 
   return (
     <div className="flex flex-col min-h-full">
@@ -87,24 +52,23 @@ export default function Dashboard() {
             <div className="grid grid-cols-4 gap-4">
               <KPICard
                 label="Ingresos"
-                value={formatAmount(income)}
+                value={formatAmount(d.income)}
                 icon={<TrendingUp size={14} className="text-green" />}
               />
               <KPICard
                 label="Gastos"
-                value={formatAmount(expenses)}
+                value={formatAmount(d.expenses)}
                 icon={<TrendingDown size={14} className="text-red" />}
-                valueClass="text-text-primary"
               />
               <KPICard
                 label="Cashflow neto"
-                value={formatAmount(cashflow)}
-                icon={<TrendingUp size={14} className={cashflow >= 0 ? "text-green" : "text-red"} />}
-                valueClass={cashflow >= 0 ? "text-green-text" : "text-red-text"}
+                value={formatAmount(d.cashflow)}
+                icon={<TrendingUp size={14} className={d.cashflow >= 0 ? "text-green" : "text-red"} />}
+                valueClass={d.cashflow >= 0 ? "text-green-text" : "text-red-text"}
               />
               <KPICard
                 label="Pendientes"
-                value={String(pendingCount)}
+                value={String(d.pendingCount)}
                 icon={<AlertCircle size={14} className="text-amber" />}
                 valueClass="text-amber"
                 subtitle="requieren revisión"
@@ -121,7 +85,7 @@ export default function Dashboard() {
               </div>
               <SummaryRow
                 concept="Transacciones conciliadas"
-                amount={reconciledAmount}
+                amount={d.reconciled.amount}
                 amountColor="text-text-primary"
                 statusColor="bg-green"
                 statusLabel="Verde"
@@ -129,7 +93,7 @@ export default function Dashboard() {
               />
               <SummaryRow
                 concept="Pendientes de match"
-                amount={pendingMatchAmount}
+                amount={d.pendingMatch.amount}
                 amountColor="text-amber-text"
                 statusColor="bg-amber"
                 statusLabel="Ámbar"
@@ -140,7 +104,7 @@ export default function Dashboard() {
               />
               <SummaryRow
                 concept="Sin clasificar"
-                amount={unclassifiedAmount}
+                amount={d.unclassified.amount}
                 amountColor="text-red-text"
                 statusColor="bg-red"
                 statusLabel="Rojo"
@@ -157,17 +121,9 @@ export default function Dashboard() {
 }
 
 function KPICard({
-  label,
-  value,
-  icon,
-  valueClass = "text-text-primary",
-  subtitle,
+  label, value, icon, valueClass = "text-text-primary", subtitle,
 }: {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  valueClass?: string;
-  subtitle?: string;
+  label: string; value: string; icon: React.ReactNode; valueClass?: string; subtitle?: string;
 }) {
   return (
     <div className="bg-white rounded-lg border border-subtle p-5 flex flex-col gap-2">
@@ -182,25 +138,12 @@ function KPICard({
 }
 
 function SummaryRow({
-  concept,
-  amount,
-  amountColor,
-  statusColor,
-  statusLabel,
-  statusTextColor,
-  actionLabel,
-  actionHref,
-  border = true,
+  concept, amount, amountColor, statusColor, statusLabel, statusTextColor,
+  actionLabel, actionHref, border = true,
 }: {
-  concept: string;
-  amount: number;
-  amountColor: string;
-  statusColor: string;
-  statusLabel: string;
-  statusTextColor: string;
-  actionLabel?: string;
-  actionHref?: string;
-  border?: boolean;
+  concept: string; amount: number; amountColor: string; statusColor: string;
+  statusLabel: string; statusTextColor: string; actionLabel?: string;
+  actionHref?: string; border?: boolean;
 }) {
   return (
     <div className={`flex items-center h-11 px-5 ${border ? "border-b border-subtle" : ""}`}>
@@ -214,9 +157,7 @@ function SummaryRow({
       </div>
       <span className="w-[100px] text-right">
         {actionLabel && actionHref ? (
-          <Link href={actionHref} className="text-[13px] font-medium text-accent">
-            {actionLabel}
-          </Link>
+          <Link href={actionHref} className="text-[13px] font-medium text-accent">{actionLabel}</Link>
         ) : (
           <span className="text-[13px] text-text-tertiary">—</span>
         )}

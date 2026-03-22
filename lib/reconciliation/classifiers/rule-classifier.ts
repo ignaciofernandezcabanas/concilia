@@ -119,7 +119,7 @@ export async function classifyByRules(
     prisma.matchingRule.update({
       where: { id: rule.id },
       data: { timesApplied: { increment: 1 }, lastExecutedAt: new Date() },
-    }).catch(() => {});
+    }).catch((err) => console.warn("[rule-classifier] Non-critical operation failed:", err instanceof Error ? err.message : err));
 
     // ── Calculate confidence ──
     const baseConfidence =

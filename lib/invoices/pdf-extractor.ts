@@ -5,9 +5,8 @@
  * and returns structured invoice data.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
 
-const anthropic = new Anthropic();
+import { anthropic } from "@/lib/ai/client";
 
 export interface ExtractedInvoice {
   number: string | null;

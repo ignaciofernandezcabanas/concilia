@@ -9,12 +9,14 @@ import { useTransactions, useReconciliationReport } from "@/hooks/useApi";
 import { api } from "@/lib/api-client";
 import { formatAmount, formatDate, getYearMonth } from "@/lib/format";
 import { Download, Check, X, ChevronLeft, ChevronRight } from "lucide-react";
+import ReconciliationPanel from "@/components/ReconciliationPanel";
 
 export default function Conciliacion() {
   // ── Bandeja de conciliación ──
   const [status, setStatus] = useState<string>("");
   const [page, setPage] = useState(1);
   const [resolving, setResolving] = useState<string | null>(null);
+  const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
 
   const { data, loading, refetch } = useTransactions({
     status: status || undefined,
@@ -35,21 +37,18 @@ export default function Conciliacion() {
 
   const reconMonthLabel = reconDate.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 
-  async function handleResolve(
-    reconciliationId: string,
-    action: "approve" | "reject",
-    reason?: string
-  ) {
-    setResolving(reconciliationId);
+  async function handleResolve(payload: Record<string, unknown>) {
+    const recoId = payload.reconciliationId as string;
+    // Use reconciliationId for the URL, fallback to a dummy for non-reco actions
+    const urlId = recoId || "action";
+    setResolving(recoId || (payload.bankTransactionId as string) || "");
     try {
-      await api.post(`/api/reconciliation/${reconciliationId}/resolve`, {
-        action,
-        reconciliationId,
-        ...(reason ? { reason } : {}),
-      });
+      await api.post(`/api/reconciliation/${urlId}/resolve`, payload);
       refetch();
+      setSelectedTxId(null);
     } catch (err) {
       console.error("Error resolving:", err);
+      alert(err instanceof Error ? err.message : "Error al resolver");
     } finally {
       setResolving(null);
     }
@@ -106,7 +105,9 @@ export default function Conciliacion() {
             <EmptyState title="Sin transacciones" description="No hay transacciones que coincidan con los filtros." />
           ) : (
             <>
-              <div className="bg-white rounded-lg border border-subtle overflow-hidden">
+              <div className="flex gap-0">
+              {/* Table */}
+              <div className={`bg-white rounded-lg border border-subtle overflow-hidden ${selectedTxId ? "flex-1 min-w-0" : "w-full"}`}>
                 <div className="flex items-center h-10 px-5 border-b border-subtle text-xs font-semibold text-text-secondary">
                   <span className="w-20">Tipo</span>
                   <span className="w-24">Fecha</span>
@@ -118,7 +119,8 @@ export default function Conciliacion() {
                 {transactions.map((tx) => (
                   <div
                     key={tx.id}
-                    className="flex items-center h-12 px-5 text-[13px] border-b border-border-light hover:bg-page transition-colors"
+                    onClick={() => setSelectedTxId(tx.id === selectedTxId ? null : tx.id)}
+                    className={`flex items-center h-12 px-5 text-[13px] border-b border-border-light hover:bg-page transition-colors cursor-pointer ${tx.id === selectedTxId ? "bg-accent-light/30" : ""}`}
                   >
                     <span className="w-20">
                       {tx.detectedType && <Badge value={tx.detectedType} />}
@@ -132,19 +134,25 @@ export default function Conciliacion() {
                     </span>
                     <span className="w-24"><Badge value={tx.status} /></span>
                     <span className="w-24 flex justify-end gap-1">
-                      {tx.status === "PENDING" && tx._count && tx._count.reconciliations > 0 && (
+                      {tx.status === "PENDING" && (tx as Record<string, unknown>).reconciliation && (
                         <>
                           <button
-                            disabled={resolving === tx.id}
-                            onClick={() => handleResolve(tx.id, "approve")}
+                            disabled={resolving === ((tx as Record<string, unknown>).reconciliation as Record<string, string>)?.id}
+                            onClick={() => {
+                              const recoId = ((tx as Record<string, unknown>).reconciliation as Record<string, string>)?.id;
+                              if (recoId) handleResolve(recoId, "approve");
+                            }}
                             className="p-1 rounded hover:bg-green-light text-green transition-colors"
                             title="Aprobar"
                           >
                             <Check size={14} />
                           </button>
                           <button
-                            disabled={resolving === tx.id}
-                            onClick={() => handleResolve(tx.id, "reject", "Rechazado por el usuario")}
+                            disabled={resolving === ((tx as Record<string, unknown>).reconciliation as Record<string, string>)?.id}
+                            onClick={() => {
+                              const recoId = ((tx as Record<string, unknown>).reconciliation as Record<string, string>)?.id;
+                              if (recoId) handleResolve(recoId, "reject", "Rechazado por el usuario");
+                            }}
                             className="p-1 rounded hover:bg-red-light text-red transition-colors"
                             title="Rechazar"
                           >
@@ -156,6 +164,21 @@ export default function Conciliacion() {
                   </div>
                 ))}
               </div>
+
+              {/* Panel */}
+              {selectedTxId && (() => {
+                const selectedTx = transactions.find((t) => t.id === selectedTxId);
+                if (!selectedTx) return null;
+                return (
+                  <ReconciliationPanel
+                    tx={selectedTx}
+                    onResolve={handleResolve}
+                    onClose={() => setSelectedTxId(null)}
+                    resolving={!!resolving}
+                  />
+                );
+              })()}
+              </div>{/* end flex container */}
 
               <div className="flex items-center justify-between mt-3">
                 <span className="text-xs text-text-tertiary">Página {page} de {totalPages}</span>

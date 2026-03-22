@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { anthropic } from "@/lib/ai/client";
 import { withRateLimit } from "@/lib/ai/rate-limiter";
 import type { BankTransaction, CashflowType } from "@prisma/client";
 
@@ -68,7 +68,7 @@ export async function classifyByLlm(
   tx: BankTransaction,
   history: HistoricalClassification[]
 ): Promise<LlmClassificationResult | null> {
-  const client = new Anthropic();
+  const client = anthropic;
 
   const historySlice = history.slice(0, MAX_HISTORY_ITEMS);
 

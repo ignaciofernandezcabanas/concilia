@@ -156,7 +156,7 @@ export async function resolveItem(
         if (reco.matchReason?.startsWith("rule:")) {
           const ruleId = reco.matchReason.split(":")[1];
           if (ruleId) {
-            await tx.matchingRule.update({ where: { id: ruleId }, data: { isActive: false } }).catch(() => {});
+            await tx.matchingRule.update({ where: { id: ruleId }, data: { isActive: false } }).catch((err) => console.warn("[resolver] Non-critical operation failed:", err instanceof Error ? err.message : err));
           }
         }
 

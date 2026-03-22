@@ -145,7 +145,7 @@ export const POST = withAuth(
         entityType: "User",
         entityId: newUser.id,
         details: { email, role },
-      }).catch(() => {});
+      }).catch((err) => console.warn("[users] Non-critical operation failed:", err instanceof Error ? err.message : err));
 
       return NextResponse.json(
         { success: true, user: newUser },

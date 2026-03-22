@@ -234,8 +234,8 @@ async function verifyCallerAndGetCompanyId(
     try {
       const { Receiver } = await import("@upstash/qstash");
       const receiver = new Receiver({
-        currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY!,
-        nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY!,
+        currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY || "",
+        nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY || "",
       });
       const body = await req.text();
       await receiver.verify({ signature: qstashSignature, body });

@@ -47,7 +47,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       actionDetails,
       source: "natural_language",
     },
-  }).catch(() => {});
+  }).catch((err) => console.warn("[confirm] Non-critical operation failed:", err instanceof Error ? err.message : err));
 
   return NextResponse.json({ success: true, rule: { id: rule.id, type: rule.type } });
 }, "manage:rules");

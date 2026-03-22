@@ -37,6 +37,24 @@ export type BankTransactionResponse = Pick<
     description?: string | null;
     account: { code: string; name: string };
   } | null;
+  reconciliation?: {
+    id: string;
+    type: string;
+    confidenceScore: number | null;
+    matchReason: string | null;
+    difference: number | null;
+    differenceReason: string | null;
+    resolution: string | null;
+    invoiceId: string | null;
+    invoiceAmount: number | null;
+    bankAmount: number | null;
+    invoice?: {
+      id: string;
+      number: string;
+      totalAmount: number;
+      contact?: { name: string } | null;
+    } | null;
+  } | null;
   _count?: { reconciliations: number };
 };
 
@@ -120,6 +138,16 @@ export interface ReconciliationReportResponse {
   difference: number;
   holdedItems?: { id: string; date: string; concept: string; amount: number; status?: string }[];
   bankItems?: { id: string; date: string; concept: string; amount: number; status?: string }[];
+}
+
+export interface DashboardResponse {
+  income: number;
+  expenses: number;
+  cashflow: number;
+  pendingCount: number;
+  reconciled: { count: number; amount: number };
+  pendingMatch: { count: number; amount: number };
+  unclassified: { count: number; amount: number };
 }
 
 export interface SearchResultsResponse {

@@ -26,7 +26,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     entityType: "BankTransaction",
     entityId: "batch",
     details: { count: result.count, ids: parsed.data.ids },
-  }).catch(() => {});
+  }).catch((err) => console.warn("[batch-delete] Non-critical operation failed:", err instanceof Error ? err.message : err));
 
   return NextResponse.json({ success: true, deleted: result.count });
 }, "delete:transaction");

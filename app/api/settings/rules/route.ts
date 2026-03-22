@@ -157,7 +157,7 @@ export const POST = withAuth(
       entityType: "MatchingRule",
       entityId: rule.id,
       details: input,
-    }).catch(() => {});
+    }).catch((err) => console.warn("[rules] Non-critical operation failed:", err instanceof Error ? err.message : err));
 
     return NextResponse.json({ success: true, rule }, { status: 201 });
   },
@@ -217,7 +217,7 @@ export const DELETE = withAuth(
         pattern: rule.pattern,
         action: rule.action,
       },
-    }).catch(() => {});
+    }).catch((err) => console.warn("[rules] Non-critical operation failed:", err instanceof Error ? err.message : err));
 
     return NextResponse.json({ success: true, deletedId: id });
   },

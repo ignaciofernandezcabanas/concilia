@@ -93,7 +93,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     entityType: "Integration",
     entityId: integration.id,
     details: { syncFrequency },
-  }).catch(() => {});
+  }).catch((err) => console.warn("[holded] Non-critical operation failed:", err instanceof Error ? err.message : err));
 
   return NextResponse.json({ success: true, integration: { id: integration.id, status: integration.status } });
 }, "manage:integrations");

@@ -88,7 +88,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     entityType: "Integration",
     entityId: existing?.id ?? "new",
     details: { emails: verifiedAccounts.map((a) => a.email), mode: "read_only" },
-  }).catch(() => {});
+  }).catch((err) => console.warn("[gmail] Non-critical operation failed:", err instanceof Error ? err.message : err));
 
   return NextResponse.json({
     success: true,

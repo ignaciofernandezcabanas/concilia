@@ -22,8 +22,8 @@ export function withCronAuth(handler: CronHandler): CronHandler {
       try {
         const { Receiver } = await import("@upstash/qstash");
         const receiver = new Receiver({
-          currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY!,
-          nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY!,
+          currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY || "",
+          nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY || "",
         });
 
         const signature = req.headers.get("upstash-signature") ?? "";

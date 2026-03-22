@@ -198,7 +198,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     entityType: "Invoice",
     entityId: "batch",
     details: { folderId: parsed.data.folderId, filesCount: pdfFiles.length, created, skipped },
-  }).catch(() => {});
+  }).catch((err) => console.warn("[import-drive] Non-critical operation failed:", err instanceof Error ? err.message : err));
 
   return NextResponse.json({ success: true, created, skipped, total: pdfFiles.length, errors: errors.slice(0, 30), results });
 }, "classify:transaction");
