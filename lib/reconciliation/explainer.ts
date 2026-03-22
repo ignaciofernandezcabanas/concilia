@@ -1,18 +1,11 @@
 /**
  * Generates human-readable explanations for items that go to the controller's bandeja.
- *
- * Principles:
- * - Non-blocking: if it fails, the item goes to bandeja without explanation.
- * - Only for bandeja: auto-approved items don't need explanations.
- * - Rate limited: uses the same limiter as matcher/classifier.
- * - Brief: max 2-3 sentences.
+ * Now uses Haiku via the model router (simple NLP task).
  */
 
-import { anthropic } from "@/lib/ai/client";
-import { withRateLimit } from "@/lib/ai/rate-limiter";
+import { callAI } from "@/lib/ai/model-router";
+import { EXPLAIN_BANDEJA } from "@/lib/ai/prompt-registry";
 import type { BankTransaction } from "@prisma/client";
-
-const MODEL = "claude-sonnet-4-20250514";
 
 export interface ExplainContext {
   tx: BankTransaction;
@@ -33,69 +26,45 @@ export interface ExplainContext {
   materialityThreshold: number;
 }
 
-const EXPLAINER_SYSTEM_PROMPT =
-  `Eres un asistente financiero. Explica en 2-3 frases en español por qué un movimiento bancario necesita revisión humana.\n` +
-  `Sé directo y conciso. Sin introducciones ni cortesía.\n` +
-  `Usa lenguaje de negocio, no técnico. Di "cobro" no "transacción positiva".\n` +
-  `Si hay una acción recomendada, sugiérela.`;
-
-function buildExplainerPrompt(ctx: ExplainContext): string {
-  const txType = ctx.tx.amount > 0 ? "cobro" : "pago";
-  const absAmount = Math.abs(ctx.tx.amount).toFixed(2);
-
-  let prompt =
-    `MOVIMIENTO:\n` +
-    `- Tipo: ${txType}\n` +
-    `- Importe: ${absAmount} EUR\n` +
-    `- Fecha: ${ctx.tx.valueDate.toISOString().slice(0, 10)}\n` +
-    `- Concepto: ${ctx.tx.concept ?? "Sin concepto"}\n` +
-    `- Contrapartida: ${ctx.tx.counterpartName ?? "Desconocida"} (${ctx.tx.counterpartIban ?? "sin IBAN"})\n\n` +
-    `PROPUESTA DEL SISTEMA:\n` +
-    `- Tipo de match: ${ctx.reconciliation.type}\n` +
-    `- Confianza: ${(ctx.reconciliation.confidenceScore * 100).toFixed(0)}% (umbral: ${(ctx.threshold * 100).toFixed(0)}%)\n` +
-    `- Razón: ${ctx.reconciliation.matchReason}\n`;
-
-  if (ctx.invoice) {
-    prompt +=
-      `- Factura candidata: #${ctx.invoice.number} de ${ctx.invoice.contactName} por ${ctx.invoice.totalAmount.toFixed(2)} EUR\n`;
-    if (ctx.reconciliation.difference != null && ctx.reconciliation.difference !== 0) {
-      prompt += `- Diferencia: ${ctx.reconciliation.difference.toFixed(2)} EUR (${ctx.reconciliation.differenceReason ?? "sin causa identificada"})\n`;
-    }
-    if (ctx.invoice.dueDate) {
-      prompt += `- Vencimiento factura: ${ctx.invoice.dueDate}\n`;
-    }
-  }
-
-  if (Math.abs(ctx.tx.amount) > ctx.materialityThreshold) {
-    prompt += `\nNOTA: El importe supera el umbral de materialidad (${ctx.materialityThreshold} EUR).\n`;
-  }
-
-  prompt += `\nExplica la razón PRINCIPAL por la que necesita revisión. Responde SOLO con el texto, sin JSON.`;
-
-  return prompt;
-}
-
 /**
  * Generate a 2-3 sentence explanation in Spanish for why an item needs human review.
  * Returns null if generation fails. NON-BLOCKING.
  */
 export async function generateExplanation(ctx: ExplainContext): Promise<string | null> {
   try {
-    const response = await withRateLimit(() =>
-      anthropic.messages.create({
-        model: MODEL,
-        max_tokens: 300,
-        system: EXPLAINER_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: buildExplainerPrompt(ctx) }],
-      })
-    );
+    const txType = ctx.tx.amount > 0 ? "cobro" : "pago";
+    const absAmount = Math.abs(ctx.tx.amount).toFixed(2);
 
-    if (!response) return null;
+    const userPrompt = EXPLAIN_BANDEJA.buildUser({
+      txType,
+      amount: absAmount,
+      date: ctx.tx.valueDate.toISOString().slice(0, 10),
+      concept: ctx.tx.concept ?? "Sin concepto",
+      counterpart: `${ctx.tx.counterpartName ?? "Desconocida"} (${ctx.tx.counterpartIban ?? "sin IBAN"})`,
+      matchType: ctx.reconciliation.type,
+      confidence: `${(ctx.reconciliation.confidenceScore * 100).toFixed(0)}%`,
+      threshold: `${(ctx.threshold * 100).toFixed(0)}%`,
+      matchReason: ctx.reconciliation.matchReason,
+      invoice: ctx.invoice
+        ? {
+            number: ctx.invoice.number,
+            contact: ctx.invoice.contactName,
+            amount: ctx.invoice.totalAmount.toFixed(2),
+            dueDate: ctx.invoice.dueDate ?? undefined,
+            difference: ctx.reconciliation.difference != null && ctx.reconciliation.difference !== 0
+              ? ctx.reconciliation.difference.toFixed(2)
+              : undefined,
+            differenceReason: ctx.reconciliation.differenceReason ?? undefined,
+          }
+        : undefined,
+      materialityNote: Math.abs(ctx.tx.amount) > ctx.materialityThreshold
+        ? `El importe supera el umbral de materialidad (${ctx.materialityThreshold} EUR).`
+        : undefined,
+    });
 
-    const text = response.content[0].type === "text" ? response.content[0].text : "";
-    return text.trim() || null;
+    return await callAI("explain_bandeja", EXPLAIN_BANDEJA.system, userPrompt);
   } catch (err) {
-    console.warn("[explainer] Failed to generate explanation:", err instanceof Error ? err.message : err);
+    console.warn("[explainer] Failed:", err instanceof Error ? err.message : err);
     return null;
   }
 }
