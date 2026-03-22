@@ -21,9 +21,12 @@ model Organization {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  autoExecuteThreshold  Float     @default(0.95)
+
   companies             Company[]
   memberships           Membership[]
   intercompanyLinks     IntercompanyLink[]
+  agentRuns             AgentRun[]
 }
 
 model Membership {
@@ -905,6 +908,47 @@ enum NotificationType {
   ARCHIVE
   SYSTEM
   FINANCIAL_ALERT
+  DAILY_BRIEFING
+  CLOSE_PROPOSAL
+  TREASURY_ALERT
+  OVERDUE_INVOICE
+  ANOMALY_DETECTED
+  FISCAL_DEADLINE
+  ENGINE_COMPLETE
+  AUTO_EXECUTE_ERROR
+}
+
+// ============================================================
+// AGENT RUNS
+// ============================================================
+
+model AgentRun {
+  id                 String         @id @default(cuid())
+  status             AgentRunStatus @default(RUNNING)
+  startedAt          DateTime       @default(now())
+  completedAt        DateTime?
+  companiesProcessed Int            @default(0)
+  txsProcessed       Int            @default(0)
+  txsAutoExecuted    Int            @default(0)
+  txsToBandeja       Int            @default(0)
+  llmCallsTotal      Int            @default(0)
+  llmCostEstimate    Float          @default(0)
+  errorsCount        Int            @default(0)
+  companyResults     Json?
+  aiCallLog          Json?
+  briefing           String?
+  organizationId     String
+  organization       Organization   @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, startedAt])
+}
+
+enum AgentRunStatus {
+  RUNNING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+  SKIPPED
 }
 
 // ============================================================
