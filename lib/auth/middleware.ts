@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getScopedDb, type ScopedPrisma } from "@/lib/db-scoped";
 import { createServerClient } from "@/lib/supabase";
 import {
   hasPermission,
@@ -10,6 +11,8 @@ import type { User, Company, Role } from "@prisma/client";
 export interface AuthContext {
   user: User;
   company: Company;
+  /** Scoped Prisma client — auto-injects companyId in all queries */
+  db: ScopedPrisma;
 }
 
 type AuthenticatedHandler = (
@@ -20,13 +23,8 @@ type AuthenticatedHandler = (
 /**
  * Wraps a Next.js Route Handler with authentication and optional permission checks.
  *
- * - Extracts and verifies the Supabase JWT from the Authorization header.
- * - Loads the User (with ACTIVE status) and their Company from the database.
- * - Optionally checks role-based permission.
- * - Injects `{ user, company }` into the handler context.
- *
- * Returns 401 for missing/invalid tokens or inactive users.
- * Returns 403 for insufficient permissions.
+ * Injects `{ user, company, db }` into the handler context.
+ * `db` is a scoped Prisma client that auto-filters by companyId.
  */
 export function withAuth(
   handler: AuthenticatedHandler,
@@ -85,16 +83,13 @@ export function withAuth(
       if (requiredPermission) {
         if (!hasPermission(user.role as Role, requiredPermission)) {
           return NextResponse.json(
-            {
-              error: "Insufficient permissions.",
-              required: requiredPermission,
-            },
+            { error: "Insufficient permissions." },
             { status: 403 }
           );
         }
       }
 
-      // Update last login timestamp — only if null or > 1 hour old (avoid DB spam)
+      // Update last login — throttled to 1/hour
       const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
       if (!user.lastLoginAt || user.lastLoginAt < oneHourAgo) {
         prisma.user
@@ -104,16 +99,19 @@ export function withAuth(
           });
       }
 
+      // Create scoped DB client
+      const db = getScopedDb(company.id);
+
       return handler(req, {
         user: userWithoutCompany as User,
         company,
+        db,
         params: routeCtx?.params,
       });
     } catch (error) {
       console.error("[withAuth] Unexpected error:", error instanceof Error ? error.message : error);
-      console.error("[withAuth] Stack:", error instanceof Error ? error.stack : "no stack");
       return NextResponse.json(
-        { error: "Internal authentication error.", detail: error instanceof Error ? error.message : String(error) },
+        { error: "Internal authentication error." },
         { status: 500 }
       );
     }
