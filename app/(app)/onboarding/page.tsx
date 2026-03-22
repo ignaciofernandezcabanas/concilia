@@ -54,7 +54,9 @@ export default function OnboardingPage() {
     }
   }
 
-  const canAdvance1 = name.trim().length > 0 && cif.trim().length > 0;
+  const cifRegex = /^[A-HJNP-SUVW]\d{7}[0-9A-J]$|^\d{8}[A-Z]$|^[XYZ]\d{7}[A-Z]$/;
+  const cifValid = cifRegex.test(cif.trim().toUpperCase());
+  const canAdvance1 = name.trim().length > 0 && cifValid;
   const canAdvance2 = accounts.some((a) => a.iban.trim().length > 0);
 
   return (
@@ -95,6 +97,9 @@ export default function OnboardingPage() {
             <div>
               <label className="text-xs font-medium text-text-secondary block mb-1">CIF / NIF</label>
               <input type="text" value={cif} onChange={(e) => setCif(e.target.value.toUpperCase())} placeholder="B12345678" className="w-full h-10 px-3 text-[13px] border border-subtle rounded-md focus:border-accent focus:outline-none" />
+              {cif.trim().length > 0 && !cifValid && (
+                <p className="text-[11px] text-red-text mt-1">CIF/NIF inválido. Formato: B12345670, 12345678Z, o X1234567A</p>
+              )}
             </div>
             <div>
               <label className="text-xs font-medium text-text-secondary block mb-1">Moneda</label>

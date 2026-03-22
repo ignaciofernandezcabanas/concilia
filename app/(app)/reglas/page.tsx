@@ -99,8 +99,8 @@ function RulesTab() {
   const rules = data?.rules ?? [];
 
   async function toggleStatus(rule: Rule) {
-    const newStatus = rule.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
-    await api.post("/api/settings/learning", { action: "deactivate", type: "rule", id: rule.id });
+    const action = rule.status === "ACTIVE" ? "deactivate" : "activate";
+    await api.post("/api/settings/learning", { action, type: "rule", id: rule.id });
     refetch();
   }
 

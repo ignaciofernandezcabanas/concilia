@@ -306,16 +306,22 @@ function AccountPicker({ bankTransactionId, onSelect, onCancel, resolving }: {
   resolving: boolean;
 }) {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [accounts, setAccounts] = useState<{ code: string; name: string; cashflowType: string | null }[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
     setLoading(true);
-    api.get<{ accounts: typeof accounts }>(`/api/settings/accounts${qs({ search })}`)
+    api.get<{ accounts: typeof accounts }>(`/api/settings/accounts${qs({ search: debouncedSearch })}`)
       .then((res) => setAccounts(res.accounts))
       .catch(() => setAccounts([]))
       .finally(() => setLoading(false));
-  }, [search]);
+  }, [debouncedSearch]);
 
   return (
     <div className="border border-subtle rounded-md p-3 flex flex-col gap-2">
@@ -361,19 +367,33 @@ function InvoicePicker({ isIncome, onSelect, onCancel, resolving }: {
   onCancel: () => void;
   resolving: boolean;
 }) {
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [invoices, setInvoices] = useState<{ id: string; number: string; totalAmount: number; contact?: { name: string } | null }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    setLoading(true);
     const type = isIncome ? "ISSUED" : "RECEIVED";
-    api.get<{ data: typeof invoices }>(`/api/invoices${qs({ type, status: "PENDING", pageSize: 20 })}`)
+    const params: Record<string, unknown> = { type, status: "PENDING", pageSize: 50 };
+    if (debouncedSearch.trim()) params.search = debouncedSearch;
+    api.get<{ data: typeof invoices }>(`/api/invoices${qs(params)}`)
       .then((res) => setInvoices(res.data))
       .catch(() => setInvoices([]))
       .finally(() => setLoading(false));
-  }, [isIncome]);
+  }, [isIncome, debouncedSearch]);
 
   return (
     <div className="border border-subtle rounded-md p-3 flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <Search size={12} className="text-text-tertiary" />
+        <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar factura..." className="flex-1 h-7 text-[12px] border-none outline-none placeholder:text-text-tertiary" />
+      </div>
       <span className="text-[11px] font-medium text-text-secondary">Facturas {isIncome ? "emitidas" : "recibidas"} pendientes:</span>
       <div className="max-h-40 overflow-auto">
         {loading ? (

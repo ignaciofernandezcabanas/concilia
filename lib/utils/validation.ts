@@ -154,7 +154,7 @@ export const transactionFiltersSchema = z.object({
   maxAmount: z.coerce.number().optional(),
   counterpartIban: z.string().optional(),
   search: z.string().max(200).optional(),
-  sortBy: z.enum(["valueDate", "amount", "status"]).default("valueDate"),
+  sortBy: z.enum(["valueDate", "amount", "status", "priority"]).default("valueDate"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 

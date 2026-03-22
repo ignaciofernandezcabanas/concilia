@@ -10,6 +10,7 @@ import { api } from "@/lib/api-client";
 import { formatAmount, formatDate, getYearMonth } from "@/lib/format";
 import { Download, Check, X, ChevronLeft, ChevronRight } from "lucide-react";
 import ReconciliationPanel from "@/components/ReconciliationPanel";
+import Toast from "@/components/Toast";
 
 export default function Conciliacion() {
   // ── Bandeja de conciliación ──
@@ -17,13 +18,14 @@ export default function Conciliacion() {
   const [page, setPage] = useState(1);
   const [resolving, setResolving] = useState<string | null>(null);
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const { data, loading, refetch } = useTransactions({
     status: status || undefined,
     page,
     pageSize: 25,
-    sortBy: "valueDate",
-    sortOrder: "desc",
+    sortBy: "priority",
+    sortOrder: "asc",
   });
 
   const transactions = data?.data ?? [];
@@ -46,9 +48,16 @@ export default function Conciliacion() {
       await api.post(`/api/reconciliation/${urlId}/resolve`, payload);
       refetch();
       setSelectedTxId(null);
+      const labels: Record<string, string> = {
+        approve: "Match aprobado", reject: "Match rechazado", classify: "Transacción clasificada",
+        mark_internal: "Transferencia interna confirmada", mark_duplicate: "Duplicado confirmado",
+        mark_legitimate: "Marcada como legítima", mark_return: "Devolución confirmada",
+        ignore: "Transacción ignorada", manual_match: "Match manual creado",
+      };
+      setToast({ message: labels[payload.action as string] ?? "Acción completada", type: "success" });
     } catch (err) {
       console.error("Error resolving:", err);
-      alert(err instanceof Error ? err.message : "Error al resolver");
+      setToast({ message: err instanceof Error ? err.message : "Error al resolver", type: "error" });
     } finally {
       setResolving(null);
     }
@@ -74,7 +83,30 @@ export default function Conciliacion() {
         <section>
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-[22px] font-semibold text-text-primary">Conciliación</h1>
-            <button className="flex items-center gap-2 bg-accent text-white text-[13px] font-medium px-4 h-9 rounded-md hover:bg-accent-dark transition-colors">
+            <button
+              onClick={() => {
+                if (transactions.length === 0) return;
+                const headers = ["Fecha", "Concepto", "Importe", "Contrapartida", "IBAN", "Estado", "Tipo"];
+                const rows = transactions.map(tx => [
+                  typeof tx.valueDate === 'string' ? tx.valueDate.slice(0, 10) : "",
+                  (tx.conceptParsed || tx.concept || "").replace(/;/g, ","),
+                  String(tx.amount),
+                  tx.counterpartName ?? "",
+                  tx.counterpartIban ?? "",
+                  tx.status,
+                  tx.detectedType ?? "",
+                ]);
+                const csv = [headers, ...rows].map(r => r.join(";")).join("\n");
+                const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `conciliacion_${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex items-center gap-2 bg-accent text-white text-[13px] font-medium px-4 h-9 rounded-md hover:bg-accent-dark transition-colors"
+            >
               <Download size={16} />
               Exportar
             </button>
@@ -134,13 +166,13 @@ export default function Conciliacion() {
                     </span>
                     <span className="w-24"><Badge value={tx.status} /></span>
                     <span className="w-24 flex justify-end gap-1">
-                      {tx.status === "PENDING" && (tx as Record<string, unknown>).reconciliation && (
+                      {tx.status === "PENDING" && tx.reconciliation && (
                         <>
                           <button
-                            disabled={resolving === ((tx as Record<string, unknown>).reconciliation as Record<string, string>)?.id}
-                            onClick={() => {
-                              const recoId = ((tx as Record<string, unknown>).reconciliation as Record<string, string>)?.id;
-                              if (recoId) handleResolve(recoId, "approve");
+                            disabled={!!resolving}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (tx.reconciliation?.id) handleResolve({ action: "approve", reconciliationId: tx.reconciliation.id });
                             }}
                             className="p-1 rounded hover:bg-green-light text-green transition-colors"
                             title="Aprobar"
@@ -148,10 +180,10 @@ export default function Conciliacion() {
                             <Check size={14} />
                           </button>
                           <button
-                            disabled={resolving === ((tx as Record<string, unknown>).reconciliation as Record<string, string>)?.id}
-                            onClick={() => {
-                              const recoId = ((tx as Record<string, unknown>).reconciliation as Record<string, string>)?.id;
-                              if (recoId) handleResolve(recoId, "reject", "Rechazado por el usuario");
+                            disabled={!!resolving}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (tx.reconciliation?.id) handleResolve({ action: "reject", reconciliationId: tx.reconciliation.id, reason: "Rechazado por el usuario" });
                             }}
                             className="p-1 rounded hover:bg-red-light text-red transition-colors"
                             title="Rechazar"
@@ -306,6 +338,7 @@ export default function Conciliacion() {
           )}
         </section>
       </div>
+      {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
     </div>
   );
 }

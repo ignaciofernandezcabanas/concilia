@@ -63,6 +63,18 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         data: { isActive: false },
       });
     }
+  } else if (body.action === "activate") {
+    if (body.type === "rule") {
+      await prisma.matchingRule.updateMany({
+        where: { id: body.id, companyId: company.id },
+        data: { isActive: true, status: "ACTIVE" },
+      });
+    } else if (body.type === "pattern") {
+      await prisma.learnedPattern.updateMany({
+        where: { id: body.id, companyId: company.id },
+        data: { isActive: true },
+      });
+    }
   } else if (body.action === "delete") {
     if (body.type === "pattern") {
       await prisma.learnedPattern.deleteMany({
