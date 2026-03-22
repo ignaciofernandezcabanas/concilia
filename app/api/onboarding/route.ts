@@ -61,13 +61,19 @@ export async function POST(req: NextRequest) {
 
     const { company: companyData, bankAccounts, loadPgc } = parsed.data;
 
-    // Create company + user + bank accounts in a single transaction
+    // Create org + company + user + membership + bank accounts
     const result = await prisma.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: { name: companyData.name },
+      });
+
       const company = await tx.company.create({
         data: {
           name: companyData.name,
           cif: companyData.cif,
           currency: companyData.currency,
+          type: "STANDALONE",
+          organizationId: org.id,
         },
       });
 
@@ -78,7 +84,17 @@ export async function POST(req: NextRequest) {
           role: "ADMIN",
           status: "ACTIVE",
           companyId: company.id,
+          activeOrgId: org.id,
+          activeCompanyId: company.id,
         },
+      });
+
+      // Create Membership + CompanyScope
+      const membership = await tx.membership.create({
+        data: { role: "OWNER", status: "ACTIVE", userId: user.id, organizationId: org.id },
+      });
+      await tx.companyScope.create({
+        data: { role: "ADMIN", membershipId: membership.id, companyId: company.id },
       });
 
       for (const ba of bankAccounts) {

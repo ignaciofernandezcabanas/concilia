@@ -7,26 +7,108 @@ datasource db {
 }
 
 // ============================================================
+// ORGANIZACIÓN Y GRUPO EMPRESARIAL
+// ============================================================
+
+model Organization {
+  id                    String    @id @default(cuid())
+  name                  String
+  currency              String    @default("EUR")
+  fiscalYearStart       Int       @default(1)        // Month 1-12
+  intercoDebtorAccount  String    @default("5510")
+  intercoCreditorAccount String   @default("5520")
+  maxCompanies          Int       @default(5)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  companies             Company[]
+  memberships           Membership[]
+  intercompanyLinks     IntercompanyLink[]
+}
+
+model Membership {
+  id              String           @id @default(cuid())
+  role            MembershipRole   @default(MEMBER)
+  status          MembershipStatus @default(ACTIVE)
+  joinedAt        DateTime         @default(now())
+  invitedBy       String?
+
+  userId          String
+  user            User             @relation(fields: [userId], references: [id])
+
+  organizationId  String
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+
+  companyScopes   CompanyScope[]
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model CompanyScope {
+  id              String       @id @default(cuid())
+  role            CompanyRole  @default(VIEWER)
+
+  membershipId    String
+  membership      Membership   @relation(fields: [membershipId], references: [id])
+
+  companyId       String
+  company         Company      @relation(fields: [companyId], references: [id])
+
+  @@unique([membershipId, companyId])
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+enum CompanyRole {
+  ADMIN
+  CONTROLLER
+  VIEWER
+}
+
+enum CompanyType {
+  PARENT
+  SUBSIDIARY
+  STANDALONE
+}
+
+// ============================================================
 // EMPRESA Y USUARIOS
 // ============================================================
 
 model Company {
-  id                    String    @id @default(cuid())
+  id                    String       @id @default(cuid())
   name                  String
+  shortName             String?
   cif                   String
-  currency              String    @default("EUR")
-  fiscalYearStartMonth  Int       @default(1)
-  numberFormat          String    @default("eu")
-  csvSeparator          String    @default(";")
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  currency              String       @default("EUR")
+  fiscalYearStartMonth  Int          @default(1)
+  numberFormat          String       @default("eu")
+  csvSeparator          String       @default(";")
+  type                  CompanyType  @default(STANDALONE)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 
-  autoApproveThreshold  Float     @default(0.95)     // Confidence below → bandeja
-  materialityThreshold  Float     @default(500)      // Above → bandeja siempre (major)
-  materialityMinor      Float     @default(5)        // Differences below → auto-adjust
-  preAlertDays          Int       @default(7)        // Days before due date → alert
+  autoApproveThreshold  Float        @default(0.95)
+  materialityThreshold  Float        @default(500)
+  materialityMinor      Float        @default(5)
+  preAlertDays          Int          @default(7)
+
+  organizationId        String?
+  organization          Organization? @relation(fields: [organizationId], references: [id])
 
   users                 User[]
+  companyScopes         CompanyScope[]
   invoices              Invoice[]
   bankTransactions      BankTransaction[]
   reconciliations       Reconciliation[]
@@ -39,23 +121,27 @@ model Company {
   integrations          Integration[]
   archiveLogs           ArchiveLog[]
   ownBankAccounts       OwnBankAccount[]
+
 }
 
 model User {
-  id            String     @id @default(cuid())
-  email         String     @unique
-  name          String?
-  role          Role       @default(EDITOR)
-  status        UserStatus @default(PENDING)
-  lastLoginAt   DateTime?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id              String     @id @default(cuid())
+  email           String     @unique
+  name            String?
+  role            Role       @default(EDITOR)    // Legacy — use Membership.role
+  status          UserStatus @default(PENDING)
+  lastLoginAt     DateTime?
+  activeOrgId     String?
+  activeCompanyId String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
-  companyId     String
-  company       Company    @relation(fields: [companyId], references: [id])
+  companyId       String                          // Legacy — kept for backward compat
+  company         Company    @relation(fields: [companyId], references: [id])
 
-  auditLogs     AuditLog[]
-  notifications Notification[]
+  memberships     Membership[]
+  auditLogs       AuditLog[]
+  notifications   Notification[]
 
   @@unique([email, companyId])
 }
@@ -64,6 +150,37 @@ enum Role {
   ADMIN
   EDITOR
   READER
+}
+
+// ============================================================
+// INTERCOMPAÑÍA
+// ============================================================
+
+model IntercompanyLink {
+  id              String         @id @default(cuid())
+  amount          Float
+  date            DateTime
+  concept         String?
+  status          IntercoStatus  @default(DETECTED)
+  matchedAt       DateTime?
+
+  companyAId      String
+  companyBId      String
+  transactionAId  String?
+  transactionBId  String?
+  invoiceAId      String?
+  invoiceBId      String?
+
+  organizationId  String
+  organization    Organization   @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, status])
+}
+
+enum IntercoStatus {
+  DETECTED
+  CONFIRMED
+  ELIMINATED
 }
 
 enum UserStatus {

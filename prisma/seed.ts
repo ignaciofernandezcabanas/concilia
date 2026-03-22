@@ -93,20 +93,42 @@ async function main() {
   }
   console.log(`✅ Supabase Auth: ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
 
-  // Step 2: Company
+  // Step 2: Organization + Company
+  const org = await prisma.organization.create({
+    data: { name: "Grupo Alimentación Mediterránea" },
+  });
+
   const company = await prisma.company.create({
     data: {
       name: "Alimentación Mediterránea SL", cif: COMPANY_CIF, currency: "EUR",
+      type: "STANDALONE",
       autoApproveThreshold: 0.90, materialityThreshold: 5000, materialityMinor: 5, preAlertDays: 7,
+      organizationId: org.id,
     },
   });
   const cid = company.id;
 
-  // Step 3: User
+  // Step 3: User + Membership
   const user = await prisma.user.create({
-    data: { email: DEMO_EMAIL, name: "Admin Demo", role: "ADMIN", status: "ACTIVE", companyId: cid },
+    data: {
+      email: DEMO_EMAIL, name: "Admin Demo", role: "ADMIN", status: "ACTIVE",
+      companyId: cid, activeOrgId: org.id, activeCompanyId: cid,
+    },
   });
   const userId = user.id;
+
+  // Create Membership (OWNER of the organization)
+  const membership = await prisma.membership.create({
+    data: {
+      role: "OWNER", status: "ACTIVE",
+      userId: user.id, organizationId: org.id,
+    },
+  });
+
+  // Create CompanyScope (ADMIN of the company)
+  await prisma.companyScope.create({
+    data: { role: "ADMIN", membershipId: membership.id, companyId: cid },
+  });
 
   // Step 4: Own bank accounts
   await prisma.ownBankAccount.createMany({
