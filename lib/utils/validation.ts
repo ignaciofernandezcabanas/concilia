@@ -60,7 +60,7 @@ const ignoreAction = z.object({
 const markDuplicateAction = z.object({
   action: z.literal("mark_duplicate"),
   bankTransactionId: z.string(),
-  duplicateOfId: z.string(),
+  duplicateOfId: z.string().optional(),
 });
 
 const markLegitimateAction = z.object({

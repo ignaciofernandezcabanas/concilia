@@ -105,6 +105,7 @@ export default function PyGPage() {
             data={dataMap}
             columns={columns}
             pctData={pctMap}
+            drilldown={{ report: "pyg", from: period.from, to: period.to }}
           />
         )}
       </div>

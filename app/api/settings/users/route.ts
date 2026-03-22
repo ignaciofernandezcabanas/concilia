@@ -1,3 +1,4 @@
+import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
 import { prisma } from "@/lib/db";
@@ -153,13 +154,7 @@ export const POST = withAuth(
       );
     } catch (err) {
       console.error("[settings/users] Error:", err);
-      return NextResponse.json(
-        {
-          error: "Failed to invite user.",
-          details: err instanceof Error ? err.message : String(err),
-        },
-        { status: 500 }
-      );
+      return errorResponse("Failed to invite user.", err, 500);
     }
   },
   "manage:users"

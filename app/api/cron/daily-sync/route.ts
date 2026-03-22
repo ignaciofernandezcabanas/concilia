@@ -1,3 +1,4 @@
+import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { withCronAuth } from "@/lib/auth/cron-guard";
@@ -49,6 +50,6 @@ export const POST = withCronAuth(async (_req: NextRequest) => {
     return NextResponse.json({ success: true, companiesProcessed: companies.length, results });
   } catch (err) {
     console.error("[cron/daily-sync] Error:", err);
-    return NextResponse.json({ error: "Daily sync failed.", details: err instanceof Error ? err.message : String(err) }, { status: 500 });
+    return errorResponse("Daily sync failed.", err, 500);
   }
 });

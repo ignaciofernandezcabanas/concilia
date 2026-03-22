@@ -1,3 +1,4 @@
+import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
 import { cashflowQuerySchema } from "@/lib/utils/validation";
@@ -42,13 +43,7 @@ export const GET = withAuth(
       return NextResponse.json(report);
     } catch (err) {
       console.error("[reports/cashflow] Error:", err);
-      return NextResponse.json(
-        {
-          error: "Failed to generate cash flow report.",
-          details: err instanceof Error ? err.message : String(err),
-        },
-        { status: 500 }
-      );
+      return errorResponse("Failed to generate cash flow report.", err, 500);
     }
   },
   "read:reports"

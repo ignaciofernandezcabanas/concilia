@@ -103,9 +103,10 @@ async function main() {
   const cid = company.id;
 
   // Step 3: User
-  await prisma.user.create({
+  const user = await prisma.user.create({
     data: { email: DEMO_EMAIL, name: "Admin Demo", role: "ADMIN", status: "ACTIVE", companyId: cid },
   });
+  const userId = user.id;
 
   // Step 4: Own bank accounts
   await prisma.ownBankAccount.createMany({
@@ -257,10 +258,12 @@ async function main() {
 
   // Step 8: Bank transactions
   // Scenario 1 — exact cobros for PAID invoices
+  // Jan/Feb → RECONCILED (already processed), Mar → PENDING (for engine)
   for (const i of invoices.filter(i => i.type === "ISSUED" && i.status === "PAID")) {
     const ct = contacts.find(ct => ct.id === i.contactId)!;
-    addTx(i.totalAmount, new Date(i.issueDate.getTime() + (5 + Math.floor(Math.random()*10)) * 86400000),
-      `TRANSFERENCIA A FAVOR ${ct.name} REF ${i.number}`, ct.iban, ct.name);
+    const txDate = new Date(i.issueDate.getTime() + (5 + Math.floor(Math.random()*10)) * 86400000);
+    const txStatus = txDate.getMonth() < 2 ? "RECONCILED" : "PENDING"; // 0=Jan, 1=Feb
+    addTx(i.totalAmount, txDate, `TRANSFERENCIA A FAVOR ${ct.name} REF ${i.number}`, ct.iban, ct.name, txStatus);
   }
 
   // Scenario 2 — partial cobro
@@ -277,10 +280,12 @@ async function main() {
   addTx(round(levPend1.totalAmount - 15), d(2026, 3, 14), "TRANSF LEVANTE COMISION BANCARIA", IBANS.levante, "Distribuidora Levante SL");
 
   // Scenarios 5-6 — pagos for PAID received invoices
+  // Jan/Feb → RECONCILED, Mar → PENDING
   for (const i of invoices.filter(i => i.type === "RECEIVED" && i.status === "PAID")) {
     const ct = contacts.find(ct => ct.id === i.contactId)!;
-    addTx(-i.totalAmount, new Date(i.issueDate.getTime() + (3 + Math.floor(Math.random()*7)) * 86400000),
-      `PAGO TRANSFERENCIA A ${ct.name} FRA ${i.number}`, ct.iban, ct.name);
+    const txDate = new Date(i.issueDate.getTime() + (3 + Math.floor(Math.random()*7)) * 86400000);
+    const txStatus = txDate.getMonth() < 2 ? "RECONCILED" : "PENDING";
+    addTx(-i.totalAmount, txDate, `PAGO TRANSFERENCIA A ${ct.name} FRA ${i.number}`, ct.iban, ct.name, txStatus);
   }
 
   // Scenario 7 — recurring expenses without invoice
@@ -378,16 +383,16 @@ async function main() {
   // Step 10: Controller Decisions (25)
   const decisionData = [];
   for (let i = 0; i < 15; i++) {
-    decisionData.push(mkDecision(cid, "approve", false, contacts[i % contacts.length], d(2026, 1 + Math.floor(i/8), 5 + i)));
+    decisionData.push(mkDecision(cid, userId, "approve", false, contacts[i % contacts.length], d(2026, 1 + Math.floor(i/8), 5 + i)));
   }
   for (let i = 0; i < 5; i++) {
-    decisionData.push(mkDecision(cid, "approve", true, contacts[i], d(2026, 2, 10 + i), "differenceReason", "BANK_COMMISSION", "EARLY_PAYMENT"));
+    decisionData.push(mkDecision(cid, userId, "approve", true, contacts[i], d(2026, 2, 10 + i)));
   }
   for (let i = 0; i < 3; i++) {
-    decisionData.push(mkDecision(cid, "classify", true, contacts[7 + i], d(2026, 2, 15 + i), "accountCode", "629", "628"));
+    decisionData.push(mkDecision(cid, userId, "classify", true, contacts[7 + i], d(2026, 2, 15 + i)));
   }
-  decisionData.push(mkDecision(cid, "reject", true, contacts[3], d(2026, 2, 20)));
-  decisionData.push(mkDecision(cid, "reject", true, contacts[4], d(2026, 2, 22)));
+  decisionData.push(mkDecision(cid, userId, "reject", true, contacts[3], d(2026, 2, 20)));
+  decisionData.push(mkDecision(cid, userId, "reject", true, contacts[4], d(2026, 2, 22)));
 
   await prisma.controllerDecision.createMany({ data: decisionData });
 
@@ -444,7 +449,7 @@ async function mkInvoice(
   const paid = isPaid ? totalAmount : amountPaid;
   const pending = isPaid ? 0 : round(totalAmount - paid);
 
-  return prisma.invoice.create({
+  const invoice = await prisma.invoice.create({
     data: {
       number, type: type as "ISSUED", issueDate, dueDate: avgDays > 0 ? dueDate : null,
       totalAmount, netAmount: net(totalAmount), vatAmount: vat(totalAmount),
@@ -452,14 +457,42 @@ async function mkInvoice(
       amountPaid: paid, amountPending: pending, companyId, contactId,
     },
   });
+
+  // Create InvoiceLine linked to PGC account (needed for PyG report)
+  // ISSUED/CREDIT_ISSUED → 705 (Prestaciones de servicios, pygLine "1")
+  // RECEIVED/CREDIT_RECEIVED → 600 (Compras de mercaderías, pygLine "4")
+  const pygAccount = type.includes("ISSUED") ? "705" : "600";
+  const account = await prisma.account.findFirst({
+    where: { code: pygAccount, companyId },
+    select: { id: true },
+  });
+  if (account) {
+    await prisma.invoiceLine.create({
+      data: {
+        description: `Línea ${number}`,
+        quantity: 1,
+        unitPrice: net(totalAmount),
+        totalAmount: net(totalAmount),
+        vatRate: 0.21,
+        invoiceId: invoice.id,
+        accountId: account.id,
+      },
+    });
+  }
+
+  return invoice;
 }
 
 function mkDecision(
-  companyId: string, action: string, wasModified: boolean,
+  companyId: string, uid: string, action: string, wasModified: boolean,
   contact: { name: string; cif: string | null; iban: string | null },
-  date: Date, _correctedField?: string, _correctedFrom?: string, _correctedTo?: string
+  date: Date
 ) {
   const absAmount = 1000 + Math.random() * 20000;
+  const amountRange = absAmount < 100 ? "0-100"
+    : absAmount < 500 ? "100-500"
+    : absAmount < 5000 ? "500-5000"
+    : "5000+";
   return {
     systemProposal: action === "reject" ? "approve" : "exact_amount",
     systemConfidence: 0.85 + Math.random() * 0.1,
@@ -470,12 +503,12 @@ function mkDecision(
     counterpartCif: contact.cif,
     counterpartIban: contact.iban,
     transactionType: Math.random() > 0.5 ? "cobro" : "pago",
-    amountRange: absAmount < 5000 ? "0-5000" : "5000+",
+    amountRange,
     bankConcept: `TRANSFERENCIA ${contact.name}`,
     dayOfMonth: date.getDate(),
     isRecurring: Math.random() > 0.7,
     createdExplicitRule: false,
-    userId: "seed",
+    userId: uid,
     companyId,
     createdAt: date,
   };

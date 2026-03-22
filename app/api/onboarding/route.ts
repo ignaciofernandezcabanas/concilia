@@ -1,3 +1,4 @@
+import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { createServerClient } from "@/lib/supabase";
@@ -108,10 +109,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[onboarding] Error:", err);
-    return NextResponse.json({
-      error: "Error en el onboarding.",
-      details: err instanceof Error ? err.message : String(err),
-    }, { status: 500 });
+    return errorResponse("Error en el onboarding.", err, 500);
   }
 }
 

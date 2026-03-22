@@ -29,7 +29,7 @@ export type BankTransactionResponse = Pick<
   PrismaBankTransaction,
   "id" | "valueDate" | "bookingDate" | "amount" | "currency" |
   "concept" | "conceptParsed" | "counterpartIban" | "counterpartName" |
-  "reference" | "balanceAfter" | "status" | "priority" | "detectedType" | "note"
+  "reference" | "balanceAfter" | "status" | "priority" | "detectedType" | "note" | "duplicateGroupId"
 > & {
   classification?: {
     id: string;
@@ -132,12 +132,12 @@ export interface PyGReport {
 }
 
 export interface ReconciliationReportResponse {
-  period: string;
-  holdedBalance: number;
-  bankBalance: number;
-  difference: number;
-  holdedItems?: { id: string; date: string; concept: string; amount: number; status?: string }[];
-  bankItems?: { id: string; date: string; concept: string; amount: number; status?: string }[];
+  month: string;
+  saldoHolded: number;
+  saldoBanco: number;
+  diferencia: number;
+  unreconciledInvoices?: { invoiceId: string; number: string; type: string; issueDate: string; totalAmount: number; amountPending: number; contactName: string; status: string }[];
+  unreconciledTransactions?: { transactionId: string; valueDate: string; concept: string; amount: number; counterpartName: string; status: string }[];
 }
 
 export interface DashboardResponse {

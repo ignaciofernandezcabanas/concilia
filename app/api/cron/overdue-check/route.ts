@@ -1,3 +1,4 @@
+import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { withCronAuth } from "@/lib/auth/cron-guard";
@@ -181,12 +182,6 @@ export const POST = withCronAuth(async (req: NextRequest) => {
     });
   } catch (err) {
     console.error("[cron/overdue-check] Error:", err);
-    return NextResponse.json(
-      {
-        error: "Overdue check failed.",
-        details: err instanceof Error ? err.message : String(err),
-      },
-      { status: 500 }
-    );
+    return errorResponse("Overdue check failed.", err, 500);
   }
 });

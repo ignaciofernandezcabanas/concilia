@@ -40,12 +40,25 @@ export default function Conciliacion() {
   const reconMonthLabel = reconDate.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 
   async function handleResolve(payload: Record<string, unknown>) {
-    const recoId = payload.reconciliationId as string;
-    // Use reconciliationId for the URL, fallback to a dummy for non-reco actions
-    const urlId = recoId || "action";
-    setResolving(recoId || (payload.bankTransactionId as string) || "");
+    const action = payload.action as string;
+    const recoId = payload.reconciliationId as string | undefined;
+    const txId = payload.bankTransactionId as string | undefined;
+
+    // Route to the correct endpoint
+    const recoActions = ["approve", "reject", "investigate", "mark_return", "split_financial"];
+    let url: string;
+    if (recoActions.includes(action) && recoId) {
+      url = `/api/reconciliation/${recoId}/resolve`;
+    } else if (txId) {
+      url = `/api/transactions/${txId}/action`;
+    } else {
+      console.error("No reconciliationId nor bankTransactionId for action", action);
+      return;
+    }
+
+    setResolving(recoId || txId || "");
     try {
-      await api.post(`/api/reconciliation/${urlId}/resolve`, payload);
+      await api.post(url, payload);
       refetch();
       setSelectedTxId(null);
       const labels: Record<string, string> = {
@@ -256,19 +269,19 @@ export default function Conciliacion() {
                 <div className="bg-white rounded-lg border border-subtle p-5 text-center">
                   <div className="text-xs text-text-secondary mb-2">Saldo según Holded</div>
                   <div className="text-2xl font-semibold font-mono text-accent">
-                    {formatAmount(reconData.holdedBalance ?? 0)}
+                    {formatAmount(reconData.saldoHolded ?? 0)}
                   </div>
                 </div>
                 <div className="bg-white rounded-lg border border-subtle p-5 text-center">
                   <div className="text-xs text-text-secondary mb-2">Diferencia</div>
-                  <div className={`text-2xl font-semibold font-mono ${(reconData.difference ?? 0) === 0 ? "text-green-text" : "text-red"}`}>
-                    {formatAmount(reconData.difference ?? 0)}
+                  <div className={`text-2xl font-semibold font-mono ${(reconData.diferencia ?? 0) === 0 ? "text-green-text" : "text-red"}`}>
+                    {formatAmount(reconData.diferencia ?? 0)}
                   </div>
                 </div>
                 <div className="bg-white rounded-lg border border-subtle p-5 text-center">
                   <div className="text-xs text-text-secondary mb-2">Saldo según banco</div>
                   <div className="text-2xl font-semibold font-mono text-green">
-                    {formatAmount(reconData.bankBalance ?? 0)}
+                    {formatAmount(reconData.saldoBanco ?? 0)}
                   </div>
                 </div>
               </div>
@@ -279,25 +292,23 @@ export default function Conciliacion() {
               </h3>
               <div className="bg-white rounded-lg border border-subtle overflow-hidden mb-5">
                 <div className="flex items-center h-10 px-5 border-b border-subtle text-xs font-semibold text-text-secondary">
-                  <span className="w-20">Fecha</span>
-                  <span className="flex-1">Concepto</span>
-                  <span className="w-[120px] text-right">Importe</span>
-                  <span className="w-28 text-right">Estado</span>
+                  <span className="w-24">Nº Factura</span>
+                  <span className="flex-1">Contacto</span>
+                  <span className="w-[120px] text-right">Pendiente</span>
+                  <span className="w-20 text-right">Estado</span>
                 </div>
-                {(reconData.holdedItems ?? []).length === 0 ? (
+                {(reconData.unreconciledInvoices ?? []).length === 0 ? (
                   <div className="px-5 py-4 text-[13px] text-text-tertiary">Sin partidas pendientes</div>
                 ) : (
-                  (reconData.holdedItems ?? []).map((item) => (
-                    <div key={item.id} className="flex items-center h-11 px-5 text-[13px] border-b border-border-light">
-                      <span className="w-20 text-text-secondary">
-                        {new Date(item.date).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                  (reconData.unreconciledInvoices ?? []).map((item) => (
+                    <div key={item.invoiceId} className="flex items-center h-11 px-5 text-[13px] border-b border-border-light">
+                      <span className="w-24 text-accent font-medium">{item.number}</span>
+                      <span className="flex-1 text-text-primary">{item.contactName}</span>
+                      <span className="w-[120px] text-right font-mono font-medium text-text-primary">
+                        {formatAmount(item.amountPending)}
                       </span>
-                      <span className="flex-1 text-text-primary">{item.concept}</span>
-                      <span className={`w-[120px] text-right font-mono font-medium ${item.amount < 0 ? "text-red-text" : "text-text-primary"}`}>
-                        {formatAmount(item.amount)}
-                      </span>
-                      <span className="w-28 text-right">
-                        {item.status && <Badge value={item.status} />}
+                      <span className="w-20 text-right">
+                        <Badge value={item.status} />
                       </span>
                     </div>
                   ))
@@ -310,25 +321,25 @@ export default function Conciliacion() {
               </h3>
               <div className="bg-white rounded-lg border border-subtle overflow-hidden">
                 <div className="flex items-center h-10 px-5 border-b border-subtle text-xs font-semibold text-text-secondary">
-                  <span className="w-20">Fecha</span>
+                  <span className="w-24">Fecha</span>
                   <span className="flex-1">Concepto</span>
                   <span className="w-[120px] text-right">Importe</span>
-                  <span className="w-28 text-right">Estado</span>
+                  <span className="w-24 text-right">Estado</span>
                 </div>
-                {(reconData.bankItems ?? []).length === 0 ? (
+                {(reconData.unreconciledTransactions ?? []).length === 0 ? (
                   <div className="px-5 py-4 text-[13px] text-text-tertiary">Sin partidas pendientes</div>
                 ) : (
-                  (reconData.bankItems ?? []).map((item) => (
-                    <div key={item.id} className="flex items-center h-11 px-5 text-[13px] border-b border-border-light">
-                      <span className="w-20 text-text-secondary">
-                        {new Date(item.date).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                  (reconData.unreconciledTransactions ?? []).map((item) => (
+                    <div key={item.transactionId} className="flex items-center h-11 px-5 text-[13px] border-b border-border-light">
+                      <span className="w-24 text-text-secondary">
+                        {new Date(item.valueDate).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
                       </span>
-                      <span className="flex-1 text-text-primary">{item.concept}</span>
-                      <span className="w-[120px] text-right font-mono font-medium text-text-primary">
+                      <span className="flex-1 text-text-primary truncate">{item.concept}</span>
+                      <span className={`w-[120px] text-right font-mono font-medium ${item.amount < 0 ? "text-red-text" : "text-green-text"}`}>
                         {formatAmount(item.amount)}
                       </span>
-                      <span className="w-28 text-right">
-                        {item.status && <Badge value={item.status} />}
+                      <span className="w-24 text-right">
+                        <Badge value={item.status} />
                       </span>
                     </div>
                   ))

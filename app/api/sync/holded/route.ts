@@ -1,3 +1,4 @@
+import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { HoldedClient } from "@/lib/holded/client";
@@ -214,10 +215,7 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     console.error("[sync/holded] Error:", err);
-    return NextResponse.json(
-      { error: "Sync failed.", details: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    return errorResponse("Sync failed.", err, 500);
   }
 }
 

@@ -63,6 +63,7 @@ export default function BalancePage() {
             structure={BALANCE_STRUCTURE}
             data={dataMap}
             columns={columns}
+            drilldown={{ report: "balance", asOf: period.to }}
           />
         )}
       </div>

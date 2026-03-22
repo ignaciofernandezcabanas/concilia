@@ -1,3 +1,4 @@
+import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
 import { resolveSchema } from "@/lib/utils/validation";
@@ -84,13 +85,7 @@ export const POST = withAuth(
       return NextResponse.json(result);
     } catch (err) {
       console.error("[reconciliation/resolve] Error:", err);
-      return NextResponse.json(
-        {
-          error: "Failed to resolve reconciliation.",
-          details: err instanceof Error ? err.message : String(err),
-        },
-        { status: 500 }
-      );
+      return errorResponse("Failed to resolve reconciliation.", err, 500);
     }
   },
   "resolve:reconciliation"

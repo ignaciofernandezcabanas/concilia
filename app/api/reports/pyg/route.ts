@@ -1,3 +1,4 @@
+import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
 import { pygQuerySchema } from "@/lib/utils/validation";
@@ -54,13 +55,7 @@ export const GET = withAuth(
       return NextResponse.json(report);
     } catch (err) {
       console.error("[reports/pyg] Error:", err);
-      return NextResponse.json(
-        {
-          error: "Failed to generate P&L report.",
-          details: err instanceof Error ? err.message : String(err),
-        },
-        { status: 500 }
-      );
+      return errorResponse("Failed to generate P&L report.", err, 500);
     }
   },
   "read:reports"

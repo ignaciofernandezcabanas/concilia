@@ -16,7 +16,7 @@ export function formatAmount(amount: number, currency = "EUR"): string {
 
 export function formatDate(date: string | Date, format: "short" | "long" | "iso" = "short"): string {
   const d = typeof date === "string" ? new Date(date) : date;
-  if (format === "iso") return d.toISOString().slice(0, 10);
+  if (format === "iso") return localDateStr(d);
   if (format === "long") {
     return new Intl.DateTimeFormat("es-ES", {
       day: "numeric",
@@ -35,23 +35,25 @@ export function formatMonth(date: Date): string {
   return new Intl.DateTimeFormat("es-ES", { month: "long", year: "numeric" }).format(date);
 }
 
+/** Format a local Date as YYYY-MM-DD without UTC conversion */
+function localDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function getMonthRange(date: Date): { from: string; to: string } {
   const from = new Date(date.getFullYear(), date.getMonth(), 1);
   const to = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
-  };
+  return { from: localDateStr(from), to: localDateStr(to) };
 }
 
 export function getQuarterRange(date: Date): { from: string; to: string } {
   const q = Math.floor(date.getMonth() / 3);
   const from = new Date(date.getFullYear(), q * 3, 1);
   const to = new Date(date.getFullYear(), q * 3 + 3, 0);
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
-  };
+  return { from: localDateStr(from), to: localDateStr(to) };
 }
 
 export function getYearMonth(date: Date): string {

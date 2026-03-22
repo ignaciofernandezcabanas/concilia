@@ -1,3 +1,4 @@
+import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { withCronAuth } from "@/lib/auth/cron-guard";
@@ -146,9 +147,6 @@ export const POST = withCronAuth(async (_req: NextRequest) => {
     return NextResponse.json({ success: true, period });
   } catch (err) {
     console.error("[cron/calibrate-thresholds] Error:", err);
-    return NextResponse.json(
-      { error: "Calibration failed.", detail: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    return errorResponse("Calibration failed.", err, 500);
   }
 });

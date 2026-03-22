@@ -113,6 +113,7 @@ export default function CashflowPage() {
             structure={EFE_STRUCTURE}
             data={efeDataMap}
             columns={efeColumns}
+            drilldown={{ report: "cashflow", from: period.from, to: period.to }}
           />
         ) : (
           <TreasuryView data={data?.mode === "direct" ? data as TreasuryReport : null} />

@@ -27,18 +27,41 @@ interface DecisionContext {
 
 export async function trackControllerDecision(ctx: DecisionContext): Promise<void> {
   try {
-    // Load the reconciliation to get the system's original proposal
-    const reco = await prisma.reconciliation.findUnique({
-      where: { id: ctx.reconciliationId },
-      include: {
-        bankTransaction: {
-          include: {
-            reconciliations: { where: { status: { not: "REJECTED" } }, take: 1 },
+    // Load context — either from reconciliation or directly from bank transaction
+    let reco: Awaited<ReturnType<typeof prisma.reconciliation.findUnique>> & {
+      bankTransaction?: { amount: number; counterpartIban: string | null; counterpartName: string | null; concept: string | null; valueDate: Date; reconciliations?: unknown[] } | null;
+      invoice?: { contact?: { name: string; cif: string | null } | null } | null;
+    } | null = null;
+
+    if (ctx.reconciliationId) {
+      reco = await prisma.reconciliation.findUnique({
+        where: { id: ctx.reconciliationId },
+        include: {
+          bankTransaction: {
+            include: {
+              reconciliations: { where: { status: { not: "REJECTED" } }, take: 1 },
+            },
           },
+          invoice: { include: { contact: true } },
         },
-        invoice: { include: { contact: true } },
-      },
-    });
+      });
+    }
+
+    // If no reco but we have a bankTransactionId, load tx directly
+    if (!reco && ctx.bankTransactionId) {
+      const tx = await prisma.bankTransaction.findUnique({ where: { id: ctx.bankTransactionId } });
+      if (tx) {
+        // Create a minimal reco-like object for context extraction
+        reco = {
+          id: "", matchReason: null, confidenceScore: 0, difference: null, differenceReason: null,
+          bankTransactionId: tx.id, invoiceId: null, companyId: ctx.companyId,
+          type: "MANUAL", status: "PROPOSED", invoiceAmount: null, bankAmount: null,
+          differenceAccountId: null, resolvedAt: null, resolvedById: null, resolution: null,
+          createdAt: new Date(), updatedAt: new Date(),
+          bankTransaction: tx, invoice: null,
+        } as typeof reco;
+      }
+    }
 
     if (!reco) return;
 

@@ -1,3 +1,4 @@
+import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
 import { generateBalance } from "@/lib/reports/balance-generator";
@@ -28,10 +29,7 @@ export const GET = withAuth(
       return NextResponse.json(report);
     } catch (err) {
       console.error("[reports/balance] Error:", err);
-      return NextResponse.json(
-        { error: "Failed to generate balance.", detail: err instanceof Error ? err.message : String(err) },
-        { status: 500 }
-      );
+      return errorResponse("Failed to generate balance.", err, 500);
     }
   },
   "read:reports"
