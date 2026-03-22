@@ -1,0 +1,689 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// EMPRESA Y USUARIOS
+// ============================================================
+
+model Company {
+  id                    String    @id @default(cuid())
+  name                  String
+  cif                   String
+  currency              String    @default("EUR")
+  fiscalYearStartMonth  Int       @default(1)
+  numberFormat          String    @default("eu")
+  csvSeparator          String    @default(";")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  autoApproveThreshold  Float     @default(0.95)     // Confidence below → bandeja
+  materialityThreshold  Float     @default(500)      // Above → bandeja siempre (major)
+  materialityMinor      Float     @default(5)        // Differences below → auto-adjust
+  preAlertDays          Int       @default(7)        // Days before due date → alert
+
+  users                 User[]
+  invoices              Invoice[]
+  bankTransactions      BankTransaction[]
+  reconciliations       Reconciliation[]
+  accounts              Account[]
+  contacts              Contact[]
+  matchingRules         MatchingRule[]
+  syncLogs              SyncLog[]
+  notifications         Notification[]
+  integrations          Integration[]
+  archiveLogs           ArchiveLog[]
+  ownBankAccounts       OwnBankAccount[]
+}
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  name          String?
+  role          Role       @default(EDITOR)
+  status        UserStatus @default(PENDING)
+  lastLoginAt   DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  companyId     String
+  company       Company    @relation(fields: [companyId], references: [id])
+
+  auditLogs     AuditLog[]
+  notifications Notification[]
+
+  @@unique([email, companyId])
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  READER
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING
+  DISABLED
+}
+
+// ============================================================
+// PLAN DE CUENTAS (PGC)
+// ============================================================
+
+model Account {
+  id            String       @id @default(cuid())
+  code          String
+  name          String
+  parentCode    String?
+  group         Int
+  pygLine       String?
+  cashflowType  CashflowType?
+  isActive      Boolean      @default(true)
+
+  companyId     String
+  company       Company      @relation(fields: [companyId], references: [id])
+
+  invoiceLines      InvoiceLine[]
+  classifications   BankTransactionClassification[]
+
+  @@unique([code, companyId])
+}
+
+enum CashflowType {
+  OPERATING
+  INVESTING
+  FINANCING
+  INTERNAL
+  NON_CASH
+}
+
+// ============================================================
+// CUENTAS BANCARIAS PROPIAS
+// ============================================================
+
+model OwnBankAccount {
+  id        String  @id @default(cuid())
+  iban      String
+  bankName  String?
+  alias     String?
+  isActive  Boolean @default(true)
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  @@unique([iban, companyId])
+}
+
+// ============================================================
+// CONTACTOS
+// ============================================================
+
+model Contact {
+  id              String      @id @default(cuid())
+  holdedId        String?
+  name            String
+  cif             String?
+  iban            String?
+  type            ContactType
+  avgPaymentDays  Float?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id])
+
+  invoices        Invoice[]
+
+  @@unique([holdedId, companyId])
+}
+
+enum ContactType {
+  CUSTOMER
+  SUPPLIER
+  BOTH
+}
+
+// ============================================================
+// FACTURAS
+// ============================================================
+
+model Invoice {
+  id                String        @id @default(cuid())
+  holdedId          String?
+  number            String
+  type              InvoiceType
+  issueDate         DateTime
+  dueDate           DateTime?
+  totalAmount       Float
+  netAmount         Float?
+  vatAmount         Float?
+  currency          String        @default("EUR")
+  description       String?
+  status            InvoiceStatus @default(PENDING)
+
+  amountPaid        Float         @default(0)
+  amountPending     Float?
+
+  provisionedAmount Float         @default(0)
+  provisionType     ProvisionType?
+
+  pdfUrl            String?
+  driveFileId       String?
+
+  creditNoteForId   String?
+  creditNoteFor     Invoice?      @relation("CreditNotes", fields: [creditNoteForId], references: [id])
+  creditNotes       Invoice[]     @relation("CreditNotes")
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  syncedAt          DateTime?
+
+  companyId         String
+  company           Company       @relation(fields: [companyId], references: [id])
+
+  contactId         String?
+  contact           Contact?      @relation(fields: [contactId], references: [id])
+
+  lines             InvoiceLine[]
+  reconciliations   Reconciliation[]
+  payments          Payment[]
+
+  @@unique([holdedId, companyId])
+  @@index([companyId, status])
+  @@index([companyId, type, issueDate])
+  @@index([companyId, dueDate])
+}
+
+model InvoiceLine {
+  id          String  @id @default(cuid())
+  description String?
+  quantity    Float   @default(1)
+  unitPrice   Float
+  totalAmount Float
+  vatRate     Float?
+
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  accountId   String?
+  account     Account? @relation(fields: [accountId], references: [id])
+}
+
+enum InvoiceType {
+  ISSUED
+  RECEIVED
+  CREDIT_ISSUED
+  CREDIT_RECEIVED
+}
+
+enum InvoiceStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  PROVISIONED
+  WRITTEN_OFF
+  CANCELLED
+}
+
+enum ProvisionType {
+  DOUBTFUL
+  WRITTEN_OFF
+}
+
+// ============================================================
+// PAGOS
+// ============================================================
+
+model Payment {
+  id        String   @id @default(cuid())
+  holdedId  String?  @unique
+  amount    Float
+  date      DateTime
+  method    String?
+
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+// ============================================================
+// MOVIMIENTOS BANCARIOS
+// ============================================================
+
+model BankTransaction {
+  id              String                @id @default(cuid())
+  externalId      String?
+  valueDate       DateTime
+  bookingDate     DateTime?
+  amount          Float
+  currency        String                @default("EUR")
+  concept         String?
+  conceptParsed   String?
+  counterpartIban String?
+  counterpartName String?
+  reference       String?
+  balanceAfter    Float?
+
+  status          BankTransactionStatus @default(PENDING)
+  priority        TransactionPriority   @default(ROUTINE)
+  detectedType    DetectedType?
+
+  classificationId String?
+  classification   BankTransactionClassification? @relation(fields: [classificationId], references: [id])
+
+  note            String?
+  noteAuthorId    String?
+  noteCreatedAt   DateTime?
+  reminderDate    DateTime?
+
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  syncedAt        DateTime?
+
+  companyId       String
+  company         Company               @relation(fields: [companyId], references: [id])
+
+  reconciliations Reconciliation[]
+  duplicateGroupId String?
+  duplicateGroup   DuplicateGroup?      @relation(fields: [duplicateGroupId], references: [id])
+
+  @@unique([externalId, companyId])
+  @@index([companyId, status])
+  @@index([companyId, valueDate])
+  @@index([companyId, counterpartIban])
+}
+
+model BankTransactionClassification {
+  id           String       @id @default(cuid())
+  accountId    String
+  account      Account      @relation(fields: [accountId], references: [id])
+  cashflowType CashflowType
+  description  String?
+
+  transactions BankTransaction[]
+}
+
+enum BankTransactionStatus {
+  PENDING
+  RECONCILED
+  CLASSIFIED
+  REJECTED
+  INVESTIGATING
+  INTERNAL
+  DUPLICATE
+  IGNORED
+}
+
+enum TransactionPriority {
+  URGENT
+  DECISION
+  CONFIRMATION
+  ROUTINE
+}
+
+enum DetectedType {
+  MATCH_SIMPLE
+  MATCH_GROUPED
+  MATCH_PARTIAL
+  MATCH_DIFFERENCE
+  EXPENSE_NO_INVOICE
+  INTERNAL_TRANSFER
+  FINANCIAL_OPERATION
+  UNIDENTIFIED
+  POSSIBLE_DUPLICATE
+  RETURN
+  OVERDUE_INVOICE
+  CREDIT_NOTE
+}
+
+// ============================================================
+// GRUPOS DE DUPLICADOS
+// ============================================================
+
+model DuplicateGroup {
+  id           String          @id @default(cuid())
+  status       DuplicateStatus @default(PENDING)
+  resolvedAt   DateTime?
+  resolution   String?
+
+  transactions BankTransaction[]
+}
+
+enum DuplicateStatus {
+  PENDING
+  LEGITIMATE
+  DUPLICATE
+}
+
+// ============================================================
+// CONCILIACIONES
+// ============================================================
+
+model Reconciliation {
+  id                  String               @id @default(cuid())
+  type                ReconciliationType
+  confidenceScore     Float?
+  matchReason         String?
+  status              ReconciliationStatus @default(PROPOSED)
+
+  invoiceAmount       Float?
+  bankAmount          Float?
+  difference          Float?
+  differenceReason    DifferenceReason?
+  differenceAccountId String?
+
+  resolvedAt          DateTime?
+  resolvedById        String?
+  resolution          String?
+
+  bankTransactionId   String?
+  bankTransaction     BankTransaction?     @relation(fields: [bankTransactionId], references: [id])
+
+  invoiceId           String?
+  invoice             Invoice?             @relation(fields: [invoiceId], references: [id])
+
+  companyId           String
+  company             Company              @relation(fields: [companyId], references: [id])
+
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([companyId, status])
+  @@index([bankTransactionId])
+  @@index([invoiceId])
+}
+
+enum ReconciliationType {
+  EXACT_MATCH
+  GROUPED_MATCH
+  PARTIAL_MATCH
+  DIFFERENCE_MATCH
+  RETURN_MATCH
+  CREDIT_NOTE_MATCH
+  MANUAL
+}
+
+enum ReconciliationStatus {
+  PROPOSED
+  APPROVED
+  AUTO_APPROVED
+  REJECTED
+}
+
+enum DifferenceReason {
+  BANK_COMMISSION
+  EARLY_PAYMENT
+  COMMERCIAL_DISCOUNT
+  PARTIAL_PAYMENT
+  OTHER
+}
+
+// ============================================================
+// REGLAS DE MATCHING
+// ============================================================
+
+model MatchingRule {
+  id              String       @id @default(cuid())
+  type            RuleType
+  isActive        Boolean      @default(true)
+  timesApplied    Int          @default(0)
+
+  pattern         String?
+  counterpartIban String?
+  contactId       String?
+  minAmount       Float?
+  maxAmount       Float?
+
+  action          String
+  accountCode     String?
+  cashflowType    CashflowType?
+
+  companyId       String
+  company         Company      @relation(fields: [companyId], references: [id])
+
+  createdAt       DateTime     @default(now())
+  createdById     String?
+
+  @@index([companyId, isActive])
+}
+
+enum RuleType {
+  EXACT_AMOUNT_CONTACT
+  CONCEPT_CLASSIFY
+  IBAN_CLASSIFY
+  IBAN_INTERNAL
+  FINANCIAL_SPLIT
+}
+
+// ============================================================
+// INTEGRACIONES
+// ============================================================
+
+model Integration {
+  id            String            @id @default(cuid())
+  type          IntegrationType
+  status        IntegrationStatus @default(DISCONNECTED)
+  config        Json?
+  lastSyncAt    DateTime?
+  syncFrequency String            @default("daily")
+  error         String?
+
+  companyId     String
+  company       Company           @relation(fields: [companyId], references: [id])
+
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@unique([type, companyId])
+}
+
+enum IntegrationType {
+  HOLDED
+  OPEN_BANKING
+  GOOGLE_DRIVE
+  CLAUDE_AI
+}
+
+enum IntegrationStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+}
+
+// ============================================================
+// LOGS
+// ============================================================
+
+model SyncLog {
+  id               String    @id @default(cuid())
+  source           String
+  action           String
+  status           String
+  recordsProcessed Int       @default(0)
+  recordsCreated   Int       @default(0)
+  recordsUpdated   Int       @default(0)
+  errors           Json?
+  duration         Int?
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
+
+  companyId        String
+  company          Company   @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, startedAt])
+}
+
+model ArchiveLog {
+  id            String    @id @default(cuid())
+  quarter       String
+  status        String
+  issuedCount   Int       @default(0)
+  receivedCount Int       @default(0)
+  errorCount    Int       @default(0)
+  errors        Json?
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  companyId     String
+  company       Company   @relation(fields: [companyId], references: [id])
+}
+
+// ============================================================
+// NOTIFICACIONES
+// ============================================================
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  body      String
+  isRead    Boolean          @default(false)
+  actionUrl String?
+  metadata  Json?
+
+  userId    String
+  user      User             @relation(fields: [userId], references: [id])
+
+  companyId String
+  company   Company          @relation(fields: [companyId], references: [id])
+
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@index([companyId, createdAt])
+}
+
+enum NotificationType {
+  RECONCILIATION
+  SYNC
+  ARCHIVE
+  SYSTEM
+  FINANCIAL_ALERT
+}
+
+// ============================================================
+// DECISIONES DEL CONTROLLER (feedback loop)
+// ============================================================
+
+model ControllerDecision {
+  id                    String    @id @default(cuid())
+
+  // What the system proposed
+  systemProposal        String                    // "approve_match", "classify:629", etc.
+  systemConfidence      Float
+  systemMatchReason     String?
+
+  // What the controller decided
+  controllerAction      String                    // actual action taken
+  wasModified           Boolean                   // true if controller changed the proposal
+  isDefinitive          Boolean   @default(true)  // false = provisional (corrections only keep final)
+
+  // Full context for learning
+  counterpartName       String?
+  counterpartCif        String?
+  counterpartIban       String?
+  transactionType       String?                   // cobro, pago, gasto, ingreso
+  amountRange           String?                   // "0-100", "100-500", "500-5000", "5000+"
+  bankConcept           String?                   // raw bank concept
+  dayOfMonth            Int?
+  isRecurring           Boolean   @default(false)
+  differenceAmount      Float?
+  differenceReason      String?                   // reason chosen by controller
+  createdExplicitRule   Boolean   @default(false)
+
+  // References
+  reconciliationId      String?
+  bankTransactionId     String?
+  invoiceId             String?
+
+  userId                String
+  companyId             String
+  createdAt             DateTime  @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([companyId, counterpartIban])
+  @@index([companyId, transactionType])
+}
+
+// ============================================================
+// PATRONES APRENDIDOS (implicit learning)
+// ============================================================
+
+model LearnedPattern {
+  id                String    @id @default(cuid())
+  type              String                        // "difference_reason", "classification", "match_preference"
+  isActive          Boolean   @default(true)
+
+  // Pattern definition
+  counterpartIban   String?
+  counterpartName   String?
+  conceptPattern    String?                       // regex or substring
+  amountRange       String?
+  dayOfMonthRange   String?                       // e.g. "25-28" for payroll
+
+  // What the pattern predicts
+  predictedAction   String                        // the action to suggest
+  predictedReason   String?                       // e.g. "BANK_COMMISSION"
+  predictedAccount  String?                       // PGC account code
+
+  // Confidence tracking
+  occurrences       Int       @default(0)         // how many times this pattern was seen
+  correctPredictions Int      @default(0)         // how many times the prediction was right
+  confidence        Float     @default(0)         // correctPredictions / occurrences
+
+  companyId         String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([companyId, isActive])
+  @@index([companyId, counterpartIban])
+}
+
+// ============================================================
+// CALIBRACIÓN DE UMBRALES POR CATEGORÍA
+// ============================================================
+
+model ThresholdCalibration {
+  id                  String    @id @default(cuid())
+  category            String                      // "exact_match", "grouped_match", "classification", etc.
+  currentThreshold    Float
+  suggestedThreshold  Float?
+  autoApprovedCount   Int       @default(0)
+  autoApprovedErrors  Int       @default(0)
+  manualApprovedCount Int       @default(0)       // items in bandeja that controller approved unchanged
+  manualRejectedCount Int       @default(0)
+  monthsNoError       Int       @default(0)
+  lastCalibratedAt    DateTime?
+  period              String                      // "2026-03"
+
+  companyId           String
+
+  @@unique([companyId, category, period])
+  @@index([companyId])
+}
+
+// ============================================================
+// AUDITORÍA
+// ============================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+}

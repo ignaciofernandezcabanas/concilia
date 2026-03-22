@@ -1,0 +1,877 @@
+import { prisma } from "@/lib/db";
+import type {
+  BankTransaction,
+  DetectedType,
+  ReconciliationType,
+  Invoice,
+  Contact,
+} from "@prisma/client";
+
+import { detectInternalTransfer } from "./detectors/internal-detector";
+import { detectDuplicates } from "./detectors/duplicate-detector";
+import { detectReturn } from "./detectors/return-detector";
+import { detectFinancialOp } from "./detectors/financial-detector";
+
+import { findExactMatch } from "./matchers/exact-match";
+import { findGroupedMatch } from "./matchers/grouped-match";
+import { findFuzzyMatch } from "./matchers/fuzzy-match";
+import { findLlmMatch } from "./matchers/llm-match";
+
+import { classifyByRules } from "./classifiers/rule-classifier";
+import {
+  classifyByLlm,
+  type HistoricalClassification,
+} from "./classifiers/llm-classifier";
+
+import { assignPriority } from "./prioritizer";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface ReconciliationResult {
+  processed: number;
+  matched: number;
+  classified: number;
+  autoApproved: number;
+  needsReview: number;
+  errors: Array<{ txId: string; error: string }>;
+}
+
+interface MatchOutcome {
+  type: ReconciliationType;
+  invoiceId: string | null;
+  invoiceIds: string[];
+  confidence: number;
+  matchReason: string;
+  difference: number | null;
+  differenceReason: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Engine
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs the full reconciliation pipeline for all PENDING bank transactions
+ * belonging to the specified company.
+ *
+ * For each transaction:
+ * 1. Run detectors (internal, duplicate, return, financial)
+ * 2. Run matchers (exact -> grouped -> fuzzy -> LLM)
+ * 3. Run classifiers (rule-based -> LLM)
+ * 4. Assign priority
+ * 5. Auto-approve if confidence > threshold AND amount < materiality
+ *
+ * The engine is idempotent: it checks for existing Reconciliation records
+ * before creating new ones and skips already-processed transactions.
+ */
+export async function runReconciliation(
+  companyId: string
+): Promise<ReconciliationResult> {
+  const result: ReconciliationResult = {
+    processed: 0,
+    matched: 0,
+    classified: 0,
+    autoApproved: 0,
+    needsReview: 0,
+    errors: [],
+  };
+
+  // Load company settings
+  const company = await prisma.company.findUniqueOrThrow({
+    where: { id: companyId },
+  });
+
+  const {
+    autoApproveThreshold,
+    materialityThreshold,
+    materialityMinor,
+  } = company;
+
+  // Load all PENDING bank transactions
+  const pendingTx = await prisma.bankTransaction.findMany({
+    where: {
+      companyId,
+      status: "PENDING",
+    },
+    orderBy: { valueDate: "asc" },
+  });
+
+  if (pendingTx.length === 0) {
+    return result;
+  }
+
+  // Preload data shared across transactions
+  const contacts = await prisma.contact.findMany({
+    where: { companyId },
+  });
+
+  const pendingInvoices = await prisma.invoice.findMany({
+    where: {
+      companyId,
+      status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
+    },
+    include: { contact: true },
+  });
+
+  // Load historical classifications for LLM classifier context
+  const historicalClassifications = await loadHistoricalClassifications(companyId);
+
+  // Process each transaction
+  for (const tx of pendingTx) {
+    try {
+      await processTransaction(
+        tx,
+        companyId,
+        contacts,
+        pendingInvoices,
+        historicalClassifications,
+        autoApproveThreshold,
+        materialityThreshold,
+        materialityMinor,
+        result
+      );
+      result.processed++;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error(
+        `[reconciliation] Error processing tx ${tx.id}:`,
+        message
+      );
+      result.errors.push({ txId: tx.id, error: message });
+      result.processed++;
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Per-transaction processing
+// ---------------------------------------------------------------------------
+
+async function processTransaction(
+  tx: BankTransaction,
+  companyId: string,
+  contacts: Contact[],
+  pendingInvoices: (Invoice & { contact: Contact | null })[],
+  historicalClassifications: HistoricalClassification[],
+  autoApproveThreshold: number,
+  materialityThreshold: number,
+  materialityMinor: number,
+  result: ReconciliationResult
+): Promise<void> {
+  // Idempotency: skip if a non-rejected reconciliation already exists
+  const existing = await prisma.reconciliation.findFirst({
+    where: {
+      bankTransactionId: tx.id,
+      status: { notIn: ["REJECTED"] },
+    },
+  });
+
+  if (existing) {
+    return;
+  }
+
+  // =====================================================================
+  // PHASE 1: DETECTORS
+  // =====================================================================
+
+  // 1a. Internal transfer
+  const internalResult = await detectInternalTransfer(tx, companyId);
+  if (internalResult.isInternal) {
+    await createReconciliation(tx, companyId, {
+      type: "MANUAL",
+      confidence: 0.99,
+      matchReason: `internal_transfer:${internalResult.ownAccountId}`,
+      detectedType: "INTERNAL_TRANSFER",
+      autoApprove: true,
+    });
+    await updateTxStatus(tx.id, "INTERNAL", "INTERNAL_TRANSFER", "ROUTINE");
+    result.matched++;
+    result.autoApproved++;
+    return;
+  }
+
+  // 1b. Duplicate detection
+  const duplicateResult = await detectDuplicates(tx, companyId);
+  if (duplicateResult.isDuplicate) {
+    await createReconciliation(tx, companyId, {
+      type: "MANUAL",
+      confidence: 0.90,
+      matchReason: `possible_duplicate:group_${duplicateResult.groupId}`,
+      detectedType: "POSSIBLE_DUPLICATE",
+      autoApprove: false,
+    });
+    await updateTxStatus(tx.id, "PENDING", "POSSIBLE_DUPLICATE", "URGENT");
+    result.needsReview++;
+    return;
+  }
+
+  // 1c. Return detection
+  const returnResult = await detectReturn(tx, companyId);
+  if (returnResult.isReturn) {
+    await createReconciliation(tx, companyId, {
+      type: "RETURN_MATCH",
+      confidence: 0.95,
+      matchReason: `return:original_tx_${returnResult.originalTxId}`,
+      detectedType: "RETURN",
+      autoApprove: false,
+    });
+    await updateTxStatus(tx.id, "PENDING", "RETURN", "URGENT");
+    result.needsReview++;
+    return;
+  }
+
+  // =====================================================================
+  // PHASE 1d: CREDIT NOTE DETECTION
+  // =====================================================================
+
+  if (tx.amount > 0) {
+    // Positive amount could be a credit note refund — check for CREDIT_ISSUED invoices
+    const creditNotes = pendingInvoices.filter(
+      (inv) =>
+        inv.type === "CREDIT_ISSUED" &&
+        Math.abs(inv.totalAmount - tx.amount) < 0.01
+    );
+    if (creditNotes.length === 1) {
+      const cn = creditNotes[0];
+      await createReconciliation(tx, companyId, {
+        type: "CREDIT_NOTE_MATCH",
+        confidence: 0.95,
+        matchReason: `credit_note:${cn.number}:exact_amount`,
+        detectedType: "CREDIT_NOTE",
+        invoiceId: cn.id,
+        autoApprove:
+          0.95 >= autoApproveThreshold &&
+          Math.abs(tx.amount) <= materialityThreshold,
+      });
+      const shouldAuto =
+        0.95 >= autoApproveThreshold &&
+        Math.abs(tx.amount) <= materialityThreshold;
+      await updateTxStatus(
+        tx.id,
+        shouldAuto ? "RECONCILED" : "PENDING",
+        "CREDIT_NOTE",
+        shouldAuto ? "ROUTINE" : "CONFIRMATION"
+      );
+      if (shouldAuto) {
+        await markInvoicePaid(cn.id, tx.amount);
+        // Link credit note to original invoice
+        if (cn.creditNoteForId) {
+          await prisma.invoice.update({
+            where: { id: cn.creditNoteForId },
+            data: {
+              amountPaid: { decrement: Math.abs(cn.totalAmount) },
+              status: "PARTIAL",
+            },
+          });
+        }
+        result.autoApproved++;
+      } else {
+        result.needsReview++;
+      }
+      result.matched++;
+      return;
+    }
+  }
+  // Negative amount → CREDIT_RECEIVED
+  if (tx.amount < 0) {
+    const creditNotes = pendingInvoices.filter(
+      (inv) =>
+        inv.type === "CREDIT_RECEIVED" &&
+        Math.abs(inv.totalAmount - Math.abs(tx.amount)) < 0.01
+    );
+    if (creditNotes.length === 1) {
+      const cn = creditNotes[0];
+      await createReconciliation(tx, companyId, {
+        type: "CREDIT_NOTE_MATCH",
+        confidence: 0.95,
+        matchReason: `credit_note:${cn.number}:exact_amount`,
+        detectedType: "CREDIT_NOTE",
+        invoiceId: cn.id,
+        autoApprove:
+          0.95 >= autoApproveThreshold &&
+          Math.abs(tx.amount) <= materialityThreshold,
+      });
+      const shouldAuto =
+        0.95 >= autoApproveThreshold &&
+        Math.abs(tx.amount) <= materialityThreshold;
+      await updateTxStatus(
+        tx.id,
+        shouldAuto ? "RECONCILED" : "PENDING",
+        "CREDIT_NOTE",
+        shouldAuto ? "ROUTINE" : "CONFIRMATION"
+      );
+      if (shouldAuto) {
+        await markInvoicePaid(cn.id, Math.abs(tx.amount));
+        result.autoApproved++;
+      } else {
+        result.needsReview++;
+      }
+      result.matched++;
+      return;
+    }
+  }
+
+  // =====================================================================
+  // PHASE 2: MATCHERS
+  // =====================================================================
+
+  let matchOutcome: MatchOutcome | null = null;
+
+  // 2a. Exact match
+  const exactMatches = await findExactMatch(tx, companyId);
+  if (exactMatches.length > 0) {
+    const best = exactMatches[0];
+    matchOutcome = {
+      type: "EXACT_MATCH",
+      invoiceId: best.invoice.id,
+      invoiceIds: [best.invoice.id],
+      confidence: best.confidence,
+      matchReason: best.matchReason,
+      difference: null,
+      differenceReason: null,
+    };
+  }
+
+  // 2a-bis. Partial payment detection (amount < invoice but same contact)
+  if (!matchOutcome) {
+    const absTxAmount = Math.abs(tx.amount);
+    const isIncome = tx.amount > 0;
+    const partialCandidates = pendingInvoices.filter((inv) => {
+      const matchType = isIncome
+        ? (inv.type === "ISSUED" || inv.type === "CREDIT_RECEIVED")
+        : (inv.type === "RECEIVED" || inv.type === "CREDIT_ISSUED");
+      if (!matchType) return false;
+      // Amount must be less than invoice but > 10% of it
+      const pending = inv.amountPending ?? inv.totalAmount;
+      return absTxAmount < pending && absTxAmount > pending * 0.1;
+    });
+
+    // Try to match by IBAN or CIF
+    for (const inv of partialCandidates) {
+      const contact = inv.contact;
+      if (!contact) continue;
+      const ibanMatch = contact.iban && tx.counterpartIban &&
+        contact.iban.replace(/\s/g, "") === tx.counterpartIban.replace(/\s/g, "");
+      const cifMatch = contact.cif && tx.concept &&
+        tx.concept.toUpperCase().includes(contact.cif.toUpperCase());
+      if (ibanMatch || cifMatch) {
+        matchOutcome = {
+          type: "PARTIAL_MATCH",
+          invoiceId: inv.id,
+          invoiceIds: [inv.id],
+          confidence: ibanMatch ? 0.88 : 0.75,
+          matchReason: `partial_payment:${absTxAmount}/${inv.amountPending ?? inv.totalAmount}:${ibanMatch ? "iban" : "cif"}`,
+          difference: absTxAmount - (inv.amountPending ?? inv.totalAmount),
+          differenceReason: "PARTIAL_PAYMENT",
+        };
+        break;
+      }
+    }
+  }
+
+  // 2b. Grouped match (only if no exact match)
+  if (!matchOutcome) {
+    const grouped = await findGroupedMatch(tx, companyId);
+    if (grouped) {
+      matchOutcome = {
+        type: "GROUPED_MATCH",
+        invoiceId: grouped.invoices[0]?.id ?? null,
+        invoiceIds: grouped.invoices.map((inv) => inv.id),
+        confidence: grouped.confidence,
+        matchReason: grouped.matchReason,
+        difference: null,
+        differenceReason: null,
+      };
+    }
+  }
+
+  // 2b-bis. Check learned patterns for difference reason prediction
+  // If we have a fuzzy match, check if a learned pattern suggests the reason
+  if (!matchOutcome) {
+    // First check if a learned pattern can resolve this directly
+    const learnedPatterns = await prisma.learnedPattern.findMany({
+      where: {
+        companyId,
+        isActive: true,
+        counterpartIban: tx.counterpartIban ?? "none",
+        confidence: { gte: 0.80 },
+      },
+      orderBy: { confidence: "desc" },
+      take: 1,
+    });
+
+    if (learnedPatterns.length > 0) {
+      const pattern = learnedPatterns[0];
+      // Find the matching invoice using the pattern's predicted action
+      const candidates = pendingInvoices.filter((inv) => {
+        const isMatch = tx.amount > 0
+          ? (inv.type === "ISSUED" || inv.type === "CREDIT_RECEIVED")
+          : (inv.type === "RECEIVED" || inv.type === "CREDIT_ISSUED");
+        return isMatch && inv.contact?.iban === tx.counterpartIban;
+      });
+
+      if (candidates.length > 0) {
+        const best = candidates[0];
+        const diff = Math.abs(tx.amount) - best.totalAmount;
+        if (Math.abs(diff) < best.totalAmount * 0.10) {
+          matchOutcome = {
+            type: "DIFFERENCE_MATCH",
+            invoiceId: best.id,
+            invoiceIds: [best.id],
+            confidence: Math.min(pattern.confidence, 0.90),
+            matchReason: `learned_pattern:${pattern.id}:${pattern.predictedReason}`,
+            difference: diff,
+            differenceReason: pattern.predictedReason,
+          };
+          // Increment pattern usage
+          prisma.learnedPattern.update({
+            where: { id: pattern.id },
+            data: { occurrences: { increment: 1 } },
+          }).catch(() => {});
+        }
+      }
+    }
+  }
+
+  // 2c. Fuzzy match (only if no match found yet)
+  if (!matchOutcome) {
+    const fuzzyMatches = await findFuzzyMatch(tx, companyId);
+    if (fuzzyMatches.length > 0) {
+      const best = fuzzyMatches[0];
+      matchOutcome = {
+        type: "DIFFERENCE_MATCH",
+        invoiceId: best.invoice.id,
+        invoiceIds: [best.invoice.id],
+        confidence: best.confidence,
+        matchReason: best.matchReason,
+        difference: best.amountDifference,
+        differenceReason: best.suggestedDifferenceReason,
+      };
+    }
+  }
+
+  // 2d. LLM match (only if no other match found)
+  if (!matchOutcome) {
+    const llmResult = await findLlmMatch(tx, pendingInvoices, contacts);
+    if (llmResult) {
+      matchOutcome = {
+        type: "EXACT_MATCH",
+        invoiceId: llmResult.invoiceId,
+        invoiceIds: [llmResult.invoiceId],
+        confidence: llmResult.confidence,
+        matchReason: `${llmResult.matchReason}:${llmResult.llmExplanation}`,
+        difference: null,
+        differenceReason: null,
+      };
+    }
+  }
+
+  // If a match was found, create reconciliation(s)
+  if (matchOutcome) {
+    const detectedType = resolveDetectedType(matchOutcome);
+    const priority = assignPriority(
+      tx,
+      detectedType,
+      matchOutcome.confidence,
+      materialityThreshold
+    );
+
+    // Auto-approve rules:
+    // 1. Standard: confidence >= threshold AND amount <= materiality
+    // 2. Small difference: if difference exists AND |difference| <= materialityMinor
+    //    AND confidence >= 0.70 → auto-approve as minor adjustment
+    // 3. Unidentified income (scenario 8) → NEVER auto-approve
+    // 4. First-time classification → NEVER auto-approve
+    const isSmallDiff =
+      matchOutcome.difference != null &&
+      Math.abs(matchOutcome.difference) <= materialityMinor &&
+      matchOutcome.confidence >= 0.70;
+
+    const isUnidentifiedIncome = !matchOutcome.invoiceId && tx.amount > 0;
+
+    const shouldAutoApprove =
+      !isUnidentifiedIncome &&
+      (
+        (matchOutcome.confidence >= autoApproveThreshold &&
+          Math.abs(tx.amount) <= materialityThreshold) ||
+        isSmallDiff
+      );
+
+    // For grouped matches, create a reconciliation per invoice
+    if (matchOutcome.type === "GROUPED_MATCH" && matchOutcome.invoiceIds.length > 1) {
+      for (const invoiceId of matchOutcome.invoiceIds) {
+        await createReconciliation(tx, companyId, {
+          type: matchOutcome.type,
+          confidence: matchOutcome.confidence,
+          matchReason: matchOutcome.matchReason,
+          detectedType,
+          invoiceId,
+          difference: matchOutcome.difference,
+          differenceReason: matchOutcome.differenceReason,
+          autoApprove: shouldAutoApprove,
+        });
+      }
+    } else {
+      await createReconciliation(tx, companyId, {
+        type: matchOutcome.type,
+        confidence: matchOutcome.confidence,
+        matchReason: matchOutcome.matchReason,
+        detectedType,
+        invoiceId: matchOutcome.invoiceId,
+        difference: matchOutcome.difference,
+        differenceReason: matchOutcome.differenceReason,
+        autoApprove: shouldAutoApprove,
+      });
+    }
+
+    const newTxStatus = shouldAutoApprove ? "RECONCILED" : "PENDING";
+    await updateTxStatus(tx.id, newTxStatus, detectedType, priority);
+
+    // Update invoice payment status if auto-approved
+    if (shouldAutoApprove && matchOutcome.invoiceId) {
+      await markInvoicePaid(matchOutcome.invoiceId, Math.abs(tx.amount));
+    }
+
+    // LEARNING LOOP: create a rule from auto-approved exact matches
+    if (shouldAutoApprove && matchOutcome.type === "EXACT_MATCH" && tx.counterpartIban) {
+      await learnFromApproval(tx, companyId, matchOutcome);
+    }
+
+    result.matched++;
+    if (shouldAutoApprove) {
+      result.autoApproved++;
+    } else {
+      result.needsReview++;
+    }
+    return;
+  }
+
+  // =====================================================================
+  // PHASE 3: CLASSIFIERS (no invoice match found)
+  // =====================================================================
+
+  // 3a. Financial operation detection
+  const financialResult = await detectFinancialOp(tx, companyId);
+  if (financialResult.isFinancial) {
+    await createReconciliation(tx, companyId, {
+      type: "MANUAL",
+      confidence: 0.85,
+      matchReason: `financial_op:principal_${financialResult.suggestedPrincipal}_interest_${financialResult.suggestedInterest}`,
+      detectedType: "FINANCIAL_OPERATION",
+      autoApprove: false,
+    });
+    await updateTxStatus(tx.id, "PENDING", "FINANCIAL_OPERATION", "CONFIRMATION");
+    result.classified++;
+    result.needsReview++;
+    return;
+  }
+
+  // 3b. Rule-based classification
+  const ruleResult = await classifyByRules(tx, companyId);
+  if (ruleResult) {
+    // Resolve the account to get its ID
+    const account = await prisma.account.findFirst({
+      where: { code: ruleResult.accountCode, companyId },
+    });
+
+    if (account) {
+      const classification = await prisma.bankTransactionClassification.create({
+        data: {
+          accountId: account.id,
+          cashflowType: ruleResult.cashflowType,
+          description: `Rule: ${ruleResult.ruleName}`,
+        },
+      });
+
+      const shouldAutoApprove =
+        ruleResult.confidence >= autoApproveThreshold &&
+        Math.abs(tx.amount) <= materialityThreshold;
+
+      const priority = assignPriority(
+        tx,
+        "EXPENSE_NO_INVOICE",
+        ruleResult.confidence,
+        materialityThreshold
+      );
+
+      await prisma.bankTransaction.update({
+        where: { id: tx.id },
+        data: {
+          classificationId: classification.id,
+          status: shouldAutoApprove ? "CLASSIFIED" : "PENDING",
+          detectedType: "EXPENSE_NO_INVOICE",
+          priority,
+        },
+      });
+
+      await createReconciliation(tx, companyId, {
+        type: "MANUAL",
+        confidence: ruleResult.confidence,
+        matchReason: `rule:${ruleResult.ruleId}:${ruleResult.ruleName}`,
+        detectedType: "EXPENSE_NO_INVOICE",
+        autoApprove: shouldAutoApprove,
+      });
+
+      result.classified++;
+      if (shouldAutoApprove) {
+        result.autoApproved++;
+      } else {
+        result.needsReview++;
+      }
+      return;
+    }
+  }
+
+  // 3c. LLM classification
+  const llmClassification = await classifyByLlm(tx, historicalClassifications);
+  if (llmClassification) {
+    const account = await prisma.account.findFirst({
+      where: { code: llmClassification.accountCode, companyId },
+    });
+
+    if (account) {
+      const classification = await prisma.bankTransactionClassification.create({
+        data: {
+          accountId: account.id,
+          cashflowType: llmClassification.cashflowType,
+          description: `LLM: ${llmClassification.llmExplanation}`,
+        },
+      });
+
+      const priority = assignPriority(
+        tx,
+        "EXPENSE_NO_INVOICE",
+        llmClassification.confidence,
+        materialityThreshold
+      );
+
+      // LLM classifications always require human review
+      await prisma.bankTransaction.update({
+        where: { id: tx.id },
+        data: {
+          classificationId: classification.id,
+          detectedType: "EXPENSE_NO_INVOICE",
+          priority,
+        },
+      });
+
+      await createReconciliation(tx, companyId, {
+        type: "MANUAL",
+        confidence: llmClassification.confidence,
+        matchReason: `llm_classify:${llmClassification.accountCode}:${llmClassification.llmExplanation}`,
+        detectedType: "EXPENSE_NO_INVOICE",
+        autoApprove: false,
+      });
+
+      result.classified++;
+      result.needsReview++;
+      return;
+    }
+  }
+
+  // =====================================================================
+  // PHASE 4: UNIDENTIFIED
+  // =====================================================================
+
+  const priority = assignPriority(
+    tx,
+    "UNIDENTIFIED",
+    0,
+    materialityThreshold
+  );
+
+  await updateTxStatus(tx.id, "PENDING", "UNIDENTIFIED", priority);
+
+  await createReconciliation(tx, companyId, {
+    type: "MANUAL",
+    confidence: 0,
+    matchReason: "unidentified",
+    detectedType: "UNIDENTIFIED",
+    autoApprove: false,
+  });
+
+  result.needsReview++;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+interface CreateRecoParams {
+  type: ReconciliationType;
+  confidence: number;
+  matchReason: string;
+  detectedType: DetectedType;
+  invoiceId?: string | null;
+  difference?: number | null;
+  differenceReason?: string | null;
+  autoApprove: boolean;
+}
+
+async function createReconciliation(
+  tx: BankTransaction,
+  companyId: string,
+  params: CreateRecoParams
+): Promise<void> {
+  const invoiceAmount = params.invoiceId
+    ? (
+        await prisma.invoice.findUnique({
+          where: { id: params.invoiceId },
+          select: { totalAmount: true },
+        })
+      )?.totalAmount ?? null
+    : null;
+
+  await prisma.reconciliation.create({
+    data: {
+      type: params.type,
+      confidenceScore: params.confidence,
+      matchReason: params.matchReason,
+      status: params.autoApprove ? "AUTO_APPROVED" : "PROPOSED",
+      bankTransactionId: tx.id,
+      invoiceId: params.invoiceId ?? null,
+      companyId,
+      invoiceAmount,
+      bankAmount: Math.abs(tx.amount),
+      difference: params.difference ?? null,
+      differenceReason: (params.differenceReason as never) ?? null,
+      ...(params.autoApprove ? { resolvedAt: new Date() } : {}),
+    },
+  });
+}
+
+async function updateTxStatus(
+  txId: string,
+  status: BankTransaction["status"],
+  detectedType: DetectedType,
+  priority: BankTransaction["priority"]
+): Promise<void> {
+  await prisma.bankTransaction.update({
+    where: { id: txId },
+    data: { status, detectedType, priority },
+  });
+}
+
+function resolveDetectedType(match: MatchOutcome): DetectedType {
+  switch (match.type) {
+    case "EXACT_MATCH":
+      return "MATCH_SIMPLE";
+    case "GROUPED_MATCH":
+      return "MATCH_GROUPED";
+    case "PARTIAL_MATCH":
+      return "MATCH_PARTIAL";
+    case "DIFFERENCE_MATCH":
+      return "MATCH_DIFFERENCE";
+    case "RETURN_MATCH":
+      return "RETURN";
+    case "CREDIT_NOTE_MATCH":
+      return "CREDIT_NOTE";
+    case "MANUAL":
+      return "UNIDENTIFIED";
+    default:
+      return "UNIDENTIFIED";
+  }
+}
+
+/**
+ * Update invoice payment status after a match is approved.
+ */
+async function markInvoicePaid(invoiceId: string, paidAmount: number): Promise<void> {
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+  if (!invoice) return;
+
+  const newAmountPaid = invoice.amountPaid + paidAmount;
+  const newPending = invoice.totalAmount - newAmountPaid;
+  const tolerance = 0.01;
+
+  let newStatus: "PAID" | "PARTIAL" | "PENDING" = "PARTIAL";
+  if (newPending <= tolerance) newStatus = "PAID";
+  else if (newAmountPaid <= tolerance) newStatus = "PENDING";
+
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: {
+      amountPaid: newAmountPaid,
+      amountPending: Math.max(0, newPending),
+      status: newStatus,
+    },
+  });
+}
+
+/**
+ * LEARNING LOOP: create or increment a MatchingRule from an auto-approved match.
+ * This teaches the system to auto-approve similar transactions in the future.
+ */
+async function learnFromApproval(
+  tx: BankTransaction,
+  companyId: string,
+  match: MatchOutcome
+): Promise<void> {
+  try {
+    // Check if a rule already exists for this IBAN + amount pattern
+    const existingRule = await prisma.matchingRule.findFirst({
+      where: {
+        companyId,
+        counterpartIban: tx.counterpartIban,
+        type: "EXACT_AMOUNT_CONTACT",
+        isActive: true,
+      },
+    });
+
+    if (existingRule) {
+      // Increment usage counter
+      await prisma.matchingRule.update({
+        where: { id: existingRule.id },
+        data: { timesApplied: { increment: 1 } },
+      });
+    } else {
+      // Create new rule from this successful match
+      await prisma.matchingRule.create({
+        data: {
+          type: "EXACT_AMOUNT_CONTACT",
+          isActive: true,
+          pattern: tx.concept?.slice(0, 100) ?? null,
+          counterpartIban: tx.counterpartIban,
+          action: "auto_approve",
+          companyId,
+        },
+      });
+    }
+  } catch {
+    // Non-critical: silently ignore rule creation failures
+  }
+}
+
+async function loadHistoricalClassifications(
+  companyId: string
+): Promise<HistoricalClassification[]> {
+  const classified = await prisma.bankTransaction.findMany({
+    where: {
+      companyId,
+      status: "CLASSIFIED",
+      classificationId: { not: null },
+    },
+    include: {
+      classification: {
+        include: { account: true },
+      },
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 50,
+  });
+
+  return classified
+    .filter((tx) => tx.classification?.account)
+    .map((tx) => ({
+      concept: tx.concept ?? "",
+      accountCode: tx.classification!.account.code,
+      accountName: tx.classification!.account.name,
+      cashflowType: tx.classification!.cashflowType,
+      amount: tx.amount,
+    }));
+}
