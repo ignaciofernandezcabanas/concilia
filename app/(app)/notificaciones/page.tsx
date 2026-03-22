@@ -15,6 +15,12 @@ import {
   RefreshCw,
   Scale,
   Shield,
+  Bot,
+  Calendar,
+  Wallet,
+  Clock,
+  Search,
+  Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -25,6 +31,14 @@ const TYPE_ICONS: Record<string, LucideIcon> = {
   ARCHIVE: FileText,
   SYSTEM: Shield,
   FINANCIAL_ALERT: AlertTriangle,
+  DAILY_BRIEFING: Bot,
+  CLOSE_PROPOSAL: Calendar,
+  TREASURY_ALERT: Wallet,
+  OVERDUE_INVOICE: Clock,
+  ANOMALY_DETECTED: Search,
+  FISCAL_DEADLINE: Calendar,
+  ENGINE_COMPLETE: Zap,
+  AUTO_EXECUTE_ERROR: AlertCircle,
 };
 
 const TYPE_COLORS: Record<string, { icon: string; bg: string }> = {
@@ -33,6 +47,14 @@ const TYPE_COLORS: Record<string, { icon: string; bg: string }> = {
   ARCHIVE: { icon: "text-accent", bg: "bg-accent-light" },
   SYSTEM: { icon: "text-text-secondary", bg: "bg-hover" },
   FINANCIAL_ALERT: { icon: "text-amber", bg: "bg-amber-light" },
+  DAILY_BRIEFING: { icon: "text-accent", bg: "bg-accent-light" },
+  CLOSE_PROPOSAL: { icon: "text-accent", bg: "bg-accent-light" },
+  TREASURY_ALERT: { icon: "text-red", bg: "bg-red-light" },
+  OVERDUE_INVOICE: { icon: "text-amber", bg: "bg-amber-light" },
+  ANOMALY_DETECTED: { icon: "text-amber", bg: "bg-amber-light" },
+  FISCAL_DEADLINE: { icon: "text-red", bg: "bg-red-light" },
+  ENGINE_COMPLETE: { icon: "text-green", bg: "bg-green-light" },
+  AUTO_EXECUTE_ERROR: { icon: "text-red", bg: "bg-red-light" },
 };
 
 export default function Notificaciones() {

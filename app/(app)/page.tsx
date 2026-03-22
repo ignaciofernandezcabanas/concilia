@@ -6,9 +6,15 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import { useFetch } from "@/hooks/useApi";
 import { qs } from "@/lib/api-client";
 import { formatAmount, formatMonth, getMonthRange } from "@/lib/format";
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, AlertCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, AlertCircle, Bot } from "lucide-react";
 import Link from "next/link";
 import type { DashboardResponse } from "@/lib/types/api";
+
+interface BriefingNotification {
+  id: string;
+  body: string;
+  createdAt: string;
+}
 
 export default function Dashboard() {
   const [date, setDate] = useState(() => new Date());
@@ -17,6 +23,20 @@ export default function Dashboard() {
   const { data, loading } = useFetch<DashboardResponse>(
     `/api/reports/dashboard${qs({ from, to })}`
   );
+
+  // Fetch today's briefing
+  const { data: briefingData } = useFetch<{ data: BriefingNotification[] }>(
+    `/api/notifications${qs({ type: "DAILY_BRIEFING", limit: 1 })}`
+  );
+
+  const todayBriefing = useMemo(() => {
+    const notif = briefingData?.data?.[0];
+    if (!notif) return null;
+    const notifDate = new Date(notif.createdAt);
+    const today = new Date();
+    if (notifDate.toDateString() === today.toDateString()) return notif;
+    return null;
+  }, [briefingData]);
 
   function shiftMonth(delta: number) {
     setDate((d) => new Date(d.getFullYear(), d.getMonth() + delta, 1));
@@ -28,6 +48,19 @@ export default function Dashboard() {
     <div className="flex flex-col min-h-full">
       <TopBar title="Resumen" />
       <div className="flex flex-col gap-6 p-6 px-8 flex-1 overflow-auto">
+        {/* Daily briefing card */}
+        {todayBriefing && (
+          <div className="bg-accent/5 border border-accent/30 rounded-lg p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <Bot size={16} className="text-accent" />
+              <span className="text-[13px] font-semibold text-accent">Briefing diario</span>
+            </div>
+            <p className="text-[12px] text-text-primary whitespace-pre-line leading-relaxed">
+              {todayBriefing.body}
+            </p>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-[22px] font-semibold text-text-primary">Resumen</h1>
