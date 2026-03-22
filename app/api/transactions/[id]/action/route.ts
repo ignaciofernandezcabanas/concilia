@@ -2,12 +2,13 @@ import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
 import { resolveItem, type ResolvePayload } from "@/lib/reconciliation/resolver";
+import { prisma } from "@/lib/db";
 
 /**
  * POST /api/transactions/[id]/action
  *
  * Actions that operate directly on a BankTransaction (no existing Reconciliation):
- * classify, mark_internal, ignore, mark_duplicate, mark_legitimate, manual_match
+ * classify, mark_internal, mark_intercompany, ignore, mark_duplicate, mark_legitimate, manual_match
  */
 export const POST = withAuth(
   async (req: NextRequest, ctx: AuthContext & { params?: Record<string, string> }) => {
@@ -28,6 +29,16 @@ export const POST = withAuth(
       return NextResponse.json({ error: "Action required." }, { status: 400 });
     }
 
+    // For intercompany actions, resolve the link ID from the transaction
+    let intercompanyLinkId = body.intercompanyLinkId as string | undefined;
+    if (action === "mark_intercompany" && !intercompanyLinkId) {
+      const link = await prisma.intercompanyLink.findFirst({
+        where: { transactionAId: txId, status: "DETECTED" },
+        select: { id: true },
+      });
+      intercompanyLinkId = link?.id;
+    }
+
     const payload: ResolvePayload = {
       action: action as ResolvePayload["action"],
       bankTransactionId: txId,
@@ -39,6 +50,8 @@ export const POST = withAuth(
       duplicateOfId: body.duplicateOfId as string | undefined,
       duplicateGroupId: body.duplicateGroupId as string | undefined,
       differenceReason: body.differenceReason as ResolvePayload["differenceReason"],
+      intercompanyLinkId,
+      intercompanyAction: body.intercompanyAction as "confirm" | "eliminate" | undefined,
       createRule: body.createRule as boolean | undefined,
       note: body.note as string | undefined,
     };

@@ -16,9 +16,10 @@ import {
   Scale,
   Shield,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-const TYPE_ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+const TYPE_ICONS: Record<string, LucideIcon> = {
   RECONCILIATION: Scale,
   SYNC: RefreshCw,
   ARCHIVE: FileText,

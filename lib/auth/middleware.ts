@@ -65,9 +65,6 @@ export function withAuth(
           email: supabaseUser.email!,
           status: "ACTIVE",
         },
-        include: {
-          company: true,
-        },
       });
 
       if (!user) {
@@ -77,7 +74,18 @@ export function withAuth(
         );
       }
 
-      const { company, ...userWithoutCompany } = user;
+      // Resolve active company: activeCompanyId (multi-tenant) → companyId (legacy)
+      const activeCompanyId = user.activeCompanyId ?? user.companyId;
+      const company = await prisma.company.findUnique({
+        where: { id: activeCompanyId },
+      });
+
+      if (!company) {
+        return NextResponse.json(
+          { error: "No active company. Please select a company." },
+          { status: 400 }
+        );
+      }
 
       // Check permission if required
       if (requiredPermission) {
@@ -103,7 +111,7 @@ export function withAuth(
       const db = getScopedDb(company.id);
 
       return handler(req, {
-        user: userWithoutCompany as User,
+        user,
         company,
         db,
         params: routeCtx?.params,

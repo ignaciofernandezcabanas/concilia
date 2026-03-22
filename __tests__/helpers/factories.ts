@@ -4,13 +4,15 @@
  * Use overrides to customize specific fields.
  */
 
+import type { BankTransaction, Invoice, Company, Contact, Reconciliation, MatchingRule, LearnedPattern } from "@prisma/client";
+
 const DEFAULT_COMPANY_ID = "company_1";
 const DEFAULT_CONTACT_ID = "contact_1";
 const DEFAULT_CONTACT_IBAN = "ES7620770024003102575766";
 const DEFAULT_CONTACT_CIF = "B12345678";
 
 // ── Company ──
-export function buildCompany(overrides: Partial<ReturnType<typeof buildCompany>> = {}) {
+export function buildCompany(overrides: Record<string, unknown> = {}): Company {
   return {
     id: DEFAULT_COMPANY_ID,
     name: "Test Company S.L.",
@@ -26,11 +28,11 @@ export function buildCompany(overrides: Partial<ReturnType<typeof buildCompany>>
     materialityMinor: 5,
     preAlertDays: 7,
     ...overrides,
-  };
+  } as Company;
 }
 
 // ── Contact ──
-export function buildContact(overrides: Partial<ReturnType<typeof buildContact>> = {}) {
+export function buildContact(overrides: Record<string, unknown> = {}): Contact {
   return {
     id: DEFAULT_CONTACT_ID,
     holdedId: null,
@@ -43,11 +45,11 @@ export function buildContact(overrides: Partial<ReturnType<typeof buildContact>>
     updatedAt: new Date("2025-01-01"),
     companyId: DEFAULT_COMPANY_ID,
     ...overrides,
-  };
+  } as Contact;
 }
 
 // ── Invoice ──
-export function buildInvoice(overrides: Partial<ReturnType<typeof buildInvoice>> = {}) {
+export function buildInvoice(overrides: Record<string, unknown> = {}): Invoice & { contact: Contact } {
   return {
     id: "invoice_1",
     holdedId: null,
@@ -75,11 +77,11 @@ export function buildInvoice(overrides: Partial<ReturnType<typeof buildInvoice>>
     contactId: DEFAULT_CONTACT_ID,
     contact: buildContact(),
     ...overrides,
-  };
+  } as Invoice & { contact: Contact };
 }
 
 // ── BankTransaction ──
-export function buildBankTransaction(overrides: Partial<ReturnType<typeof buildBankTransaction>> = {}) {
+export function buildBankTransaction(overrides: Record<string, unknown> = {}): BankTransaction {
   return {
     id: "tx_1",
     externalId: "csv_2026-03-15_-1000.00_47254.02",
@@ -107,11 +109,11 @@ export function buildBankTransaction(overrides: Partial<ReturnType<typeof buildB
     companyId: DEFAULT_COMPANY_ID,
     duplicateGroupId: null,
     ...overrides,
-  };
+  } as BankTransaction;
 }
 
 // ── Reconciliation ──
-export function buildReconciliation(overrides: Partial<ReturnType<typeof buildReconciliation>> = {}) {
+export function buildReconciliation(overrides: Record<string, unknown> = {}): Reconciliation {
   return {
     id: "reco_1",
     type: "EXACT_MATCH" as const,
@@ -132,11 +134,11 @@ export function buildReconciliation(overrides: Partial<ReturnType<typeof buildRe
     createdAt: new Date("2026-03-15"),
     updatedAt: new Date("2026-03-15"),
     ...overrides,
-  };
+  } as Reconciliation;
 }
 
 // ── MatchingRule ──
-export function buildMatchingRule(overrides: Partial<ReturnType<typeof buildMatchingRule>> = {}) {
+export function buildMatchingRule(overrides: Record<string, unknown> = {}): MatchingRule {
   return {
     id: "rule_1",
     name: null as string | null,
@@ -165,11 +167,11 @@ export function buildMatchingRule(overrides: Partial<ReturnType<typeof buildMatc
     createdAt: new Date("2026-01-01"),
     createdById: null as string | null,
     ...overrides,
-  };
+  } as MatchingRule;
 }
 
 // ── LearnedPattern ──
-export function buildLearnedPattern(overrides: Partial<ReturnType<typeof buildLearnedPattern>> = {}) {
+export function buildLearnedPattern(overrides: Record<string, unknown> = {}): LearnedPattern {
   return {
     id: "pattern_1",
     type: "difference_reason",
@@ -194,5 +196,5 @@ export function buildLearnedPattern(overrides: Partial<ReturnType<typeof buildLe
     createdAt: new Date("2026-02-01"),
     updatedAt: new Date("2026-03-01"),
     ...overrides,
-  };
+  } as LearnedPattern;
 }

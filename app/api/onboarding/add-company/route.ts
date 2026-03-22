@@ -4,9 +4,7 @@ import { prisma } from "@/lib/db";
 import { createServerClient } from "@/lib/supabase";
 import { z } from "zod";
 
-const onboardingSchema = z.object({
-  mode: z.enum(["standalone", "group"]).default("standalone"),
-  orgName: z.string().optional(),
+const addCompanySchema = z.object({
   company: z.object({
     name: z.string().min(1, "Nombre es requerido"),
     shortName: z.string().optional(),
@@ -25,83 +23,84 @@ const onboardingSchema = z.object({
 });
 
 /**
- * POST /api/onboarding
+ * POST /api/onboarding/add-company
  *
- * Creates organization + company, links user as OWNER, creates bank accounts,
- * optionally seeds PGC accounts.
- *
- * Auth: JWT only (no company context — it doesn't exist yet).
+ * Adds a new company to the user's active organization.
+ * Only OWNER/ADMIN of the org can add companies.
  */
 export async function POST(req: NextRequest) {
   try {
-    // Verify JWT
     const authHeader = req.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Authorization required." }, { status: 401 });
     }
-    const token = authHeader.slice(7);
 
     const supabase = createServerClient();
-    const { data: { user: supabaseUser }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user: supabaseUser }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
     if (authError || !supabaseUser) {
       return NextResponse.json({ error: "Invalid token." }, { status: 401 });
     }
 
-    // Check user doesn't already have a company
-    const existingUser = await prisma.user.findFirst({
+    const user = await prisma.user.findFirst({
       where: { email: supabaseUser.email!, status: "ACTIVE" },
+      include: {
+        memberships: {
+          where: { status: "ACTIVE" },
+          include: { organization: true },
+        },
+      },
     });
-    if (existingUser) {
-      return NextResponse.json({ error: "Ya tienes una empresa configurada." }, { status: 400 });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found." }, { status: 401 });
     }
 
-    // Parse body
+    // Find the active org membership
+    const orgId = user.activeOrgId;
+    if (!orgId) {
+      return NextResponse.json({ error: "No active organization." }, { status: 400 });
+    }
+
+    const membership = user.memberships.find((m) => m.organizationId === orgId);
+    if (!membership || (membership.role !== "OWNER" && membership.role !== "ADMIN")) {
+      return NextResponse.json({ error: "Solo OWNER o ADMIN pueden añadir sociedades." }, { status: 403 });
+    }
+
     const body = await req.json();
-    const parsed = onboardingSchema.safeParse(body);
+    const parsed = addCompanySchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: "Datos inválidos.", details: parsed.error.flatten() }, { status: 400 });
     }
 
-    const { mode, orgName, company: companyData, bankAccounts, loadPgc } = parsed.data;
-    const isGroup = mode === "group";
-    const companyType = isGroup ? "SUBSIDIARY" : "STANDALONE";
-    const resolvedOrgName = isGroup && orgName ? orgName : companyData.name;
+    const { company: companyData, bankAccounts, loadPgc } = parsed.data;
 
-    // Create org + company + user + membership + bank accounts
     const result = await prisma.$transaction(async (tx) => {
-      const org = await tx.organization.create({
-        data: { name: resolvedOrgName },
-      });
-
       const company = await tx.company.create({
         data: {
           name: companyData.name,
           shortName: companyData.shortName ?? null,
           cif: companyData.cif,
           currency: companyData.currency,
-          type: companyType,
-          organizationId: org.id,
+          type: "SUBSIDIARY",
+          organizationId: orgId,
         },
       });
 
-      const user = await tx.user.create({
-        data: {
-          email: supabaseUser.email!,
-          name: supabaseUser.user_metadata?.name ?? supabaseUser.email!.split("@")[0],
-          role: "ADMIN",
-          status: "ACTIVE",
-          companyId: company.id,
-          activeOrgId: org.id,
-          activeCompanyId: company.id,
-        },
-      });
-
-      // Create Membership + CompanyScope
-      const membership = await tx.membership.create({
-        data: { role: "OWNER", status: "ACTIVE", userId: user.id, organizationId: org.id },
-      });
+      // Grant the user access to the new company
       await tx.companyScope.create({
         data: { role: "ADMIN", membershipId: membership.id, companyId: company.id },
+      });
+
+      // Switch user to the new company
+      await tx.user.update({
+        where: { id: user.id },
+        data: { activeCompanyId: company.id },
+      });
+
+      // Update old company type to SUBSIDIARY if it was STANDALONE
+      await tx.company.updateMany({
+        where: { organizationId: orgId, type: "STANDALONE" },
+        data: { type: "SUBSIDIARY" },
       });
 
       for (const ba of bankAccounts) {
@@ -115,30 +114,24 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      return { company, user, org };
+      return company;
     });
 
-    // PGC seed outside transaction (non-critical, can be retried)
     if (loadPgc) {
-      await seedPgcAccounts(result.company.id);
+      await seedPgcAccounts(result.id);
     }
 
     return NextResponse.json({
       success: true,
-      companyId: result.company.id,
-      userId: result.user.id,
-      orgId: result.org.id,
-      mode,
+      companyId: result.id,
       accountsCreated: bankAccounts.length,
       pgcLoaded: loadPgc,
     });
   } catch (err) {
-    console.error("[onboarding] Error:", err);
-    return errorResponse("Error en el onboarding.", err, 500);
+    console.error("[onboarding/add-company] Error:", err);
+    return errorResponse("Error al añadir sociedad.", err, 500);
   }
 }
-
-// ── PGC Seed ──
 
 async function seedPgcAccounts(companyId: string) {
   const { PGC_SEED_ACCOUNTS } = await import("@/lib/pgc-seed-data");

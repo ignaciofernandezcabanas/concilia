@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { useCompany } from "@/hooks/useApi";
+import ContextSwitcher from "@/components/ContextSwitcher";
 import {
   LayoutDashboard,
   GitCompare,
@@ -53,11 +54,13 @@ export default function Sidebar() {
 
   return (
     <aside className="w-[220px] min-w-[220px] h-screen bg-white border-r border-subtle flex flex-col pt-5 sticky top-0">
-      <div className="flex items-center gap-2 h-10 px-4 mb-0">
+      <div className="flex items-center gap-2 h-10 px-4 mb-2">
         <span className="text-lg font-bold text-text-primary">Concilia</span>
       </div>
 
-      <nav className="flex flex-col gap-0.5 px-2.5 pt-4">
+      <ContextSwitcher />
+
+      <nav className="flex flex-col gap-0.5 px-2.5 pt-1">
         {mainNav.map((item) => {
           const active = isActive(item.href);
           return (

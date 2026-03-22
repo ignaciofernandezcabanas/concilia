@@ -8,6 +8,7 @@ import type {
 } from "@prisma/client";
 
 import { detectInternalTransfer } from "./detectors/internal-detector";
+import { detectIntercompany } from "./detectors/intercompany-detector";
 import { detectDuplicates } from "./detectors/duplicate-detector";
 import { detectReturn } from "./detectors/return-detector";
 import { detectFinancialOp } from "./detectors/financial-detector";
@@ -206,6 +207,36 @@ async function processTransaction(
     await updateTxStatus(tx.id, "INTERNAL", "INTERNAL_TRANSFER", "ROUTINE");
     result.matched++;
     result.autoApproved++;
+    return;
+  }
+
+  // 1a2. Intercompany transfer (sibling company in same org)
+  const intercoResult = await detectIntercompany(tx, companyId);
+  if (intercoResult.isIntercompany) {
+    await createReconciliation(tx, companyId, {
+      type: "MANUAL",
+      confidence: 0.95,
+      matchReason: `intercompany:${intercoResult.siblingCompanyId}:${intercoResult.siblingCompanyName}`,
+      detectedType: "INTERCOMPANY",
+      autoApprove: false,
+    });
+    await updateTxStatus(tx.id, "PENDING", "INTERCOMPANY", "DECISION");
+
+    // Create IntercompanyLink
+    await prisma.intercompanyLink.create({
+      data: {
+        amount: Math.abs(tx.amount),
+        date: tx.valueDate,
+        concept: tx.conceptParsed ?? tx.concept,
+        status: "DETECTED",
+        companyAId: companyId,
+        companyBId: intercoResult.siblingCompanyId!,
+        transactionAId: tx.id,
+        organizationId: intercoResult.organizationId!,
+      },
+    });
+
+    result.needsReview++;
     return;
   }
 
@@ -807,7 +838,7 @@ async function createReconciliation(
       invoiceAmount,
       bankAmount: Math.abs(tx.amount),
       difference: params.difference ?? null,
-      differenceReason: (params.differenceReason as string | null) ?? null,
+      differenceReason: (params.differenceReason as import("@prisma/client").DifferenceReason | null) ?? null,
       ...(params.autoApprove ? { resolvedAt: new Date() } : {}),
     },
   });

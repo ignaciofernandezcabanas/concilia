@@ -101,7 +101,7 @@ export default function Conciliacion() {
                 if (transactions.length === 0) return;
                 const headers = ["Fecha", "Concepto", "Importe", "Contrapartida", "IBAN", "Estado", "Tipo"];
                 const rows = transactions.map(tx => [
-                  typeof tx.valueDate === 'string' ? tx.valueDate.slice(0, 10) : "",
+                  tx.valueDate ? new Date(tx.valueDate as string | Date).toISOString().slice(0, 10) : "",
                   (tx.conceptParsed || tx.concept || "").replace(/;/g, ","),
                   String(tx.amount),
                   tx.counterpartName ?? "",

@@ -212,7 +212,7 @@ async function enrichWithHistory(
       // Auto-fill IBAN if unique
       const ibans = new Set(matchingTx.map((tx) => tx.counterpartIban).filter(Boolean));
       if (ibans.size === 1 && !conditions.counterpartIban) {
-        const iban = [...ibans][0]!;
+        const iban = Array.from(ibans)[0]!;
         overrides.conditions = { ...conditions, counterpartIban: iban };
         assumptions.push(`IBAN vinculado automáticamente: ${iban.slice(0, 8)}...${iban.slice(-4)}`);
       }

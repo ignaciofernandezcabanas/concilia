@@ -57,7 +57,7 @@ export const POST = withCronAuth(async (req: NextRequest) => {
 
     let notificationsCreated = 0;
 
-    for (const [cId, invoices] of byCompany) {
+    for (const [cId, invoices] of Array.from(byCompany)) {
       // Get admin and editor users for this company
       const users = await prisma.user.findMany({
         where: {
@@ -70,7 +70,7 @@ export const POST = withCronAuth(async (req: NextRequest) => {
 
       // Calculate total overdue amount
       const totalOverdue = invoices.reduce(
-        (sum, inv) =>
+        (sum: number, inv: typeof invoices[number]) =>
           sum + (inv.amountPending ?? inv.totalAmount - inv.amountPaid),
         0
       );
@@ -104,7 +104,7 @@ export const POST = withCronAuth(async (req: NextRequest) => {
               metadata: {
                 overdueCount: invoices.length,
                 totalAmount: totalOverdue,
-                invoiceIds: invoices.map((i) => i.id),
+                invoiceIds: invoices.map((i: typeof invoices[number]) => i.id),
               },
               userId: user.id,
               companyId: cId,

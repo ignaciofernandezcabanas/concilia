@@ -28,6 +28,7 @@ export type ResolveAction =
   | "manual_match"
   | "classify"
   | "mark_internal"
+  | "mark_intercompany"
   | "mark_duplicate"
   | "mark_legitimate"
   | "mark_return"
@@ -57,6 +58,10 @@ export interface ResolvePayload {
 
   // For mark_legitimate
   duplicateGroupId?: string;
+
+  // For mark_intercompany
+  intercompanyLinkId?: string;
+  intercompanyAction?: "confirm" | "eliminate";
 
   // For split_financial
   principalAmount?: number;
@@ -314,6 +319,71 @@ export async function resolveItem(
         return { success: true, action, bankTransactionId: bankTx.id, message: "Marked as internal." };
       }
 
+      // ─── MARK INTERCOMPANY ───
+      case "mark_intercompany": {
+        const link = await tx.intercompanyLink.findUniqueOrThrow({
+          where: { id: payload.intercompanyLinkId! },
+        });
+
+        const newStatus = payload.intercompanyAction === "eliminate" ? "ELIMINATED" : "CONFIRMED";
+
+        await tx.intercompanyLink.update({
+          where: { id: link.id },
+          data: { status: newStatus, matchedAt: new Date() },
+        });
+
+        // Mark the transaction on this side
+        if (link.transactionAId) {
+          await tx.bankTransaction.update({
+            where: { id: link.transactionAId },
+            data: {
+              status: newStatus === "CONFIRMED" ? "RECONCILED" : "PENDING",
+              detectedType: "INTERCOMPANY",
+            },
+          });
+        }
+
+        // Try to find and link the counterpart transaction
+        if (newStatus === "CONFIRMED" && !link.transactionBId) {
+          const counterpart = await tx.bankTransaction.findFirst({
+            where: {
+              companyId: link.companyBId,
+              amount: -link.amount * (link.transactionAId ? 1 : -1),
+              status: "PENDING",
+              valueDate: {
+                gte: new Date(link.date.getTime() - 3 * 24 * 60 * 60 * 1000),
+                lte: new Date(link.date.getTime() + 3 * 24 * 60 * 60 * 1000),
+              },
+            },
+            orderBy: { valueDate: "asc" },
+          });
+          if (counterpart) {
+            await tx.intercompanyLink.update({
+              where: { id: link.id },
+              data: { transactionBId: counterpart.id },
+            });
+            await tx.bankTransaction.update({
+              where: { id: counterpart.id },
+              data: { status: "RECONCILED", detectedType: "INTERCOMPANY" },
+            });
+          }
+        }
+
+        await createAuditLog(tx, userId, `reconciliation.mark_intercompany.${newStatus.toLowerCase()}`, "IntercompanyLink", link.id, {
+          companyAId: link.companyAId,
+          companyBId: link.companyBId,
+          amount: link.amount,
+        });
+
+        return {
+          success: true,
+          action,
+          message: newStatus === "CONFIRMED"
+            ? "Intercompany transfer confirmed."
+            : "Intercompany link eliminated — transaction returned to pending.",
+        };
+      }
+
       // ─── MARK DUPLICATE ───
       case "mark_duplicate": {
         const bankTx = await tx.bankTransaction.findFirstOrThrow({
@@ -448,8 +518,8 @@ export async function resolveItem(
   // Non-critical — must not break the resolve, but errors should be logged
   try {
     await trackControllerDecision({
-      reconciliationId: result.reconciliationId ?? payload.reconciliationId,
-      bankTransactionId: result.bankTransactionId ?? payload.bankTransactionId,
+      reconciliationId: result.reconciliationId ?? payload.reconciliationId ?? "",
+      bankTransactionId: result.bankTransactionId ?? payload.bankTransactionId ?? "",
       invoiceId: payload.invoiceId,
       userId,
       companyId,
@@ -480,6 +550,6 @@ async function createAuditLog(
   details: Record<string, unknown>
 ): Promise<void> {
   await tx.auditLog.create({
-    data: { userId, action, entityType, entityId, details },
+    data: { userId, action, entityType, entityId, details: details as import("@prisma/client").Prisma.InputJsonValue },
   });
 }

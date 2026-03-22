@@ -41,7 +41,7 @@ export const POST = withCronAuth(async (_req: NextRequest) => {
             companyId: company.id,
             status: "AUTO_APPROVED",
             createdAt: { gte: periodStart, lte: periodEnd },
-            type: category,
+            type: category as import("@prisma/client").ReconciliationType,
           },
         });
 

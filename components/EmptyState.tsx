@@ -1,6 +1,6 @@
 "use client";
 
-import { Inbox } from "lucide-react";
+import { Inbox, type LucideIcon } from "lucide-react";
 
 export default function EmptyState({
   title = "Sin datos",
@@ -9,7 +9,7 @@ export default function EmptyState({
 }: {
   title?: string;
   description?: string;
-  icon?: React.ComponentType<{ size?: number; className?: string }>;
+  icon?: LucideIcon;
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">

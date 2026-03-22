@@ -42,6 +42,11 @@ export async function syncAccounts(
 
       const parentCode = deriveParentCode(account.accountNum);
 
+      const existed = await prisma.account.findUnique({
+        where: { code_companyId: { code: account.accountNum, companyId } },
+        select: { id: true },
+      });
+
       await prisma.account.upsert({
         where: {
           code_companyId: { code: account.accountNum, companyId },
@@ -62,18 +67,10 @@ export async function syncAccounts(
         },
       });
 
-      // Simple heuristic: if updatedAt > createdAt it was an update
-      const record = await prisma.account.findUnique({
-        where: { code_companyId: { code: account.accountNum, companyId } },
-        select: { createdAt: true, updatedAt: true },
-      });
-      if (
-        record &&
-        record.createdAt.getTime() === record.updatedAt.getTime()
-      ) {
-        result.created++;
-      } else {
+      if (existed) {
         result.updated++;
+      } else {
+        result.created++;
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

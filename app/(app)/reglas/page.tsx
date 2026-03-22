@@ -264,16 +264,15 @@ function NLRuleCreator({ onCreated, onCancel }: { onCreated: () => void; onCance
 
       {proposal && (
         <div className="border border-accent rounded-lg p-4 bg-accent-light/10">
-          {/* Human readable */}
-          {proposal.humanReadable && (
-            <p className="text-[13px] text-text-primary font-medium mb-3">{proposal.humanReadable as string}</p>
-          )}
+          {proposal.humanReadable ? (
+            <p className="text-[13px] text-text-primary font-medium mb-3">{String(proposal.humanReadable)}</p>
+          ) : null}
 
           {/* Structured conditions */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px] mb-3">
             {renderFields(proposal.conditions as Record<string, unknown>)}
             {renderFields(proposal.actionDetails as Record<string, unknown>)}
-            {proposal.action && <div><span className="text-text-tertiary">Acción:</span> <span className="text-text-primary">{proposal.action as string}</span></div>}
+            {proposal.action ? <div><span className="text-text-tertiary">Acción:</span> <span className="text-text-primary">{String(proposal.action)}</span></div> : null}
           </div>
 
           {/* Reasoning from CoT */}

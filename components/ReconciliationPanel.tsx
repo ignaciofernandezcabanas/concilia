@@ -22,6 +22,7 @@ const TYPE_LABELS: Record<string, string> = {
   MATCH_DIFFERENCE: "Cobro/pago con diferencia de importe",
   EXPENSE_NO_INVOICE: "Gasto sin factura asociada",
   INTERNAL_TRANSFER: "Transferencia interna entre cuentas propias",
+  INTERCOMPANY: "Transferencia intercompañía detectada",
   POSSIBLE_DUPLICATE: "Posible duplicado detectado",
   RETURN: "Posible devolución",
   FINANCIAL_OPERATION: "Operación financiera recurrente",
@@ -215,6 +216,36 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
             >
               Confirmar transferencia interna
             </button>
+          )}
+
+          {tx.detectedType === "INTERCOMPANY" && reco && (
+            <div className="flex flex-col gap-2">
+              <p className="text-[11px] text-text-secondary">
+                Empresa destino: {reco.matchReason?.split(":")[2] ?? "desconocida"}
+              </p>
+              <button
+                onClick={() => onResolve({
+                  action: "mark_intercompany",
+                  intercompanyAction: "confirm",
+                  bankTransactionId: tx.id,
+                })}
+                disabled={resolving}
+                className="w-full h-9 bg-accent text-white text-[13px] font-medium rounded-md hover:bg-accent-dark disabled:opacity-50"
+              >
+                Confirmar intercompañía
+              </button>
+              <button
+                onClick={() => onResolve({
+                  action: "mark_intercompany",
+                  intercompanyAction: "eliminate",
+                  bankTransactionId: tx.id,
+                })}
+                disabled={resolving}
+                className="w-full h-9 border border-subtle text-[13px] font-medium rounded-md text-text-secondary hover:bg-hover disabled:opacity-50"
+              >
+                No es intercompañía
+              </button>
+            </div>
           )}
 
           {tx.detectedType === "RETURN" && reco && (

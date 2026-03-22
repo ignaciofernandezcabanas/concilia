@@ -121,7 +121,38 @@ model Company {
   integrations          Integration[]
   archiveLogs           ArchiveLog[]
   ownBankAccounts       OwnBankAccount[]
+  accountingPeriods     AccountingPeriod[]
+  journalEntries        JournalEntry[]
+  fixedAssets            FixedAsset[]
 
+}
+
+// ============================================================
+// PERIODOS CONTABLES
+// ============================================================
+
+model AccountingPeriod {
+  id            String       @id @default(cuid())
+  year          Int
+  month         Int          // 1-12
+  status        PeriodStatus @default(OPEN)
+  closedAt      DateTime?
+  closedById    String?
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  companyId     String
+  company       Company      @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, year, month])
+  @@index([companyId, status])
+}
+
+enum PeriodStatus {
+  OPEN
+  CLOSED
+  LOCKED
 }
 
 model User {
@@ -208,6 +239,10 @@ model Account {
 
   invoiceLines      InvoiceLine[]
   classifications   BankTransactionClassification[]
+  journalEntryLines JournalEntryLine[]
+  fixedAssets        FixedAsset[]          @relation("AssetAccount")
+  depreciationAssets FixedAsset[]          @relation("DepreciationAccount")
+  accumDepAssets     FixedAsset[]          @relation("AccumDepAccount")
 
   @@unique([code, companyId])
 }
@@ -218,6 +253,122 @@ enum CashflowType {
   FINANCING
   INTERNAL
   NON_CASH
+}
+
+// ============================================================
+// ASIENTOS CONTABLES (JOURNAL ENTRIES)
+// ============================================================
+
+model JournalEntry {
+  id            String           @id @default(cuid())
+  number        Int
+  date          DateTime
+  description   String
+  type          JournalEntryType @default(MANUAL)
+  status        JournalEntryStatus @default(DRAFT)
+  reference     String?          // e.g., invoice number, tx ID
+  sourceType    String?          // "reconciliation", "invoice", "depreciation"
+  sourceId      String?          // ID of the source record
+  postedAt      DateTime?
+  postedById    String?
+  reversalOfId  String?          // If this is a reversal entry
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  companyId     String
+  company       Company          @relation(fields: [companyId], references: [id])
+  createdById   String?
+
+  lines         JournalEntryLine[]
+
+  @@unique([companyId, number])
+  @@index([companyId, date])
+  @@index([companyId, status])
+}
+
+model JournalEntryLine {
+  id            String        @id @default(cuid())
+  debit         Float         @default(0)
+  credit        Float         @default(0)
+  description   String?
+
+  journalEntryId String
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+
+  accountId     String
+  account       Account       @relation(fields: [accountId], references: [id])
+
+  @@index([journalEntryId])
+}
+
+enum JournalEntryType {
+  MANUAL
+  AUTO_RECONCILIATION
+  AUTO_DEPRECIATION
+  CLOSING
+  OPENING
+  ADJUSTMENT
+}
+
+enum JournalEntryStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
+// ============================================================
+// ACTIVOS FIJOS (FIXED ASSETS)
+// ============================================================
+
+model FixedAsset {
+  id                  String          @id @default(cuid())
+  name                String
+  description         String?
+  serialNumber        String?
+  acquisitionDate     DateTime
+  acquisitionCost     Float
+  residualValue       Float           @default(0)
+  usefulLifeMonths    Int             // e.g., 60 = 5 years
+  depreciationMethod  DepreciationMethod @default(LINEAR)
+  status              AssetStatus     @default(ACTIVE)
+
+  // Calculated fields (updated monthly by depreciation cron)
+  accumulatedDepreciation Float       @default(0)
+  netBookValue            Float       @default(0)
+  monthlyDepreciation     Float       @default(0)
+  lastDepreciationDate    DateTime?
+
+  // Disposal
+  disposalDate        DateTime?
+  disposalAmount      Float?
+  disposalGainLoss    Float?
+
+  // PGC accounts
+  assetAccountId      String           // e.g., "210" Maquinaria
+  assetAccount        Account          @relation("AssetAccount", fields: [assetAccountId], references: [id])
+  depreciationAccountId String         // e.g., "681" Amort. inmovilizado material
+  depreciationAccount   Account        @relation("DepreciationAccount", fields: [depreciationAccountId], references: [id])
+  accumDepAccountId     String         // e.g., "281" Amort. acumulada inm. material
+  accumDepAccount       Account        @relation("AccumDepAccount", fields: [accumDepAccountId], references: [id])
+
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  companyId           String
+  company             Company          @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, status])
+}
+
+enum DepreciationMethod {
+  LINEAR
+  DECLINING_BALANCE
+}
+
+enum AssetStatus {
+  ACTIVE
+  FULLY_DEPRECIATED
+  DISPOSED
 }
 
 // ============================================================
@@ -453,6 +604,7 @@ enum DetectedType {
   MATCH_DIFFERENCE
   EXPENSE_NO_INVOICE
   INTERNAL_TRANSFER
+  INTERCOMPANY
   FINANCIAL_OPERATION
   UNIDENTIFIED
   POSSIBLE_DUPLICATE

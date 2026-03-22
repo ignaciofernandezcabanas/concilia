@@ -13,10 +13,12 @@ const mockPrisma = vi.hoisted(() => ({
   account: { findFirst: vi.fn() },
   matchingRule: { create: vi.fn(), update: vi.fn(), findFirst: vi.fn() },
   learnedPattern: { findMany: vi.fn(), update: vi.fn() },
+  intercompanyLink: { create: vi.fn() },
 }));
 vi.mock('@/lib/db', () => ({ prisma: mockPrisma }));
 
 const mockDetectInternal = vi.hoisted(() => vi.fn());
+const mockDetectIntercompany = vi.hoisted(() => vi.fn());
 const mockDetectDuplicates = vi.hoisted(() => vi.fn());
 const mockDetectReturn = vi.hoisted(() => vi.fn());
 const mockDetectFinancial = vi.hoisted(() => vi.fn());
@@ -28,6 +30,7 @@ const mockClassifyRules = vi.hoisted(() => vi.fn());
 const mockClassifyLlm = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/reconciliation/detectors/internal-detector', () => ({ detectInternalTransfer: mockDetectInternal }));
+vi.mock('@/lib/reconciliation/detectors/intercompany-detector', () => ({ detectIntercompany: mockDetectIntercompany }));
 vi.mock('@/lib/reconciliation/detectors/duplicate-detector', () => ({ detectDuplicates: mockDetectDuplicates }));
 vi.mock('@/lib/reconciliation/detectors/return-detector', () => ({ detectReturn: mockDetectReturn }));
 vi.mock('@/lib/reconciliation/detectors/financial-detector', () => ({ detectFinancialOp: mockDetectFinancial }));
@@ -61,6 +64,7 @@ function setupDefaults(txList = [buildBankTransaction()]) {
 
   // Default: nothing detected/matched
   mockDetectInternal.mockResolvedValue({ isInternal: false, ownAccountId: null });
+  mockDetectIntercompany.mockResolvedValue({ isIntercompany: false, siblingCompanyId: null, siblingCompanyName: null, organizationId: null });
   mockDetectDuplicates.mockResolvedValue({ isDuplicate: false, groupId: null, relatedTx: [] });
   mockDetectReturn.mockResolvedValue({ isReturn: false, originalTxId: null, originalReconciliationId: null });
   mockDetectFinancial.mockResolvedValue({ isFinancial: false, suggestedPrincipal: null, suggestedInterest: null });

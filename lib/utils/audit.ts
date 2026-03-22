@@ -26,7 +26,7 @@ export async function createAuditLog(
       action,
       entityType,
       entityId,
-      details: details ?? undefined,
+      details: (details ?? undefined) as import("@prisma/client").Prisma.InputJsonValue | undefined,
     },
   });
 }

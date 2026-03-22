@@ -59,7 +59,7 @@ export async function trackControllerDecision(ctx: DecisionContext): Promise<voi
           differenceAccountId: null, resolvedAt: null, resolvedById: null, resolution: null,
           createdAt: new Date(), updatedAt: new Date(),
           bankTransaction: tx, invoice: null,
-        } as typeof reco;
+        } as unknown as typeof reco;
       }
     }
 

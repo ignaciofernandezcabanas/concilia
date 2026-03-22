@@ -292,9 +292,9 @@ function NLRuleCreator({ onCreated }: { onCreated: () => void }) {
         <div className="border border-accent rounded-lg p-4 bg-accent-light/20">
           <div className="text-[12px] font-semibold text-accent mb-2">Regla interpretada:</div>
 
-          {proposal.humanReadable && (
-            <p className="text-[13px] text-text-primary font-medium mb-3">{proposal.humanReadable as string}</p>
-          )}
+          {proposal.humanReadable ? (
+            <p className="text-[13px] text-text-primary font-medium mb-3">{String(proposal.humanReadable)}</p>
+          ) : null}
 
           {/* Structured details */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px] mb-3">

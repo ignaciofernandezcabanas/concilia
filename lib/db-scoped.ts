@@ -18,6 +18,7 @@ const SCOPED_MODELS = new Set([
   "company", "user", "account", "ownBankAccount", "contact", "invoice",
   "bankTransaction", "reconciliation", "matchingRule", "categoryThreshold",
   "integration", "syncLog", "archiveLog", "notification", "auditLog",
+  "accountingPeriod", "journalEntry", "fixedAsset",
   // Note: InvoiceLine, Payment, BankTransactionClassification, DuplicateGroup
   // don't have companyId directly — they're accessed via parent relations
 ]);

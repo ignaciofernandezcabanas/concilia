@@ -58,19 +58,12 @@ export async function syncInvoices(
       });
 
       if (existing) {
-        await prisma.invoice.update({
-          where: { id: existing.id },
-          data: {
-            ...data,
-            // Preserve fields managed outside sync
-            driveFileId: undefined,
-            provisionType: undefined,
-            provisionedAmount: undefined,
-          },
-        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await prisma.invoice.update({ where: { id: existing.id }, data: data as any });
         result.updated++;
       } else {
-        await prisma.invoice.create({ data });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await prisma.invoice.create({ data: data as any });
         result.created++;
       }
     } catch (err) {

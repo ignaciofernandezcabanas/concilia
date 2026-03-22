@@ -210,9 +210,9 @@ export async function generatePyG(
 
   // Build line totals
   const lineTotals = new Map<string, number>();
-  for (const [pygLine, accounts] of lineAmounts) {
+  for (const [pygLine, accounts] of Array.from(lineAmounts)) {
     let total = 0;
-    for (const { amount } of accounts.values()) {
+    for (const { amount } of Array.from(accounts.values())) {
       total += amount;
     }
     lineTotals.set(pygLine, total);

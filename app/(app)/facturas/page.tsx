@@ -199,7 +199,7 @@ export default function Facturas() {
                   </span>
                   <span className="w-20 flex justify-center"><Badge value={inv.status} /></span>
                   <span className="w-20 flex justify-center gap-1">
-                    {(inv as Record<string, unknown>).pdfUrl && (
+                    {(inv as Record<string, unknown>).pdfUrl != null && (
                       <button onClick={() => setViewingPdf({ id: inv.id, number: inv.number })} className="p-1 rounded hover:bg-accent-light text-accent" title="Ver PDF">
                         <Eye size={14} />
                       </button>
