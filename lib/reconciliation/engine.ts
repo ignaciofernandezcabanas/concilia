@@ -25,6 +25,7 @@ import {
 
 import { assignPriority } from "./prioritizer";
 import { CONCEPT_MAX_LENGTH } from "./constants";
+import { generateExplanation } from "./explainer";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -560,6 +561,40 @@ async function processTransaction(
       result.autoApproved++;
     } else {
       result.needsReview++;
+
+      // Generate explanation for bandeja (fire-and-forget — non-blocking)
+      const invoiceForExplain = matchOutcome.invoiceId
+        ? pendingInvoices.find((i) => i.id === matchOutcome!.invoiceId) ?? null
+        : null;
+      generateExplanation({
+        tx,
+        reconciliation: {
+          type: matchOutcome.type,
+          confidenceScore: matchOutcome.confidence,
+          matchReason: matchOutcome.matchReason,
+          difference: matchOutcome.difference,
+          differenceReason: matchOutcome.differenceReason,
+        },
+        invoice: invoiceForExplain ? {
+          number: invoiceForExplain.number,
+          totalAmount: invoiceForExplain.totalAmount,
+          contactName: invoiceForExplain.contact?.name ?? "Desconocido",
+          dueDate: invoiceForExplain.dueDate?.toISOString().slice(0, 10) ?? null,
+        } : null,
+        threshold: categoryThreshold,
+        materialityThreshold,
+      })
+        .then(async (explanation) => {
+          if (explanation) {
+            await prisma.reconciliation.updateMany({
+              where: { bankTransactionId: tx.id, companyId, status: "PROPOSED" },
+              data: { resolution: explanation },
+            });
+          }
+        })
+        .catch((err) => {
+          console.warn("[explainer] Failed:", err instanceof Error ? err.message : err);
+        });
     }
     return;
   }
@@ -709,6 +744,26 @@ async function processTransaction(
   });
 
   result.needsReview++;
+
+  // Generate explanation for unidentified items (fire-and-forget)
+  generateExplanation({
+    tx,
+    reconciliation: { type: "MANUAL", confidenceScore: 0, matchReason: "unidentified", difference: null, differenceReason: null },
+    invoice: null,
+    threshold: autoApproveThreshold,
+    materialityThreshold,
+  })
+    .then(async (explanation) => {
+      if (explanation) {
+        await prisma.reconciliation.updateMany({
+          where: { bankTransactionId: tx.id, companyId, status: "PROPOSED" },
+          data: { resolution: explanation },
+        });
+      }
+    })
+    .catch((err) => {
+      console.warn("[explainer] Failed:", err instanceof Error ? err.message : err);
+    });
 }
 
 // ---------------------------------------------------------------------------

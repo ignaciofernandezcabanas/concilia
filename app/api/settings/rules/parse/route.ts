@@ -57,56 +57,61 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     .map((a) => `${a.code} - ${a.name}`)
     .join("\n");
 
-  // ── Call Claude to parse ──
+  // ── Call Claude to parse with CoT ──
+  const RULE_PARSER_PROMPT =
+    `Eres un asistente de contabilidad español. El controller ha escrito esta regla en lenguaje natural:\n\n` +
+    `"${text}"\n\n` +
+    `Contexto de la empresa:\n` +
+    `- Contactos conocidos:\n${contactList || "Ninguno"}\n\n` +
+    `- Cuentas PGC disponibles:\n${accountList || "Ninguna"}\n\n` +
+    `RAZONA PASO A PASO antes de generar la regla:\n\n` +
+    `Paso 1 — CONTRAPARTIDA: ¿Menciona un cliente, proveedor o entidad? Busca en los contactos conocidos. Si hay ambigüedad (varios candidatos), lista todos y márcalo como asunción.\n\n` +
+    `Paso 2 — TIPO DE TRANSACCIÓN: ¿Se refiere a cobros, pagos, o ambos? Si no lo dice, asume "ambos" y márcalo como asunción.\n\n` +
+    `Paso 3 — CONDICIONES DE IMPORTE: ¿Menciona un rango de importe, un porcentaje de diferencia, o un importe fijo? Si no, la regla aplica a cualquier importe.\n\n` +
+    `Paso 4 — CONDICIONES DE CONCEPTO: ¿Menciona algún texto que deba aparecer en el concepto bancario?\n\n` +
+    `Paso 5 — ACCIÓN: ¿Qué quiere que haga el sistema? Clasificar en una cuenta PGC, ajustar una diferencia, escalar siempre a revisión, o auto-aprobar?\n\n` +
+    `Paso 6 — CUENTA PGC: Si la acción es clasificar, ¿qué cuenta PGC corresponde? Busca en las cuentas disponibles. Si no existe exactamente, sugiere la más cercana.\n\n` +
+    `Paso 7 — ASUNCIONES: Lista TODAS las cosas que has asumido y que el controller no dijo explícitamente.\n\n` +
+    `Tras razonar, genera el JSON de la regla.\n\n` +
+    `Responde SOLO con JSON válido (sin markdown):\n` +
+    `{\n` +
+    `  "steps": {\n` +
+    `    "counterpart": "...",\n` +
+    `    "transaction_type": "...",\n` +
+    `    "amount_conditions": "...",\n` +
+    `    "concept_conditions": "...",\n` +
+    `    "action": "...",\n` +
+    `    "pgc_account": "...",\n` +
+    `    "assumptions_reasoning": "..."\n` +
+    `  },\n` +
+    `  "type": "EXACT_AMOUNT_CONTACT | CONCEPT_CLASSIFY | IBAN_CLASSIFY | IBAN_INTERNAL | FINANCIAL_SPLIT",\n` +
+    `  "conditions": {\n` +
+    `    "counterpartName": "..." | null,\n` +
+    `    "counterpartCif": "..." | null,\n` +
+    `    "counterpartIban": "..." | null,\n` +
+    `    "conceptPattern": "..." | null,\n` +
+    `    "minAmount": number | null,\n` +
+    `    "maxAmount": number | null,\n` +
+    `    "transactionType": "cobro" | "pago" | "ambos" | null,\n` +
+    `    "differencePercent": { "min": number, "max": number } | null\n` +
+    `  },\n` +
+    `  "action": "auto_approve" | "classify" | "escalate" | "adjust_difference",\n` +
+    `  "actionDetails": {\n` +
+    `    "accountCode": "..." | null,\n` +
+    `    "accountName": "..." | null,\n` +
+    `    "cashflowType": "OPERATING" | "INVESTING" | "FINANCING" | null,\n` +
+    `    "differenceReason": "BANK_COMMISSION" | "EARLY_PAYMENT" | "COMMERCIAL_DISCOUNT" | "PARTIAL_PAYMENT" | "OTHER" | null,\n` +
+    `    "description": "..."\n` +
+    `  },\n` +
+    `  "humanReadable": "Resumen en español de la regla interpretada",\n` +
+    `  "assumptions": ["..."],\n` +
+    `  "suggestions": ["..."]\n` +
+    `}`;
+
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-20250514",
-    max_tokens: 1500,
-    messages: [
-      {
-        role: "user",
-        content: `Eres un asistente de contabilidad español. El controller ha escrito esta regla en lenguaje natural:
-
-"${text}"
-
-Contexto de la empresa:
-- Contactos conocidos:
-${contactList || "Ninguno"}
-
-- Cuentas PGC disponibles:
-${accountList || "Ninguna"}
-
-Transforma la regla en formato estructurado JSON. Responde SOLO con JSON válido:
-
-{
-  "type": "EXACT_AMOUNT_CONTACT" | "CONCEPT_CLASSIFY" | "IBAN_CLASSIFY" | "IBAN_INTERNAL" | "FINANCIAL_SPLIT",
-  "conditions": {
-    "counterpartName": "nombre exacto del contacto si aplica" | null,
-    "counterpartCif": "CIF si lo encontraste" | null,
-    "counterpartIban": "IBAN si lo encontraste" | null,
-    "conceptPattern": "patrón regex o substring para el concepto bancario" | null,
-    "minAmount": number | null,
-    "maxAmount": number | null,
-    "transactionType": "cobro" | "pago" | "ambos" | null,
-    "differencePercent": { "min": number, "max": number } | null
-  },
-  "action": "auto_approve" | "classify" | "escalate" | "adjust_difference",
-  "actionDetails": {
-    "accountCode": "código PGC si es clasificación" | null,
-    "accountName": "nombre de la cuenta" | null,
-    "cashflowType": "OPERATING" | "INVESTING" | "FINANCING" | null,
-    "differenceReason": "BANK_COMMISSION" | "EARLY_PAYMENT" | "COMMERCIAL_DISCOUNT" | "PARTIAL_PAYMENT" | "OTHER" | null,
-    "description": "descripción breve de la regla"
-  },
-  "humanReadable": "Resumen en español de la regla interpretada",
-  "assumptions": ["lista de cosas que he asumido o que podrían ser ambiguas"],
-  "suggestions": ["sugerencias para mejorar la regla basadas en el contexto"]
-}
-
-Si el contacto mencionado es ambiguo (varios posibles), pon en assumptions "Contrapartida ambigua: ¿X, Y o Z?" con los candidatos.
-Si una condición está implícita, asúmela y ponla en assumptions.
-Si la categoría PGC no existe exactamente, sugiere la más cercana.`,
-      },
-    ],
+    max_tokens: 2000,
+    messages: [{ role: "user", content: RULE_PARSER_PROMPT }],
   });
 
   const responseText = response.content[0].type === "text" ? response.content[0].text : "";
@@ -134,6 +139,7 @@ Si la categoría PGC no existe exactamente, sugiere la más cercana.`,
     proposal: { ...proposal, ...enrichment.overrides },
     assumptions: [...(proposal.assumptions ?? []), ...enrichment.assumptions],
     suggestions: [...(proposal.suggestions ?? []), ...enrichment.suggestions],
+    reasoning: proposal.steps ?? null,
   });
 }, "manage:rules");
 

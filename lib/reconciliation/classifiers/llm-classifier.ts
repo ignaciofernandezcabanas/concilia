@@ -21,15 +21,49 @@ export interface HistoricalClassification {
 const MODEL = "claude-sonnet-4-20250514";
 const MAX_HISTORY_ITEMS = 20;
 
-/**
- * Uses Claude to classify a bank transaction into a PGC (Plan General Contable)
- * account and cashflow category.
- *
- * The LLM receives the transaction details plus similar historical classifications
- * to provide consistent categorization.
- *
- * Confidence ranges from 0.60 to 0.85 depending on the LLM's own assessment.
- */
+// ── Prompts ──
+
+const CLASSIFIER_SYSTEM_PROMPT =
+  `Eres un contable español experto en el Plan General Contable (PGC).\n` +
+  `Tu tarea es clasificar un movimiento bancario en la cuenta PGC correcta y el tipo de cashflow.\n\n` +
+  `REGLAS CRÍTICAS:\n` +
+  `- Si dudas entre dos cuentas del mismo grupo (ej: 626 vs 629), elige la más genérica y baja el confidence a 0.65.\n` +
+  `- Si dudas entre dos grupos distintos (ej: grupo 6 vs grupo 7), pon confidence < 0.60 para que un humano lo revise.\n` +
+  `- Usa las clasificaciones históricas como precedente. Si transacciones similares se han clasificado en cuenta X, mantén la consistencia SALVO que haya una razón clara para cambiar.\n` +
+  `- Tipos de cashflow: OPERATING (operativo, el más común), INVESTING (compraventa de activos), FINANCING (préstamos, ampliaciones de capital), INTERNAL (transferencias entre cuentas propias), NON_CASH (amortizaciones, provisiones).\n\n` +
+  `Responde SOLO con JSON válido, sin markdown.`;
+
+function buildClassifierUserPrompt(txSummary: string, historySummary: string): string {
+  return (
+    `Clasifica este movimiento bancario en la cuenta PGC y tipo de cashflow correcto.\n\n` +
+    `MOVIMIENTO:\n${txSummary}\n\n` +
+    `CLASIFICACIONES HISTÓRICAS SIMILARES:\n${historySummary}\n\n` +
+    `RAZONA PASO A PASO antes de clasificar:\n\n` +
+    `Paso 1 — NATURALEZA: ¿Es un gasto (grupo 6), ingreso (grupo 7), activo (grupo 2), o pasivo (grupo 1/4/5)? ¿Por qué?\n\n` +
+    `Paso 2 — SUBGRUPO: Dentro del grupo, ¿qué subgrupo aplica? Por ejemplo, dentro del grupo 62 (servicios exteriores): 621 arrendamientos, 622 reparaciones, 623 servicios profesionales, 624 transportes, 625 seguros, 626 servicios bancarios, 627 publicidad, 628 suministros, 629 otros servicios.\n\n` +
+    `Paso 3 — PRECEDENTE: ¿Las clasificaciones históricas similares sugieren una cuenta concreta? Si hay precedente claro, seguirlo salvo razón para cambiar. Si no hay precedente, indicarlo.\n\n` +
+    `Paso 4 — CASHFLOW: ¿Es operativo (día a día del negocio), de inversión (compra/venta de activos), o de financiación (deuda, capital)?\n\n` +
+    `Paso 5 — CONFIANZA: ¿Cuán seguro estás? Si has dudado entre dos opciones, el confidence debe reflejarlo.\n\n` +
+    `Responde con JSON (sin markdown):\n` +
+    `{\n` +
+    `  "steps": {\n` +
+    `    "nature": "...",\n` +
+    `    "subgroup": "...",\n` +
+    `    "precedent": "...",\n` +
+    `    "cashflow_reasoning": "...",\n` +
+    `    "confidence_reasoning": "..."\n` +
+    `  },\n` +
+    `  "accountCode": "...",\n` +
+    `  "accountName": "...",\n` +
+    `  "cashflowType": "OPERATING | INVESTING | FINANCING | INTERNAL | NON_CASH",\n` +
+    `  "confidence": <0.0 a 1.0>,\n` +
+    `  "reasoning": "<resumen de 1 frase en español>"\n` +
+    `}`
+  );
+}
+
+// ── Main function ──
+
 export async function classifyByLlm(
   tx: BankTransaction,
   history: HistoricalClassification[]
@@ -47,7 +81,7 @@ export async function classifyByLlm(
               `Account: ${h.accountCode} (${h.accountName}) | Cashflow: ${h.cashflowType}`
           )
           .join("\n")
-      : "No historical data available.";
+      : "No hay datos históricos disponibles.";
 
   const txSummary =
     `Amount: ${tx.amount.toFixed(2)} EUR\n` +
@@ -58,43 +92,32 @@ export async function classifyByLlm(
     `Counterpart Name: ${tx.counterpartName ?? "N/A"}\n` +
     `Reference: ${tx.reference ?? "N/A"}`;
 
-  const systemPrompt =
-    `You are a Spanish accounting expert specializing in the Plan General Contable (PGC). ` +
-    `Your task is to classify a bank transaction into the correct PGC account and cashflow type. ` +
-    `Use the historical classifications for consistency. ` +
-    `Available cashflow types: OPERATING, INVESTING, FINANCING, INTERNAL, NON_CASH. ` +
-    `Respond in JSON only.`;
-
-  const userPrompt =
-    `Classify this bank transaction into the appropriate PGC account.\n\n` +
-    `BANK TRANSACTION:\n${txSummary}\n\n` +
-    `SIMILAR HISTORICAL CLASSIFICATIONS:\n${historySummary}\n\n` +
-    `Respond with a JSON object (no markdown):\n` +
-    `{\n` +
-    `  "accountCode": "<PGC account code, e.g., '629'>",\n` +
-    `  "accountName": "<account name in Spanish>",\n` +
-    `  "cashflowType": "<one of: OPERATING, INVESTING, FINANCING, INTERNAL, NON_CASH>",\n` +
-    `  "confidence": <0.0 to 1.0>,\n` +
-    `  "reasoning": "<brief explanation in Spanish>"\n` +
-    `}`;
+  const userPrompt = buildClassifierUserPrompt(txSummary, historySummary);
 
   try {
     const response = await withRateLimit(() =>
       client.messages.create({
         model: MODEL,
-        max_tokens: 500,
-        system: systemPrompt,
+        max_tokens: 1200,
+        system: CLASSIFIER_SYSTEM_PROMPT,
         messages: [{ role: "user", content: userPrompt }],
       })
     );
 
-    if (!response) return null; // Circuit broken or rate limited
+    if (!response) return null;
 
     const text =
       response.content[0].type === "text" ? response.content[0].text : "";
 
     const jsonStr = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
     const parsed = JSON.parse(jsonStr) as {
+      steps?: {
+        nature?: string;
+        subgroup?: string;
+        precedent?: string;
+        cashflow_reasoning?: string;
+        confidence_reasoning?: string;
+      };
       accountCode: string;
       accountName: string;
       cashflowType: string;
@@ -102,13 +125,14 @@ export async function classifyByLlm(
       reasoning: string;
     };
 
+    // Log CoT reasoning for debugging
+    if (parsed.steps) {
+      console.info(`[llm-classifier] CoT for tx ${tx.id}:`, JSON.stringify(parsed.steps).slice(0, 500));
+    }
+
     // Validate cashflow type
     const validCashflowTypes: CashflowType[] = [
-      "OPERATING",
-      "INVESTING",
-      "FINANCING",
-      "INTERNAL",
-      "NON_CASH",
+      "OPERATING", "INVESTING", "FINANCING", "INTERNAL", "NON_CASH",
     ];
 
     const cashflowType = validCashflowTypes.includes(
