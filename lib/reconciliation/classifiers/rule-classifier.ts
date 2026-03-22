@@ -12,14 +12,12 @@ export interface RuleClassificationResult {
 /**
  * Classifies a bank transaction using the company's active matching rules.
  *
- * Checks rules in priority order:
- * 1. IBAN_INTERNAL - counterpart IBAN identifies internal transfers
- * 2. IBAN_CLASSIFY - counterpart IBAN maps to a specific account
- * 3. EXACT_AMOUNT_CONTACT - specific amount + contact combination
- * 4. CONCEPT_CLASSIFY - concept text matches a regex/substring pattern
- * 5. FINANCIAL_SPLIT - recurring financial operations
- *
- * Returns the first matching rule's classification.
+ * Respects:
+ * - status (only ACTIVE rules)
+ * - priority (higher = checked first)
+ * - new condition fields: conceptContains, transactionDirection, counterpartName,
+ *   differencePercentMin/Max
+ * - updates lastExecutedAt on match
  */
 export async function classifyByRules(
   tx: BankTransaction,
@@ -29,27 +27,48 @@ export async function classifyByRules(
     where: {
       companyId,
       isActive: true,
+      status: "ACTIVE",
     },
     orderBy: [
-      // Process more specific rules first
+      { priority: "desc" },  // higher priority first
       { type: "asc" },
       { timesApplied: "desc" },
     ],
   });
 
-  if (rules.length === 0) {
-    return null;
-  }
+  if (rules.length === 0) return null;
 
-  const normalizedIban = tx.counterpartIban
-    ?.replace(/\s/g, "")
-    .toUpperCase() ?? null;
-
+  const normalizedIban = tx.counterpartIban?.replace(/\s/g, "").toUpperCase() ?? null;
   const conceptLower = (tx.concept ?? "").toLowerCase();
   const parsedConceptLower = (tx.conceptParsed ?? "").toLowerCase();
   const absAmount = Math.abs(tx.amount);
+  const isIncome = tx.amount > 0;
 
   for (const rule of rules) {
+    // ── Check direction filter ──
+    if (rule.transactionDirection) {
+      if (rule.transactionDirection === "income" && !isIncome) continue;
+      if (rule.transactionDirection === "expense" && isIncome) continue;
+    }
+
+    // ── Check amount range ──
+    if (rule.minAmount != null && absAmount < rule.minAmount) continue;
+    if (rule.maxAmount != null && absAmount > rule.maxAmount) continue;
+
+    // ── Check conceptContains (new field) ──
+    if (rule.conceptContains) {
+      const needle = rule.conceptContains.toLowerCase();
+      if (!conceptLower.includes(needle) && !parsedConceptLower.includes(needle)) continue;
+    }
+
+    // ── Check counterpartName (new field, substring match) ──
+    if (rule.counterpartName) {
+      const needle = rule.counterpartName.toLowerCase();
+      const txName = (tx.counterpartName ?? "").toLowerCase();
+      if (!txName.includes(needle) && !conceptLower.includes(needle)) continue;
+    }
+
+    // ── Type-specific matching ──
     let matches = false;
 
     switch (rule.type) {
@@ -63,79 +82,59 @@ export async function classifyByRules(
 
       case "EXACT_AMOUNT_CONTACT": {
         if (!normalizedIban || !rule.counterpartIban) break;
-        const ruleIban2 = rule.counterpartIban.replace(/\s/g, "").toUpperCase();
-        const ibanMatch = normalizedIban === ruleIban2;
-
-        const amountInRange =
-          (rule.minAmount == null || absAmount >= rule.minAmount) &&
-          (rule.maxAmount == null || absAmount <= rule.maxAmount);
-
-        matches = ibanMatch && amountInRange;
+        const ruleIban = rule.counterpartIban.replace(/\s/g, "").toUpperCase();
+        matches = normalizedIban === ruleIban;
+        // Amount range already checked above
         break;
       }
 
       case "CONCEPT_CLASSIFY": {
-        if (!rule.pattern) break;
+        if (!rule.pattern) {
+          // No pattern but conceptContains already matched above → match
+          matches = !!rule.conceptContains;
+          break;
+        }
         try {
           const regex = new RegExp(rule.pattern, "i");
-          matches =
-            regex.test(conceptLower) || regex.test(parsedConceptLower);
+          matches = regex.test(conceptLower) || regex.test(parsedConceptLower);
         } catch {
-          // Invalid regex: fall back to substring match
           const patternLower = rule.pattern.toLowerCase();
-          matches =
-            conceptLower.includes(patternLower) ||
-            parsedConceptLower.includes(patternLower);
+          matches = conceptLower.includes(patternLower) || parsedConceptLower.includes(patternLower);
         }
         break;
       }
 
       case "FINANCIAL_SPLIT": {
-        // Financial splits are handled by the financial detector;
-        // here we just check if the IBAN matches
         if (!normalizedIban || !rule.counterpartIban) break;
-        const ruleIban3 = rule.counterpartIban.replace(/\s/g, "").toUpperCase();
-        matches = normalizedIban === ruleIban3 && tx.amount < 0;
+        const ruleIban = rule.counterpartIban.replace(/\s/g, "").toUpperCase();
+        matches = normalizedIban === ruleIban && tx.amount < 0;
         break;
       }
     }
 
     if (!matches) continue;
-
-    // Rule matched; resolve the account code
     if (!rule.accountCode && !rule.cashflowType) continue;
 
-    const accountCode = rule.accountCode ?? "";
-    const cashflowType = rule.cashflowType ?? "OPERATING";
+    // ── Match found — update timesApplied + lastExecutedAt ──
+    prisma.matchingRule.update({
+      where: { id: rule.id },
+      data: { timesApplied: { increment: 1 }, lastExecutedAt: new Date() },
+    }).catch(() => {});
 
-    // Increment the timesApplied counter (fire-and-forget)
-    prisma.matchingRule
-      .update({
-        where: { id: rule.id },
-        data: { timesApplied: { increment: 1 } },
-      })
-      .catch(() => {
-        // Non-critical
-      });
-
-    // Confidence based on rule type and how often it has been applied
+    // ── Calculate confidence ──
     const baseConfidence =
-      rule.type === "IBAN_CLASSIFY" || rule.type === "IBAN_INTERNAL"
-        ? 0.95
-        : rule.type === "EXACT_AMOUNT_CONTACT"
-          ? 0.92
-          : 0.85;
-
-    // Slight boost for well-tested rules (up to +0.04)
+      rule.type === "IBAN_CLASSIFY" || rule.type === "IBAN_INTERNAL" ? 0.95
+      : rule.type === "EXACT_AMOUNT_CONTACT" ? 0.92
+      : 0.85;
     const usageBoost = Math.min(0.04, rule.timesApplied * 0.005);
     const confidence = Math.min(0.99, baseConfidence + usageBoost);
 
     return {
-      accountCode,
-      cashflowType,
+      accountCode: rule.accountCode ?? "",
+      cashflowType: rule.cashflowType ?? "OPERATING",
       ruleId: rule.id,
       confidence: Math.round(confidence * 100) / 100,
-      ruleName: `${rule.type}:${rule.pattern ?? rule.counterpartIban ?? ""}`,
+      ruleName: rule.name ?? `${rule.type}:${rule.pattern ?? rule.counterpartIban ?? ""}`,
     };
   }
 

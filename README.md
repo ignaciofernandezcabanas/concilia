@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Concilia
 
-## Getting Started
+Plataforma de conciliación bancaria automatizada para controllers financieros de PYMEs españolas.
 
-First, run the development server:
+Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones automáticamente con IA, y genera reportes financieros (Balance, PyG, EFE) según el Plan General Contable español.
+
+## Funcionalidades
+
+- **Conciliación automática** con matching determinístico + Claude AI
+- **Importación de movimientos** bancarios via CSV
+- **Importación de facturas** en PDF (extracción de datos con IA)
+- **Reportes PGC**: Balance de Situación, Pérdidas y Ganancias, Estado de Flujos de Efectivo
+- **Sistema de aprendizaje**: reglas explícitas + patrones implícitos + creación via lenguaje natural
+- **Integraciones**: Holded, Google Drive, Gmail (solo lectura)
+- **Multi-usuario**: roles Admin, Editor, Reader
+
+## Quick Start
 
 ```bash
+git clone https://github.com/ignaciofernandezcabanas/concilia.git
+cd concilia
+cp .env.example .env   # Rellena con tus credenciales
+npm install
+npx prisma db push
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Requiere: Node.js 18+, cuenta en [Supabase](https://supabase.com), API key de [Anthropic](https://console.anthropic.com).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Documentación Técnica
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Ver [CLAUDE.md](CLAUDE.md) para arquitectura, motor de conciliación, estructura de carpetas, y decisiones de diseño.
 
-## Learn More
+## Stack
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js 14 · TypeScript · Prisma · Supabase · Claude AI · Tailwind CSS

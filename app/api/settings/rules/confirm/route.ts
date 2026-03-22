@@ -20,7 +20,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
 
   const rule = await prisma.matchingRule.create({
     data: {
-      type: type as never,
+      type: type as string,
       isActive: true,
       pattern: conditions?.conceptPattern ?? null,
       counterpartIban: conditions?.counterpartIban ?? null,
@@ -29,7 +29,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       maxAmount: conditions?.maxAmount ?? null,
       action,
       accountCode: actionDetails?.accountCode ?? null,
-      cashflowType: (actionDetails?.cashflowType as never) ?? null,
+      cashflowType: (actionDetails?.cashflowType as string) ?? null,
       companyId: company.id,
       createdById: user.id,
     },

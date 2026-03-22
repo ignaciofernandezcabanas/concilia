@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { withRateLimit } from "@/lib/ai/rate-limiter";
 import type { BankTransaction, CashflowType } from "@prisma/client";
 
 export interface LlmClassificationResult {
@@ -78,12 +79,16 @@ export async function classifyByLlm(
     `}`;
 
   try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 500,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    });
+    const response = await withRateLimit(() =>
+      client.messages.create({
+        model: MODEL,
+        max_tokens: 500,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      })
+    );
+
+    if (!response) return null; // Circuit broken or rate limited
 
     const text =
       response.content[0].type === "text" ? response.content[0].text : "";

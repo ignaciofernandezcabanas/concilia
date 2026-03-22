@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { withCronAuth } from "@/lib/auth/cron-guard";
 
 /**
  * POST /api/cron/calibrate-thresholds
+ * Protected by QStash signature or CRON_SECRET.
  *
  * Monthly cron that recalibrates auto-approval thresholds per category.
  *
@@ -18,7 +20,7 @@ import { prisma } from "@/lib/db";
  * - If autoApprovedErrors = 0 for 3+ months AND manualApproved > 10% of bandeja → LOWER by 2%
  * - Never go below 0.50 or above 0.99
  */
-export async function POST(req: NextRequest) {
+export const POST = withCronAuth(async (_req: NextRequest) => {
   try {
     const now = new Date();
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -38,7 +40,7 @@ export async function POST(req: NextRequest) {
             companyId: company.id,
             status: "AUTO_APPROVED",
             createdAt: { gte: periodStart, lte: periodEnd },
-            type: category as never,
+            type: category,
           },
         });
 
@@ -94,7 +96,18 @@ export async function POST(req: NextRequest) {
           suggested = Math.max(0.50, suggested - 0.02);
         }
 
-        // Store calibration record
+        // Update CategoryThreshold if suggestion differs from current
+        if (suggested !== company.autoApproveThreshold) {
+          await prisma.categoryThreshold.upsert({
+            where: {
+              companyId_category: { companyId: company.id, category },
+            },
+            create: { companyId: company.id, category, threshold: suggested },
+            update: { threshold: suggested },
+          });
+        }
+
+        // Store calibration record (history)
         await prisma.thresholdCalibration.upsert({
           where: {
             companyId_category_period: {
@@ -138,4 +151,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

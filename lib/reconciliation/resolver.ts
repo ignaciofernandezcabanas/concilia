@@ -1,9 +1,20 @@
+/**
+ * Unified reconciliation resolver.
+ *
+ * ALL resolution logic lives here. The API route handler delegates to this
+ * module and does NOT contain any business logic or direct Prisma writes.
+ *
+ * Every mutation runs inside a single Prisma $transaction for data consistency.
+ */
+
 import { prisma } from "@/lib/db";
+import { updateInvoicePaymentStatus } from "./invoice-payments";
+import { trackControllerDecision } from "./decision-tracker";
 import type {
   BankTransactionStatus,
-  InvoiceStatus,
   ReconciliationStatus,
   CashflowType,
+  DifferenceReason,
 } from "@prisma/client";
 
 // ---------------------------------------------------------------------------
@@ -11,42 +22,59 @@ import type {
 // ---------------------------------------------------------------------------
 
 export type ResolveAction =
-  | "approve_match"
+  | "approve"
   | "reject"
   | "investigate"
-  | "classify_manual"
+  | "manual_match"
+  | "classify"
   | "mark_internal"
   | "mark_duplicate"
+  | "mark_legitimate"
   | "mark_return"
   | "ignore"
   | "split_financial";
 
 export interface ResolvePayload {
   action: ResolveAction;
+  reconciliationId?: string;
 
-  /** Manual classification fields (for classify_manual) */
+  // For manual_match
+  bankTransactionId?: string;
+  invoiceId?: string;
+  differenceReason?: DifferenceReason;
+  differenceAccountId?: string;
+
+  // For classify
   accountCode?: string;
   cashflowType?: CashflowType;
   description?: string;
 
-  /** Whether to create a MatchingRule from this resolution */
+  // For reject / ignore
+  reason?: string;
+
+  // For mark_duplicate
+  duplicateOfId?: string;
+
+  // For mark_legitimate
+  duplicateGroupId?: string;
+
+  // For split_financial
+  principalAmount?: number;
+  interestAmount?: number;
+
+  // Rule creation
   createRule?: boolean;
   rulePattern?: string;
 
-  /** Financial split fields (for split_financial) */
-  principalAmount?: number;
-  interestAmount?: number;
-  principalAccountCode?: string;
-  interestAccountCode?: string;
-
-  /** Optional note */
+  // Note
   note?: string;
 }
 
 export interface ResolveResult {
   success: boolean;
-  reconciliationId: string;
-  newTxStatus: BankTransactionStatus;
+  action: string;
+  reconciliationId?: string;
+  bankTransactionId?: string;
   message: string;
 }
 
@@ -54,117 +82,184 @@ export interface ResolveResult {
 // Main resolver
 // ---------------------------------------------------------------------------
 
-/**
- * Resolves a reconciliation item by applying the specified action.
- *
- * All mutations run inside a Prisma transaction to ensure data consistency.
- * After resolution, an AuditLog entry is created and, optionally, a
- * Notification for relevant users.
- */
 export async function resolveItem(
-  reconciliationId: string,
   payload: ResolvePayload,
   userId: string,
   companyId: string
 ): Promise<ResolveResult> {
   const { action } = payload;
 
-  return prisma.$transaction(async (tx) => {
-    // Load the reconciliation with related entities
-    const reconciliation = await tx.reconciliation.findUniqueOrThrow({
-      where: { id: reconciliationId },
-      include: {
-        bankTransaction: true,
-        invoice: true,
-      },
-    });
-
-    if (reconciliation.companyId !== companyId) {
-      throw new Error("Reconciliation does not belong to this company.");
-    }
-
-    if (reconciliation.status === "APPROVED" || reconciliation.status === "AUTO_APPROVED") {
-      throw new Error("Reconciliation is already resolved.");
-    }
-
-    const bankTx = reconciliation.bankTransaction;
-    if (!bankTx) {
-      throw new Error("Reconciliation has no linked bank transaction.");
-    }
-
-    let newTxStatus: BankTransactionStatus;
-    let newRecoStatus: ReconciliationStatus;
-    let message: string;
-
+  const result = await prisma.$transaction(async (tx) => {
     switch (action) {
-      // ---------------------------------------------------------------
-      // APPROVE MATCH
-      // ---------------------------------------------------------------
-      case "approve_match": {
-        newTxStatus = "RECONCILED";
-        newRecoStatus = "APPROVED";
-        message = "Match approved.";
-
-        // Update invoice payment status if linked
-        if (reconciliation.invoice) {
-          const invoice = reconciliation.invoice;
-          const paidSoFar = invoice.amountPaid + Math.abs(bankTx.amount);
-          const fullyPaid = paidSoFar >= invoice.totalAmount - 0.005;
-
-          const newInvoiceStatus: InvoiceStatus = fullyPaid ? "PAID" : "PARTIAL";
-
-          await tx.invoice.update({
-            where: { id: invoice.id },
-            data: {
-              amountPaid: Math.round(paidSoFar * 100) / 100,
-              amountPending: fullyPaid
-                ? 0
-                : Math.round((invoice.totalAmount - paidSoFar) * 100) / 100,
-              status: newInvoiceStatus,
-            },
-          });
-        }
-        break;
-      }
-
-      // ---------------------------------------------------------------
-      // REJECT
-      // ---------------------------------------------------------------
-      case "reject": {
-        newTxStatus = "PENDING";
-        newRecoStatus = "REJECTED";
-        message = "Match rejected. Transaction returned to pending.";
-        break;
-      }
-
-      // ---------------------------------------------------------------
-      // INVESTIGATE
-      // ---------------------------------------------------------------
-      case "investigate": {
-        newTxStatus = "INVESTIGATING";
-        newRecoStatus = "REJECTED";
-        message = "Transaction flagged for investigation.";
-        break;
-      }
-
-      // ---------------------------------------------------------------
-      // CLASSIFY MANUAL
-      // ---------------------------------------------------------------
-      case "classify_manual": {
-        if (!payload.accountCode) {
-          throw new Error("accountCode is required for manual classification.");
-        }
-
-        // Resolve the account
-        const account = await tx.account.findFirst({
-          where: { code: payload.accountCode, companyId },
+      // ─── APPROVE ───
+      case "approve": {
+        const reco = await tx.reconciliation.findFirstOrThrow({
+          where: { id: payload.reconciliationId!, companyId },
+          include: { bankTransaction: true, invoice: true },
         });
 
-        if (!account) {
-          throw new Error(`Account ${payload.accountCode} not found.`);
+        await tx.reconciliation.update({
+          where: { id: reco.id },
+          data: { status: "APPROVED", resolvedAt: new Date(), resolvedById: userId },
+        });
+
+        if (reco.bankTransactionId) {
+          await tx.bankTransaction.update({
+            where: { id: reco.bankTransactionId },
+            data: { status: "RECONCILED" },
+          });
         }
 
-        // Create or update the classification
+        if (reco.invoice) {
+          await updateInvoicePaymentStatus(
+            reco.invoice.id,
+            reco.bankAmount ?? Math.abs(reco.bankTransaction?.amount ?? 0),
+            tx
+          );
+        }
+
+        // Negative feedback: deactivate bad rules on approve with changes
+        // (handled externally since approve = no correction)
+
+        await createAuditLog(tx, userId, "reconciliation.approve", "Reconciliation", reco.id, {
+          bankTransactionId: reco.bankTransactionId,
+          invoiceId: reco.invoiceId,
+        });
+
+        return { success: true, action, reconciliationId: reco.id, message: "Match approved." };
+      }
+
+      // ─── REJECT ───
+      case "reject": {
+        const reco = await tx.reconciliation.findFirstOrThrow({
+          where: { id: payload.reconciliationId!, companyId },
+        });
+
+        await tx.reconciliation.update({
+          where: { id: reco.id },
+          data: {
+            status: "REJECTED" as ReconciliationStatus,
+            resolvedAt: new Date(),
+            resolvedById: userId,
+            resolution: payload.reason ?? null,
+          },
+        });
+
+        if (reco.bankTransactionId) {
+          await tx.bankTransaction.update({
+            where: { id: reco.bankTransactionId },
+            data: { status: "PENDING" as BankTransactionStatus },
+          });
+        }
+
+        // Negative feedback: deactivate the rule that created this bad match
+        if (reco.matchReason?.startsWith("rule:")) {
+          const ruleId = reco.matchReason.split(":")[1];
+          if (ruleId) {
+            await tx.matchingRule.update({ where: { id: ruleId }, data: { isActive: false } }).catch(() => {});
+          }
+        }
+
+        await createAuditLog(tx, userId, "reconciliation.reject", "Reconciliation", reco.id, {
+          reason: payload.reason,
+        });
+
+        return { success: true, action, reconciliationId: reco.id, message: "Match rejected." };
+      }
+
+      // ─── INVESTIGATE ───
+      case "investigate": {
+        const reco = await tx.reconciliation.findFirstOrThrow({
+          where: { id: payload.reconciliationId!, companyId },
+        });
+
+        await tx.reconciliation.update({
+          where: { id: reco.id },
+          data: { status: "REJECTED" as ReconciliationStatus, resolvedAt: new Date(), resolvedById: userId, resolution: payload.note ?? "Under investigation" },
+        });
+
+        if (reco.bankTransactionId) {
+          await tx.bankTransaction.update({
+            where: { id: reco.bankTransactionId },
+            data: { status: "INVESTIGATING" as BankTransactionStatus, note: payload.note, noteAuthorId: userId, noteCreatedAt: new Date() },
+          });
+        }
+
+        // Notify admins
+        const admins = await tx.user.findMany({
+          where: { companyId, role: "ADMIN", status: "ACTIVE" },
+          select: { id: true },
+        });
+        if (admins.length > 0) {
+          await tx.notification.createMany({
+            data: admins.map((a) => ({
+              type: "RECONCILIATION" as const,
+              title: "Transacción en investigación",
+              body: payload.note ?? "Una transacción ha sido marcada para investigación.",
+              userId: a.id,
+              companyId,
+            })),
+          });
+        }
+
+        await createAuditLog(tx, userId, "reconciliation.investigate", "Reconciliation", reco.id, { note: payload.note });
+
+        return { success: true, action, reconciliationId: reco.id, message: "Flagged for investigation." };
+      }
+
+      // ─── MANUAL MATCH ───
+      case "manual_match": {
+        const [bankTx, invoice] = await Promise.all([
+          tx.bankTransaction.findFirstOrThrow({ where: { id: payload.bankTransactionId!, companyId } }),
+          tx.invoice.findFirstOrThrow({ where: { id: payload.invoiceId!, companyId } }),
+        ]);
+
+        const diff = Math.abs(Math.abs(bankTx.amount) - invoice.totalAmount);
+
+        const reco = await tx.reconciliation.create({
+          data: {
+            companyId,
+            type: "MANUAL",
+            confidenceScore: 1.0,
+            matchReason: `manual_match`,
+            status: "APPROVED",
+            invoiceAmount: invoice.totalAmount,
+            bankAmount: Math.abs(bankTx.amount),
+            difference: diff > 0.01 ? diff : 0,
+            differenceReason: payload.differenceReason ?? null,
+            differenceAccountId: payload.differenceAccountId ?? null,
+            bankTransactionId: bankTx.id,
+            invoiceId: invoice.id,
+            resolvedAt: new Date(),
+            resolvedById: userId,
+          },
+        });
+
+        await tx.bankTransaction.update({
+          where: { id: bankTx.id },
+          data: { status: "RECONCILED", detectedType: "MATCH_SIMPLE" },
+        });
+
+        await updateInvoicePaymentStatus(invoice.id, Math.abs(bankTx.amount), tx);
+
+        await createAuditLog(tx, userId, "reconciliation.manual_match", "Reconciliation", reco.id, {
+          bankTransactionId: bankTx.id,
+          invoiceId: invoice.id,
+        });
+
+        return { success: true, action, reconciliationId: reco.id, message: "Manual match created." };
+      }
+
+      // ─── CLASSIFY ───
+      case "classify": {
+        const bankTx = await tx.bankTransaction.findFirstOrThrow({
+          where: { id: payload.bankTransactionId!, companyId },
+        });
+
+        const account = await tx.account.findFirstOrThrow({
+          where: { code: payload.accountCode!, companyId },
+        });
+
         const classification = await tx.bankTransactionClassification.create({
           data: {
             accountId: account.id,
@@ -175,179 +270,216 @@ export async function resolveItem(
 
         await tx.bankTransaction.update({
           where: { id: bankTx.id },
-          data: { classificationId: classification.id },
+          data: { status: "CLASSIFIED", classificationId: classification.id, detectedType: "EXPENSE_NO_INVOICE" },
         });
 
-        newTxStatus = "CLASSIFIED";
-        newRecoStatus = "APPROVED";
-        message = `Classified as ${account.code} - ${account.name}.`;
-        break;
-      }
-
-      // ---------------------------------------------------------------
-      // MARK INTERNAL
-      // ---------------------------------------------------------------
-      case "mark_internal": {
-        newTxStatus = "INTERNAL";
-        newRecoStatus = "APPROVED";
-        message = "Marked as internal transfer.";
-        break;
-      }
-
-      // ---------------------------------------------------------------
-      // MARK DUPLICATE
-      // ---------------------------------------------------------------
-      case "mark_duplicate": {
-        newTxStatus = "DUPLICATE";
-        newRecoStatus = "APPROVED";
-        message = "Marked as duplicate.";
-
-        // Resolve the duplicate group if it exists
-        if (bankTx.duplicateGroupId) {
-          await tx.duplicateGroup.update({
-            where: { id: bankTx.duplicateGroupId },
+        // Create rule if requested
+        if (payload.createRule) {
+          await tx.matchingRule.create({
             data: {
-              status: "DUPLICATE",
-              resolvedAt: new Date(),
-              resolution: `Confirmed duplicate by user ${userId}`,
+              companyId,
+              type: bankTx.counterpartIban ? "IBAN_CLASSIFY" : "CONCEPT_CLASSIFY",
+              isActive: true,
+              pattern: payload.rulePattern ?? bankTx.conceptParsed ?? bankTx.concept ?? undefined,
+              counterpartIban: bankTx.counterpartIban ?? undefined,
+              accountCode: payload.accountCode,
+              cashflowType: payload.cashflowType ?? "OPERATING",
+              action: "classify",
+              createdById: userId,
             },
           });
         }
-        break;
+
+        await createAuditLog(tx, userId, "reconciliation.classify", "BankTransaction", bankTx.id, {
+          accountCode: payload.accountCode,
+          cashflowType: payload.cashflowType,
+        });
+
+        return { success: true, action, bankTransactionId: bankTx.id, message: `Classified as ${account.code}.` };
       }
 
-      // ---------------------------------------------------------------
-      // MARK RETURN
-      // ---------------------------------------------------------------
-      case "mark_return": {
-        newTxStatus = "RECONCILED";
-        newRecoStatus = "APPROVED";
-        message = "Marked as return/reversal.";
-        break;
+      // ─── MARK INTERNAL ───
+      case "mark_internal": {
+        const bankTx = await tx.bankTransaction.findFirstOrThrow({
+          where: { id: payload.bankTransactionId!, companyId },
+        });
+
+        await tx.bankTransaction.update({
+          where: { id: bankTx.id },
+          data: { status: "INTERNAL", detectedType: "INTERNAL_TRANSFER", priority: "ROUTINE" },
+        });
+
+        await createAuditLog(tx, userId, "reconciliation.mark_internal", "BankTransaction", bankTx.id, {});
+
+        return { success: true, action, bankTransactionId: bankTx.id, message: "Marked as internal." };
       }
 
-      // ---------------------------------------------------------------
-      // IGNORE
-      // ---------------------------------------------------------------
-      case "ignore": {
-        newTxStatus = "IGNORED";
-        newRecoStatus = "REJECTED";
-        message = "Transaction ignored.";
-        break;
-      }
+      // ─── MARK DUPLICATE ───
+      case "mark_duplicate": {
+        const bankTx = await tx.bankTransaction.findFirstOrThrow({
+          where: { id: payload.bankTransactionId!, companyId },
+        });
 
-      // ---------------------------------------------------------------
-      // SPLIT FINANCIAL
-      // ---------------------------------------------------------------
-      case "split_financial": {
-        if (!payload.principalAmount || !payload.interestAmount) {
-          throw new Error(
-            "principalAmount and interestAmount are required for financial splits."
-          );
+        await tx.bankTransaction.update({
+          where: { id: bankTx.id },
+          data: { status: "DUPLICATE", detectedType: "POSSIBLE_DUPLICATE" },
+        });
+
+        if (bankTx.duplicateGroupId) {
+          await tx.duplicateGroup.update({
+            where: { id: bankTx.duplicateGroupId },
+            data: { status: "DUPLICATE", resolvedAt: new Date(), resolution: `Confirmed by ${userId}` },
+          });
         }
 
-        newTxStatus = "CLASSIFIED";
-        newRecoStatus = "APPROVED";
-        message = `Financial split: principal ${payload.principalAmount.toFixed(2)}, interest ${payload.interestAmount.toFixed(2)}.`;
-        break;
-      }
-
-      default: {
-        throw new Error(`Unknown action: ${action}`);
-      }
-    }
-
-    // Update reconciliation status
-    await tx.reconciliation.update({
-      where: { id: reconciliationId },
-      data: {
-        status: newRecoStatus,
-        resolvedAt: new Date(),
-        resolvedById: userId,
-        resolution: `${action}${payload.note ? `: ${payload.note}` : ""}`,
-      },
-    });
-
-    // Update bank transaction status and optional note
-    const txUpdateData: Record<string, unknown> = {
-      status: newTxStatus,
-      updatedAt: new Date(),
-    };
-
-    if (payload.note) {
-      txUpdateData.note = payload.note;
-      txUpdateData.noteAuthorId = userId;
-      txUpdateData.noteCreatedAt = new Date();
-    }
-
-    await tx.bankTransaction.update({
-      where: { id: bankTx.id },
-      data: txUpdateData,
-    });
-
-    // Create audit log
-    await tx.auditLog.create({
-      data: {
-        action: `reconciliation.${action}`,
-        entityType: "Reconciliation",
-        entityId: reconciliationId,
-        userId,
-        details: {
-          reconciliationId,
-          bankTransactionId: bankTx.id,
-          invoiceId: reconciliation.invoiceId,
-          action,
-          previousStatus: reconciliation.status,
-          newStatus: newRecoStatus,
-          ...(payload.note ? { note: payload.note } : {}),
-          ...(payload.accountCode ? { accountCode: payload.accountCode } : {}),
-        },
-      },
-    });
-
-    // Create matching rule if requested
-    if (payload.createRule && action === "classify_manual" && payload.accountCode) {
-      await tx.matchingRule.create({
-        data: {
-          companyId,
-          type: bankTx.counterpartIban ? "IBAN_CLASSIFY" : "CONCEPT_CLASSIFY",
-          isActive: true,
-          pattern: payload.rulePattern ?? bankTx.conceptParsed ?? bankTx.concept ?? undefined,
-          counterpartIban: bankTx.counterpartIban ?? undefined,
-          accountCode: payload.accountCode,
-          cashflowType: payload.cashflowType ?? "OPERATING",
-          action: "classify",
-          createdById: userId,
-        },
-      });
-    }
-
-    // Create notification for admins on urgent actions
-    if (action === "investigate") {
-      const admins = await tx.user.findMany({
-        where: { companyId, role: "ADMIN", status: "ACTIVE" },
-        select: { id: true },
-      });
-
-      if (admins.length > 0) {
-        await tx.notification.createMany({
-          data: admins.map((admin) => ({
-            type: "RECONCILIATION" as const,
-            title: "Transaction under investigation",
-            body: `Transaction of ${bankTx.amount.toFixed(2)} EUR (${bankTx.concept ?? "no concept"}) has been flagged for investigation.`,
-            userId: admin.id,
-            companyId,
-            actionUrl: `/reconciliation/${reconciliationId}`,
-          })),
+        await createAuditLog(tx, userId, "reconciliation.mark_duplicate", "BankTransaction", bankTx.id, {
+          duplicateOfId: payload.duplicateOfId,
         });
-      }
-    }
 
-    return {
-      success: true,
-      reconciliationId,
-      newTxStatus,
-      message,
-    };
+        return { success: true, action, bankTransactionId: bankTx.id, message: "Marked as duplicate." };
+      }
+
+      // ─── MARK LEGITIMATE ───
+      case "mark_legitimate": {
+        const group = await tx.duplicateGroup.findUniqueOrThrow({
+          where: { id: payload.duplicateGroupId! },
+          include: { transactions: { select: { id: true, companyId: true } } },
+        });
+
+        if (!group.transactions.every((t) => t.companyId === companyId)) {
+          throw new Error("Duplicate group does not belong to this company.");
+        }
+
+        await tx.duplicateGroup.update({
+          where: { id: group.id },
+          data: { status: "LEGITIMATE", resolvedAt: new Date(), resolution: `Legitimate by ${userId}` },
+        });
+
+        await tx.bankTransaction.updateMany({
+          where: { duplicateGroupId: group.id, companyId },
+          data: { status: "PENDING", detectedType: null },
+        });
+
+        await createAuditLog(tx, userId, "reconciliation.mark_legitimate", "DuplicateGroup", group.id, {});
+
+        return { success: true, action, message: "Duplicate group marked as legitimate." };
+      }
+
+      // ─── MARK RETURN ───
+      case "mark_return": {
+        const reco = await tx.reconciliation.findFirstOrThrow({
+          where: { id: payload.reconciliationId!, companyId },
+          include: { bankTransaction: true },
+        });
+
+        await tx.reconciliation.update({
+          where: { id: reco.id },
+          data: { status: "APPROVED", resolvedAt: new Date(), resolvedById: userId },
+        });
+
+        if (reco.bankTransactionId) {
+          await tx.bankTransaction.update({
+            where: { id: reco.bankTransactionId },
+            data: { status: "RECONCILED" },
+          });
+        }
+
+        await createAuditLog(tx, userId, "reconciliation.mark_return", "Reconciliation", reco.id, {});
+
+        return { success: true, action, reconciliationId: reco.id, message: "Marked as return." };
+      }
+
+      // ─── IGNORE ───
+      case "ignore": {
+        const bankTx = await tx.bankTransaction.findFirstOrThrow({
+          where: { id: payload.bankTransactionId!, companyId },
+        });
+
+        await tx.bankTransaction.update({
+          where: { id: bankTx.id },
+          data: { status: "IGNORED", note: payload.reason, noteAuthorId: userId, noteCreatedAt: new Date() },
+        });
+
+        await createAuditLog(tx, userId, "reconciliation.ignore", "BankTransaction", bankTx.id, {
+          reason: payload.reason,
+        });
+
+        return { success: true, action, bankTransactionId: bankTx.id, message: "Transaction ignored." };
+      }
+
+      // ─── SPLIT FINANCIAL ───
+      case "split_financial": {
+        const reco = await tx.reconciliation.findFirstOrThrow({
+          where: { id: payload.reconciliationId!, companyId },
+          include: { bankTransaction: true },
+        });
+
+        await tx.reconciliation.update({
+          where: { id: reco.id },
+          data: {
+            status: "APPROVED",
+            resolvedAt: new Date(),
+            resolvedById: userId,
+            resolution: `split: principal=${payload.principalAmount}, interest=${payload.interestAmount}`,
+          },
+        });
+
+        if (reco.bankTransactionId) {
+          await tx.bankTransaction.update({
+            where: { id: reco.bankTransactionId },
+            data: { status: "CLASSIFIED" },
+          });
+        }
+
+        await createAuditLog(tx, userId, "reconciliation.split_financial", "Reconciliation", reco.id, {
+          principalAmount: payload.principalAmount,
+          interestAmount: payload.interestAmount,
+        });
+
+        return { success: true, action, reconciliationId: reco.id, message: "Financial split applied." };
+      }
+
+      default:
+        throw new Error(`Unknown action: ${action}`);
+    }
+  });
+
+  // Post-transaction: track decision for feedback loop
+  // Non-critical — must not break the resolve, but errors should be logged
+  try {
+    await trackControllerDecision({
+      reconciliationId: result.reconciliationId ?? payload.reconciliationId,
+      bankTransactionId: result.bankTransactionId ?? payload.bankTransactionId,
+      invoiceId: payload.invoiceId,
+      userId,
+      companyId,
+      controllerAction: action,
+      correctedField: action === "reject" ? "action" : action === "classify" ? "accountCode" : undefined,
+      correctedTo: action === "reject" ? `rejected:${payload.reason}` : action === "classify" ? payload.accountCode : undefined,
+      createdExplicitRule: payload.createRule,
+    });
+  } catch (err) {
+    console.warn("[learning] Failed to track decision:", err instanceof Error ? err.message : err);
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+async function createAuditLog(
+  tx: TxClient,
+  userId: string,
+  action: string,
+  entityType: string,
+  entityId: string,
+  details: Record<string, unknown>
+): Promise<void> {
+  await tx.auditLog.create({
+    data: { userId, action, entityType, entityId, details },
   });
 }

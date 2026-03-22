@@ -31,6 +31,8 @@ interface PatternItem {
   correctPredictions: number;
   confidence: number;
   isActive: boolean;
+  status?: string;
+  supervisedApplyCount?: number;
 }
 
 interface LearningData {
@@ -86,6 +88,11 @@ export default function LearningTab() {
     refetch();
   }
 
+  async function handlePatternReview(id: string, action: "approve" | "reject" | "promote") {
+    await api.post(`/api/settings/learning/${id}/review`, { action });
+    refetch();
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* Stats */}
@@ -103,6 +110,9 @@ export default function LearningTab() {
 
       {/* NL Rule Creator */}
       <NLRuleCreator onCreated={refetch} />
+
+      {/* Category thresholds */}
+      <CategoryThresholds />
 
       {/* Unified rules + patterns table */}
       <div>
@@ -128,7 +138,7 @@ export default function LearningTab() {
               <span className="w-14 text-right">Usos</span>
               <span className="w-20 text-right">Confianza</span>
               <span className="w-16 text-center">Estado</span>
-              <span className="w-10" />
+              <span className="w-24" />
             </div>
             {allItems.map((item) => (
               <div key={`${item.source}-${item.id}`} className={`flex items-center h-10 px-4 text-[12px] border-b border-border-light ${!item.isActive ? "opacity-40" : ""}`}>
@@ -154,7 +164,22 @@ export default function LearningTab() {
                     {item.isActive ? "Activa" : "Inactiva"}
                   </span>
                 </span>
-                <span className="w-10 flex justify-end">
+                <span className="w-24 flex justify-end gap-1">
+                  {/* Pattern lifecycle actions */}
+                  {item.source === "pattern" && (() => {
+                    const p = patterns.find((pp) => pp.id === item.id);
+                    const pStatus = p?.status ?? "SUGGESTED";
+                    if (pStatus === "SUGGESTED") return (
+                      <>
+                        <button onClick={() => handlePatternReview(item.id, "approve")} className="text-[10px] text-green-text hover:underline">Aprobar</button>
+                        <button onClick={() => handlePatternReview(item.id, "reject")} className="text-[10px] text-red-text hover:underline">Rechazar</button>
+                      </>
+                    );
+                    if (pStatus === "ACTIVE_SUPERVISED") return (
+                      <button onClick={() => handlePatternReview(item.id, "promote")} className="text-[10px] text-accent hover:underline">Promover</button>
+                    );
+                    return null;
+                  })()}
                   <button
                     onClick={() => handleDelete(item.source, item.id)}
                     className="p-1 rounded hover:bg-red-light text-text-tertiary hover:text-red transition-colors"
@@ -327,6 +352,99 @@ function ActionDetails({ action, details }: { action?: string; details?: Record<
 }
 
 // ── Stat Card ──
+
+// ── Category Thresholds ──
+
+const CATEGORY_LABELS: Record<string, string> = {
+  EXACT_MATCH: "Match exacto",
+  GROUPED_MATCH: "Match agrupado",
+  DIFFERENCE_MATCH: "Match con diferencia",
+  PARTIAL_MATCH: "Match parcial",
+  CLASSIFICATION: "Clasificación",
+};
+
+function CategoryThresholds() {
+  const { data, loading, refetch } = useFetch<{
+    global: number;
+    categories: { category: string; threshold: number; isCustom: boolean }[];
+  }>("/api/settings/thresholds");
+
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  if (loading || !data) return null;
+
+  async function saveThreshold(category: string) {
+    const val = parseFloat(editValue);
+    if (isNaN(val) || val < 0.5 || val > 0.99) return;
+    await api.put("/api/settings/thresholds", { category, threshold: val });
+    setEditing(null);
+    refetch();
+  }
+
+  async function resetThreshold(category: string) {
+    await api.put("/api/settings/thresholds", { category, reset: true });
+    refetch();
+  }
+
+  return (
+    <div>
+      <h3 className="text-[14px] font-semibold text-text-primary mb-1">Umbrales por categoría</h3>
+      <p className="text-[11px] text-text-tertiary mb-3">
+        Umbral global: {(data.global * 100).toFixed(0)}%. Las categorías sin umbral propio usan el global.
+      </p>
+      <div className="bg-white rounded-lg border border-subtle overflow-hidden">
+        <div className="flex items-center h-9 px-4 border-b border-subtle text-[11px] font-semibold text-text-secondary">
+          <span className="flex-1">Categoría</span>
+          <span className="w-24 text-right">Umbral</span>
+          <span className="w-20 text-center">Custom</span>
+          <span className="w-20" />
+        </div>
+        {data.categories.map((cat) => (
+          <div key={cat.category} className="flex items-center h-10 px-4 text-[12px] border-b border-border-light">
+            <span className="flex-1 text-text-primary">{CATEGORY_LABELS[cat.category] ?? cat.category}</span>
+            <span className="w-24 text-right">
+              {editing === cat.category ? (
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.50"
+                  max="0.99"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && saveThreshold(cat.category)}
+                  onBlur={() => setEditing(null)}
+                  autoFocus
+                  className="w-16 h-6 px-1 text-right text-[12px] border border-accent rounded"
+                />
+              ) : (
+                <span className="font-mono">{(cat.threshold * 100).toFixed(0)}%</span>
+              )}
+            </span>
+            <span className="w-20 text-center">
+              {cat.isCustom && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-light text-accent">Custom</span>
+              )}
+            </span>
+            <span className="w-20 flex justify-end gap-1">
+              <button
+                onClick={() => { setEditing(cat.category); setEditValue(cat.threshold.toString()); }}
+                className="text-[10px] text-accent hover:underline"
+              >
+                Editar
+              </button>
+              {cat.isCustom && (
+                <button onClick={() => resetThreshold(cat.category)} className="text-[10px] text-text-tertiary hover:underline">
+                  Reset
+                </button>
+              )}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function StatCard({ label, value, highlight, isText }: { label: string; value: string | number; highlight?: boolean; isText?: boolean }) {
   return (

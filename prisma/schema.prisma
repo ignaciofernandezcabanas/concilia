@@ -33,6 +33,7 @@ model Company {
   accounts              Account[]
   contacts              Contact[]
   matchingRules         MatchingRule[]
+  categoryThresholds    CategoryThreshold[]
   syncLogs              SyncLog[]
   notifications         Notification[]
   integrations          Integration[]
@@ -431,19 +432,32 @@ enum DifferenceReason {
 
 model MatchingRule {
   id              String       @id @default(cuid())
+  name            String?                           // descriptive name, editable
   type            RuleType
-  isActive        Boolean      @default(true)
+  origin          RuleOrigin   @default(MANUAL)
+  status          RuleStatus   @default(ACTIVE)
+  priority        Int          @default(0)           // higher = more priority
+  isActive        Boolean      @default(true)        // legacy compat
   timesApplied    Int          @default(0)
+  lastExecutedAt  DateTime?
 
-  pattern         String?
+  // Conditions
+  pattern         String?                            // regex/substring for concept
   counterpartIban String?
+  counterpartName String?
   contactId       String?
+  conceptContains String?                            // substring match
   minAmount       Float?
   maxAmount       Float?
+  transactionDirection String?                       // "income", "expense", "both"
+  differencePercentMin Float?
+  differencePercentMax Float?
 
-  action          String
+  // Action
+  action          String                             // "auto_approve", "classify", "escalate", "adjust_difference"
   accountCode     String?
   cashflowType    CashflowType?
+  differenceReason String?                           // for auto-adjustment rules
 
   companyId       String
   company         Company      @relation(fields: [companyId], references: [id])
@@ -451,6 +465,7 @@ model MatchingRule {
   createdAt       DateTime     @default(now())
   createdById     String?
 
+  @@index([companyId, status, priority])
   @@index([companyId, isActive])
 }
 
@@ -460,6 +475,18 @@ enum RuleType {
   IBAN_CLASSIFY
   IBAN_INTERNAL
   FINANCIAL_SPLIT
+}
+
+enum RuleOrigin {
+  MANUAL      // created from rules panel or NL
+  INLINE      // created from resolution card checkbox
+  PROMOTED    // promoted from learned pattern
+}
+
+enum RuleStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
 }
 
 // ============================================================
@@ -617,37 +644,66 @@ model ControllerDecision {
 // ============================================================
 
 model LearnedPattern {
-  id                String    @id @default(cuid())
-  type              String                        // "difference_reason", "classification", "match_preference"
-  isActive          Boolean   @default(true)
+  id                    String        @id @default(cuid())
+  type                  String                        // "difference_reason", "classification", "match_preference"
+  isActive              Boolean       @default(true)  // legacy compat
+  status                PatternStatus @default(SUGGESTED)
 
   // Pattern definition
-  counterpartIban   String?
-  counterpartName   String?
-  conceptPattern    String?                       // regex or substring
-  amountRange       String?
-  dayOfMonthRange   String?                       // e.g. "25-28" for payroll
+  counterpartIban       String?
+  counterpartName       String?
+  conceptPattern        String?                       // regex or substring
+  amountRange           String?
+  dayOfMonthRange       String?                       // e.g. "25-28" for payroll
 
   // What the pattern predicts
-  predictedAction   String                        // the action to suggest
-  predictedReason   String?                       // e.g. "BANK_COMMISSION"
-  predictedAccount  String?                       // PGC account code
+  predictedAction       String                        // the action to suggest
+  predictedReason       String?                       // e.g. "BANK_COMMISSION"
+  predictedAccount      String?                       // PGC account code
 
   // Confidence tracking
-  occurrences       Int       @default(0)         // how many times this pattern was seen
-  correctPredictions Int      @default(0)         // how many times the prediction was right
-  confidence        Float     @default(0)         // correctPredictions / occurrences
+  occurrences           Int           @default(0)
+  correctPredictions    Int           @default(0)
+  confidence            Float         @default(0)     // correctPredictions / occurrences
 
-  companyId         String
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  // Lifecycle
+  supervisedApplyCount  Int           @default(0)     // times applied in supervised mode without correction
+  promotedToRuleId      String?                       // if promoted, the resulting MatchingRule ID
+  reviewedAt            DateTime?
+  reviewedById          String?
 
+  companyId             String
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([companyId, status])
   @@index([companyId, isActive])
   @@index([companyId, counterpartIban])
 }
 
+enum PatternStatus {
+  SUGGESTED           // detected, pending review
+  ACTIVE_SUPERVISED   // approved, applied but logged
+  PROMOTED            // converted to explicit rule
+  REJECTED            // discarded by controller
+}
+
 // ============================================================
-// CALIBRACIÓN DE UMBRALES POR CATEGORÍA
+// UMBRALES POR CATEGORÍA
+// ============================================================
+
+model CategoryThreshold {
+  id          String  @id @default(cuid())
+  category    String                        // "EXACT_MATCH", "GROUPED_MATCH", "DIFFERENCE_MATCH", "CLASSIFICATION"
+  threshold   Float
+  companyId   String
+  company     Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, category])
+}
+
+// ============================================================
+// CALIBRACIÓN DE UMBRALES (histórico)
 // ============================================================
 
 model ThresholdCalibration {

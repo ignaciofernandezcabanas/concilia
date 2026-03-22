@@ -94,15 +94,15 @@ export function withAuth(
         }
       }
 
-      // Update last login timestamp (fire-and-forget)
-      prisma.user
-        .update({
-          where: { id: user.id },
-          data: { lastLoginAt: new Date() },
-        })
-        .catch(() => {
-          // Non-critical: silently ignore last-login update failures
-        });
+      // Update last login timestamp — only if null or > 1 hour old (avoid DB spam)
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      if (!user.lastLoginAt || user.lastLoginAt < oneHourAgo) {
+        prisma.user
+          .update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+          .catch((err) => {
+            console.warn("[auth] Failed to update lastLoginAt:", err instanceof Error ? err.message : err);
+          });
+      }
 
       return handler(req, {
         user: userWithoutCompany as User,

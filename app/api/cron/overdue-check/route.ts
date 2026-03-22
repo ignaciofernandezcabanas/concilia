@@ -1,42 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { withCronAuth } from "@/lib/auth/cron-guard";
 
 /**
  * POST /api/cron/overdue-check
- *
- * Finds invoices past their due date that are still pending/partial,
- * updates their status to OVERDUE, and creates notifications for
- * relevant users.
+ * Protected by QStash signature or CRON_SECRET.
  */
-export async function POST(req: NextRequest) {
+export const POST = withCronAuth(async (req: NextRequest) => {
   try {
-    // Verify QStash signature
-    const signature = req.headers.get("upstash-signature");
-    if (!signature) {
-      return NextResponse.json(
-        { error: "Missing QStash signature." },
-        { status: 401 }
-      );
-    }
-
-    const { Receiver } = await import("@upstash/qstash");
-    const receiver = new Receiver({
-      currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY!,
-      nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY!,
-    });
-
-    const body = await req.text();
+    let companyId: string | undefined;
     try {
-      await receiver.verify({ signature, body });
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid QStash signature." },
-        { status: 401 }
-      );
-    }
-
-    const parsed = body ? JSON.parse(body) : {};
-    const companyId = parsed.companyId as string | undefined;
+      const body = await req.text();
+      if (body) companyId = JSON.parse(body).companyId;
+    } catch { /* no body */ }
     const now = new Date();
 
     // Build company filter
@@ -213,4 +189,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

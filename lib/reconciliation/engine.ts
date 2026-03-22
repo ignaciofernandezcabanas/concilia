@@ -24,6 +24,7 @@ import {
 } from "./classifiers/llm-classifier";
 
 import { assignPriority } from "./prioritizer";
+import { CONCEPT_MAX_LENGTH } from "./constants";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -89,6 +90,16 @@ export async function runReconciliation(
     materialityMinor,
   } = company;
 
+  // Load per-category thresholds (fallback to global)
+  const categoryThresholds = await prisma.categoryThreshold.findMany({
+    where: { companyId },
+  });
+  const categoryThresholdMap = new Map(
+    categoryThresholds.map((ct) => [ct.category, ct.threshold])
+  );
+  const getThreshold = (category: string) =>
+    categoryThresholdMap.get(category) ?? autoApproveThreshold;
+
   // Load all PENDING bank transactions
   const pendingTx = await prisma.bankTransaction.findMany({
     where: {
@@ -130,6 +141,7 @@ export async function runReconciliation(
         autoApproveThreshold,
         materialityThreshold,
         materialityMinor,
+        getThreshold,
         result
       );
       result.processed++;
@@ -161,6 +173,7 @@ async function processTransaction(
   autoApproveThreshold: number,
   materialityThreshold: number,
   materialityMinor: number,
+  getThreshold: (category: string) => number,
   result: ReconciliationResult
 ): Promise<void> {
   // Idempotency: skip if a non-rejected reconciliation already exists
@@ -259,15 +272,9 @@ async function processTransaction(
       );
       if (shouldAuto) {
         await markInvoicePaid(cn.id, tx.amount);
-        // Link credit note to original invoice
+        // Link credit note to original invoice (reverse the payment)
         if (cn.creditNoteForId) {
-          await prisma.invoice.update({
-            where: { id: cn.creditNoteForId },
-            data: {
-              amountPaid: { decrement: Math.abs(cn.totalAmount) },
-              status: "PARTIAL",
-            },
-          });
+          await markInvoicePaid(cn.creditNoteForId, -Math.abs(cn.totalAmount));
         }
         result.autoApproved++;
       } else {
@@ -429,10 +436,14 @@ async function processTransaction(
             differenceReason: pattern.predictedReason,
           };
           // Increment pattern usage
-          prisma.learnedPattern.update({
-            where: { id: pattern.id },
-            data: { occurrences: { increment: 1 } },
-          }).catch(() => {});
+          try {
+            await prisma.learnedPattern.update({
+              where: { id: pattern.id },
+              data: { occurrences: { increment: 1 }, supervisedApplyCount: { increment: 1 } },
+            });
+          } catch (err) {
+            console.warn("[learning] Failed to increment pattern usage:", err instanceof Error ? err.message : err);
+          }
         }
       }
     }
@@ -482,11 +493,13 @@ async function processTransaction(
     );
 
     // Auto-approve rules:
-    // 1. Standard: confidence >= threshold AND amount <= materiality
-    // 2. Small difference: if difference exists AND |difference| <= materialityMinor
-    //    AND confidence >= 0.70 → auto-approve as minor adjustment
+    // 1. Standard: confidence >= category threshold AND amount <= materiality
+    // 2. Small difference: if |difference| <= materialityMinor AND confidence >= 0.70
     // 3. Unidentified income (scenario 8) → NEVER auto-approve
     // 4. First-time classification → NEVER auto-approve
+    const categoryKey = matchOutcome.type; // "EXACT_MATCH", "GROUPED_MATCH", etc.
+    const categoryThreshold = getThreshold(categoryKey);
+
     const isSmallDiff =
       matchOutcome.difference != null &&
       Math.abs(matchOutcome.difference) <= materialityMinor &&
@@ -497,7 +510,7 @@ async function processTransaction(
     const shouldAutoApprove =
       !isUnidentifiedIncome &&
       (
-        (matchOutcome.confidence >= autoApproveThreshold &&
+        (matchOutcome.confidence >= categoryThreshold &&
           Math.abs(tx.amount) <= materialityThreshold) ||
         isSmallDiff
       );
@@ -739,7 +752,7 @@ async function createReconciliation(
       invoiceAmount,
       bankAmount: Math.abs(tx.amount),
       difference: params.difference ?? null,
-      differenceReason: (params.differenceReason as never) ?? null,
+      differenceReason: (params.differenceReason as string | null) ?? null,
       ...(params.autoApprove ? { resolvedAt: new Date() } : {}),
     },
   });
@@ -780,27 +793,14 @@ function resolveDetectedType(match: MatchOutcome): DetectedType {
 
 /**
  * Update invoice payment status after a match is approved.
+ * Uses the unified function but wraps it for non-transactional context.
  */
 async function markInvoicePaid(invoiceId: string, paidAmount: number): Promise<void> {
-  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
-  if (!invoice) return;
-
-  const newAmountPaid = invoice.amountPaid + paidAmount;
-  const newPending = invoice.totalAmount - newAmountPaid;
-  const tolerance = 0.01;
-
-  let newStatus: "PAID" | "PARTIAL" | "PENDING" = "PARTIAL";
-  if (newPending <= tolerance) newStatus = "PAID";
-  else if (newAmountPaid <= tolerance) newStatus = "PENDING";
-
-  await prisma.invoice.update({
-    where: { id: invoiceId },
-    data: {
-      amountPaid: newAmountPaid,
-      amountPending: Math.max(0, newPending),
-      status: newStatus,
-    },
-  });
+  const { updateInvoicePaymentStatus } = await import("./invoice-payments");
+  // In the engine, we're not inside a $transaction, so we pass prisma directly
+  // The unified function accepts any Prisma-like client
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await updateInvoicePaymentStatus(invoiceId, paidAmount, prisma as any);
 }
 
 /**
@@ -835,15 +835,15 @@ async function learnFromApproval(
         data: {
           type: "EXACT_AMOUNT_CONTACT",
           isActive: true,
-          pattern: tx.concept?.slice(0, 100) ?? null,
+          pattern: tx.concept?.slice(0, CONCEPT_MAX_LENGTH) ?? null,
           counterpartIban: tx.counterpartIban,
           action: "auto_approve",
           companyId,
         },
       });
     }
-  } catch {
-    // Non-critical: silently ignore rule creation failures
+  } catch (err) {
+    console.warn("[learning] Failed to learn from approval:", err instanceof Error ? err.message : err);
   }
 }
 

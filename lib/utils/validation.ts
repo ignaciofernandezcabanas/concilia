@@ -193,7 +193,10 @@ export const companySettingsSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   cif: z
     .string()
-    .regex(/^[A-Z]\d{8}$/, "CIF must be a letter followed by 8 digits.")
+    .regex(
+      /^[A-HJNP-SUVW]\d{7}[0-9A-J]$|^\d{8}[A-Z]$|^[XYZ]\d{7}[A-Z]$/,
+      "CIF/NIF inválido."
+    )
     .optional(),
   currency: z.string().length(3).default("EUR").optional(),
   fiscalYearStartMonth: z.number().int().min(1).max(12).optional(),

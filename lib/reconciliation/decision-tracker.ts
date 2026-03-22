@@ -174,7 +174,7 @@ async function updateLearnedPattern(ctx: DecisionContext): Promise<void> {
         type: ctx.correctedField ?? "correction",
         counterpartIban: tx.counterpartIban,
         counterpartName: tx.counterpartName,
-        conceptPattern: tx.concept?.slice(0, 50),
+        conceptPattern: tx.concept?.slice(0, 100),
         predictedAction: ctx.correctedTo!,
         predictedReason: ctx.correctedTo,
         occurrences: 1,
