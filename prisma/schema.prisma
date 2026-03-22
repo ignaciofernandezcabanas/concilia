@@ -124,6 +124,7 @@ model Company {
   accountingPeriods     AccountingPeriod[]
   journalEntries        JournalEntry[]
   fixedAssets            FixedAsset[]
+  budgets                Budget[]
 
 }
 
@@ -153,6 +154,45 @@ enum PeriodStatus {
   OPEN
   CLOSED
   LOCKED
+}
+
+// ============================================================
+// PRESUPUESTOS (BUDGETS)
+// ============================================================
+
+model Budget {
+  id            String        @id @default(cuid())
+  year          Int
+  name          String        @default("Presupuesto anual")
+  status        BudgetStatus  @default(DRAFT)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  companyId     String
+  company       Company       @relation(fields: [companyId], references: [id])
+
+  lines         BudgetLine[]
+
+  @@unique([companyId, year, name])
+}
+
+model BudgetLine {
+  id            String  @id @default(cuid())
+  accountCode   String
+  month         Int     // 1-12
+  amount        Float
+
+  budgetId      String
+  budget        Budget  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetId, accountCode, month])
+  @@index([budgetId])
+}
+
+enum BudgetStatus {
+  DRAFT
+  APPROVED
+  CLOSED
 }
 
 model User {
@@ -784,6 +824,9 @@ enum IntegrationType {
   HOLDED
   OPEN_BANKING
   GOOGLE_DRIVE
+  ONEDRIVE
+  GMAIL
+  OUTLOOK
   CLAUDE_AI
 }
 
