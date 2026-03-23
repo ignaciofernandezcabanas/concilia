@@ -119,7 +119,7 @@ describe("Daily Agent", () => {
   it("engine step processes transactions", async () => {
     const result = await runDailyAgent(ORG_ID);
 
-    expect(mockRunReconciliation).toHaveBeenCalledWith("c1");
+    expect(mockRunReconciliation).toHaveBeenCalledWith(expect.anything(), "c1");
     expect(result.txsProcessed).toBe(5);
     expect(result.txsAutoExecuted).toBe(2);
     expect(result.txsToBandeja).toBe(1);

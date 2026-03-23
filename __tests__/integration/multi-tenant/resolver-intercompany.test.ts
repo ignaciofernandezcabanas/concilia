@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockPrisma = vi.hoisted(() => ({
   $transaction: vi.fn(),
+  reconciliation: { findFirst: vi.fn() },
   intercompanyLink: {
     findUniqueOrThrow: vi.fn(),
     update: vi.fn(),
@@ -25,6 +26,10 @@ vi.mock('@/lib/reconciliation/invoice-payments', () => ({
   updateInvoicePaymentStatus: vi.fn(),
 }));
 
+vi.mock('@/lib/ai/confidence-calibrator', () => ({
+  calibrateFromDecision: vi.fn(),
+}));
+
 import { resolveItem } from '@/lib/reconciliation/resolver';
 
 describe('mark_intercompany action', () => {
@@ -32,6 +37,8 @@ describe('mark_intercompany action', () => {
     vi.clearAllMocks();
     mockPrisma.$transaction.mockImplementation(async (fn: Function) => fn(mockPrisma));
     mockPrisma.auditLog.create.mockResolvedValue({});
+    mockPrisma.reconciliation.findFirst.mockResolvedValue(null);
+    mockPrisma.bankTransaction.findFirst.mockResolvedValue(null);
     mockTrackDecision.mockResolvedValue(undefined);
   });
 
@@ -189,6 +196,7 @@ describe('mark_intercompany action', () => {
     );
 
     expect(mockTrackDecision).toHaveBeenCalledWith(
+      expect.anything(), // db
       expect.objectContaining({
         userId: 'user_1',
         companyId: 'company_1',

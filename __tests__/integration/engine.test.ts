@@ -85,7 +85,7 @@ describe('runReconciliation — Engine', () => {
   // ── No transactions ──
   it('sin transacciones pendientes → resultado vacío', async () => {
     setupDefaults([]);
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.processed).toBe(0);
   });
 
@@ -94,7 +94,7 @@ describe('runReconciliation — Engine', () => {
     setupDefaults();
     mockDetectInternal.mockResolvedValue({ isInternal: true, ownAccountId: 'own_1' });
 
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.autoApproved).toBe(1);
     expect(result.matched).toBe(1);
     expect(mockPrisma.bankTransaction.update).toHaveBeenCalledWith(
@@ -106,7 +106,7 @@ describe('runReconciliation — Engine', () => {
     setupDefaults();
     mockDetectDuplicates.mockResolvedValue({ isDuplicate: true, groupId: 'g1', relatedTx: [] });
 
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.needsReview).toBe(1);
     expect(mockPrisma.bankTransaction.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'PENDING', priority: 'URGENT' }) })
@@ -117,7 +117,7 @@ describe('runReconciliation — Engine', () => {
     setupDefaults();
     mockDetectReturn.mockResolvedValue({ isReturn: true, originalTxId: 'tx_orig', originalReconciliationId: 'reco_orig' });
 
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.needsReview).toBe(1);
     expect(result.autoApproved).toBe(0);
   });
@@ -129,7 +129,7 @@ describe('runReconciliation — Engine', () => {
     const invoice = buildInvoice({ totalAmount: 1000, contact: buildContact() });
     mockFindExact.mockResolvedValue([{ invoice, confidence: 0.97, matchReason: 'exact' }]);
 
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.autoApproved).toBe(1);
     expect(mockPrisma.bankTransaction.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'RECONCILED' }) })
@@ -141,7 +141,7 @@ describe('runReconciliation — Engine', () => {
     const invoice = buildInvoice({ contact: buildContact() });
     mockFindExact.mockResolvedValue([{ invoice, confidence: 0.85, matchReason: 'exact' }]);
 
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.needsReview).toBe(1);
     expect(result.autoApproved).toBe(0);
   });
@@ -152,7 +152,7 @@ describe('runReconciliation — Engine', () => {
     const invoice = buildInvoice({ totalAmount: 10000, contact: buildContact() });
     mockFindExact.mockResolvedValue([{ invoice, confidence: 0.99, matchReason: 'exact' }]);
 
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.needsReview).toBe(1); // over materiality
   });
 
@@ -161,7 +161,7 @@ describe('runReconciliation — Engine', () => {
     const invoice = buildInvoice({ contact: buildContact() });
     mockFindFuzzy.mockResolvedValue([{ invoice, confidence: 0.82, matchReason: 'fuzzy', amountDifference: 15, differencePercent: 1.5, suggestedDifferenceReason: 'BANK_COMMISSION' }]);
 
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.needsReview).toBe(1);
   });
 
@@ -169,7 +169,7 @@ describe('runReconciliation — Engine', () => {
     setupDefaults();
     mockFindLlm.mockResolvedValue({ invoiceId: 'inv_1', confidence: 0.75, matchReason: 'llm', llmExplanation: 'test' });
 
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.needsReview).toBe(1);
     expect(result.autoApproved).toBe(0);
   });
@@ -180,7 +180,7 @@ describe('runReconciliation — Engine', () => {
     const invoice = buildInvoice({ contact: buildContact() });
     mockFindFuzzy.mockResolvedValue([{ invoice, confidence: 0.75, matchReason: 'fuzzy', amountDifference: 3, differencePercent: 0.3, suggestedDifferenceReason: 'BANK_COMMISSION' }]);
 
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.autoApproved).toBe(1); // isSmallDiff applies
   });
 
@@ -189,7 +189,7 @@ describe('runReconciliation — Engine', () => {
     const tx = buildBankTransaction({ amount: 500 }); // positive = income
     setupDefaults([tx]);
 
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.needsReview).toBe(1);
     expect(result.autoApproved).toBe(0);
   });
@@ -204,7 +204,7 @@ describe('runReconciliation — Engine', () => {
     mockPrisma.account.findFirst.mockResolvedValue({ id: 'acc_1', code: '629', name: 'Otros servicios' });
     mockPrisma.bankTransactionClassification.create.mockResolvedValue({ id: 'class_1' });
 
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.classified).toBe(1);
     expect(result.autoApproved).toBe(1);
   });
@@ -218,7 +218,7 @@ describe('runReconciliation — Engine', () => {
     mockPrisma.account.findFirst.mockResolvedValue({ id: 'acc_1', code: '629', name: 'Otros servicios' });
     mockPrisma.bankTransactionClassification.create.mockResolvedValue({ id: 'class_1' });
 
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.classified).toBe(1);
     expect(result.needsReview).toBe(1);
     expect(result.autoApproved).toBe(0);
@@ -227,7 +227,7 @@ describe('runReconciliation — Engine', () => {
   // ── Fallback ──
   it('nada encontrado → UNIDENTIFIED, bandeja', async () => {
     setupDefaults();
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.needsReview).toBe(1);
     expect(mockPrisma.bankTransaction.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ detectedType: 'UNIDENTIFIED' }) })
@@ -239,7 +239,7 @@ describe('runReconciliation — Engine', () => {
     setupDefaults();
     mockPrisma.reconciliation.findFirst.mockResolvedValue({ id: 'existing', status: 'PROPOSED' });
 
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.processed).toBe(1);
     expect(result.matched).toBe(0);
     expect(result.needsReview).toBe(0);
@@ -275,7 +275,7 @@ describe('runReconciliation — Engine', () => {
       return [];
     });
 
-    const result = await runReconciliation('company_1');
+    const result = await runReconciliation(mockPrisma as any, 'company_1');
     expect(result.processed).toBe(5);
     expect(result.autoApproved).toBe(2); // tx_1 (internal) + tx_2 (exact)
     expect(result.needsReview).toBe(2); // tx_3 (fuzzy) + tx_4 (unidentified)

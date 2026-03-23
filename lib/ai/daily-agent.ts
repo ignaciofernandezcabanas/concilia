@@ -117,7 +117,7 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
 
     // Step 2: Engine (reconciliation)
     results.push(await runStep("engine", async () => {
-      const engineResult = await runReconciliation(company.id);
+      const engineResult = await runReconciliation(companyDb, company.id);
       totalTxsProcessed += engineResult.processed;
       totalAutoExecuted += engineResult.autoApproved;
       totalToBandeja += engineResult.needsReview;

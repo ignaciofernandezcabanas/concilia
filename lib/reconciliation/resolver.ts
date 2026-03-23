@@ -7,7 +7,7 @@
  * Every mutation runs inside a single Prisma $transaction for data consistency.
  */
 
-import { prisma } from "@/lib/db";
+import { prisma } from "@/lib/db"; // GLOBAL-PRISMA: $transaction requires raw Prisma client
 import { updateInvoicePaymentStatus } from "./invoice-payments";
 import { trackControllerDecision } from "./decision-tracker";
 import { calibrateFromDecision } from "@/lib/ai/confidence-calibrator";
@@ -92,7 +92,8 @@ export interface ResolveResult {
 export async function resolveItem(
   payload: ResolvePayload,
   userId: string,
-  companyId: string
+  companyId: string,
+  db?: import("@/lib/db-scoped").ScopedPrisma
 ): Promise<ResolveResult> {
   const { action } = payload;
 
@@ -544,7 +545,7 @@ export async function resolveItem(
   // Post-transaction: track decision for feedback loop
   // Non-critical — must not break the resolve, but errors should be logged
   try {
-    await trackControllerDecision({
+    await trackControllerDecision(db ?? prisma as any, {
       reconciliationId: result.reconciliationId ?? payload.reconciliationId ?? "",
       bankTransactionId: result.bankTransactionId ?? payload.bankTransactionId ?? "",
       invoiceId: payload.invoiceId,

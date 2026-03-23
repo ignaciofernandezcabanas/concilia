@@ -397,6 +397,7 @@ describe('resolveItem — Unified Resolver', () => {
 
       await resolveItem({ action: 'approve', reconciliationId: 'reco_1' }, 'user_1', 'company_1');
       expect(mockTrackDecision).toHaveBeenCalledWith(
+        expect.anything(), // db
         expect.objectContaining({ controllerAction: 'approve', companyId: 'company_1' })
       );
     });

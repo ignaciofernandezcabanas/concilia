@@ -1,5 +1,4 @@
-import { prisma } from "@/lib/db";
-import { getScopedDb } from "@/lib/db-scoped";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import type {
   BankTransaction,
   DetectedType,
@@ -71,6 +70,7 @@ interface MatchOutcome {
  * before creating new ones and skips already-processed transactions.
  */
 export async function runReconciliation(
+  db: ScopedPrisma,
   companyId: string
 ): Promise<ReconciliationResult> {
   const result: ReconciliationResult = {
@@ -83,7 +83,7 @@ export async function runReconciliation(
   };
 
   // Load company settings
-  const company = await prisma.company.findUniqueOrThrow({
+  const company = await db.company.findUniqueOrThrow({
     where: { id: companyId },
   });
 
@@ -94,7 +94,7 @@ export async function runReconciliation(
   } = company;
 
   // Load per-category thresholds (fallback to global)
-  const categoryThresholds = await prisma.categoryThreshold.findMany({
+  const categoryThresholds = await db.categoryThreshold.findMany({
     where: { companyId },
   });
   const categoryThresholdMap = new Map(
@@ -104,7 +104,7 @@ export async function runReconciliation(
     categoryThresholdMap.get(category) ?? autoApproveThreshold;
 
   // Load all PENDING bank transactions
-  const pendingTx = await prisma.bankTransaction.findMany({
+  const pendingTx = await db.bankTransaction.findMany({
     where: {
       companyId,
       status: "PENDING",
@@ -117,11 +117,11 @@ export async function runReconciliation(
   }
 
   // Preload data shared across transactions
-  const contacts = await prisma.contact.findMany({
+  const contacts = await db.contact.findMany({
     where: { companyId },
   });
 
-  const pendingInvoices = await prisma.invoice.findMany({
+  const pendingInvoices = await db.invoice.findMany({
     where: {
       companyId,
       status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
@@ -130,12 +130,12 @@ export async function runReconciliation(
   });
 
   // Load historical classifications for LLM classifier context
-  const historicalClassifications = await loadHistoricalClassifications(companyId);
+  const historicalClassifications = await loadHistoricalClassifications(db, companyId);
 
   // Process each transaction
   for (const tx of pendingTx) {
     try {
-      await processTransaction(
+      await processTransaction(db, 
         tx,
         companyId,
         contacts,
@@ -168,6 +168,7 @@ export async function runReconciliation(
 // ---------------------------------------------------------------------------
 
 async function processTransaction(
+  db: ScopedPrisma,
   tx: BankTransaction,
   companyId: string,
   contacts: Contact[],
@@ -180,7 +181,7 @@ async function processTransaction(
   result: ReconciliationResult
 ): Promise<void> {
   // Idempotency: skip if a non-rejected reconciliation already exists
-  const existing = await prisma.reconciliation.findFirst({
+  const existing = await db.reconciliation.findFirst({
     where: {
       bankTransactionId: tx.id,
       status: { notIn: ["REJECTED"] },
@@ -196,16 +197,16 @@ async function processTransaction(
   // =====================================================================
 
   // 1a. Internal transfer
-  const internalResult = await detectInternalTransfer(tx, companyId);
+  const internalResult = await detectInternalTransfer(tx, db);
   if (internalResult.isInternal) {
-    await createReconciliation(tx, companyId, {
+    await createReconciliation(db, tx, companyId, {
       type: "MANUAL",
       confidence: 0.99,
       matchReason: `internal_transfer:${internalResult.ownAccountId}`,
       detectedType: "INTERNAL_TRANSFER",
       autoApprove: true,
     });
-    await updateTxStatus(tx.id, "INTERNAL", "INTERNAL_TRANSFER", "ROUTINE");
+    await updateTxStatus(db, tx.id, "INTERNAL", "INTERNAL_TRANSFER", "ROUTINE");
     result.matched++;
     result.autoApproved++;
     return;
@@ -214,17 +215,17 @@ async function processTransaction(
   // 1a2. Intercompany transfer (sibling company in same org)
   const intercoResult = await detectIntercompany(tx, companyId);
   if (intercoResult.isIntercompany) {
-    await createReconciliation(tx, companyId, {
+    await createReconciliation(db, tx, companyId, {
       type: "MANUAL",
       confidence: 0.95,
       matchReason: `intercompany:${intercoResult.siblingCompanyId}:${intercoResult.siblingCompanyName}`,
       detectedType: "INTERCOMPANY",
       autoApprove: false,
     });
-    await updateTxStatus(tx.id, "PENDING", "INTERCOMPANY", "DECISION");
+    await updateTxStatus(db, tx.id, "PENDING", "INTERCOMPANY", "DECISION");
 
     // Create IntercompanyLink
-    await prisma.intercompanyLink.create({
+    await db.intercompanyLink.create({
       data: {
         amount: Math.abs(tx.amount),
         date: tx.valueDate,
@@ -242,31 +243,31 @@ async function processTransaction(
   }
 
   // 1b. Duplicate detection
-  const duplicateResult = await detectDuplicates(tx, companyId);
+  const duplicateResult = await detectDuplicates(tx, db);
   if (duplicateResult.isDuplicate) {
-    await createReconciliation(tx, companyId, {
+    await createReconciliation(db, tx, companyId, {
       type: "MANUAL",
       confidence: 0.90,
       matchReason: `possible_duplicate:group_${duplicateResult.groupId}`,
       detectedType: "POSSIBLE_DUPLICATE",
       autoApprove: false,
     });
-    await updateTxStatus(tx.id, "PENDING", "POSSIBLE_DUPLICATE", "URGENT");
+    await updateTxStatus(db, tx.id, "PENDING", "POSSIBLE_DUPLICATE", "URGENT");
     result.needsReview++;
     return;
   }
 
   // 1c. Return detection
-  const returnResult = await detectReturn(tx, companyId);
+  const returnResult = await detectReturn(tx, db);
   if (returnResult.isReturn) {
-    await createReconciliation(tx, companyId, {
+    await createReconciliation(db, tx, companyId, {
       type: "RETURN_MATCH",
       confidence: 0.95,
       matchReason: `return:original_tx_${returnResult.originalTxId}`,
       detectedType: "RETURN",
       autoApprove: false,
     });
-    await updateTxStatus(tx.id, "PENDING", "RETURN", "URGENT");
+    await updateTxStatus(db, tx.id, "PENDING", "RETURN", "URGENT");
     result.needsReview++;
     return;
   }
@@ -284,7 +285,7 @@ async function processTransaction(
     );
     if (creditNotes.length === 1) {
       const cn = creditNotes[0];
-      await createReconciliation(tx, companyId, {
+      await createReconciliation(db, tx, companyId, {
         type: "CREDIT_NOTE_MATCH",
         confidence: 0.95,
         matchReason: `credit_note:${cn.number}:exact_amount`,
@@ -297,17 +298,17 @@ async function processTransaction(
       const shouldAuto =
         0.95 >= autoApproveThreshold &&
         Math.abs(tx.amount) <= materialityThreshold;
-      await updateTxStatus(
+      await updateTxStatus(db, 
         tx.id,
         shouldAuto ? "RECONCILED" : "PENDING",
         "CREDIT_NOTE",
         shouldAuto ? "ROUTINE" : "CONFIRMATION"
       );
       if (shouldAuto) {
-        await markInvoicePaid(cn.id, tx.amount);
+        await markInvoicePaid(db, cn.id, tx.amount);
         // Link credit note to original invoice (reverse the payment)
         if (cn.creditNoteForId) {
-          await markInvoicePaid(cn.creditNoteForId, -Math.abs(cn.totalAmount));
+          await markInvoicePaid(db, cn.creditNoteForId, -Math.abs(cn.totalAmount));
         }
         result.autoApproved++;
       } else {
@@ -326,7 +327,7 @@ async function processTransaction(
     );
     if (creditNotes.length === 1) {
       const cn = creditNotes[0];
-      await createReconciliation(tx, companyId, {
+      await createReconciliation(db, tx, companyId, {
         type: "CREDIT_NOTE_MATCH",
         confidence: 0.95,
         matchReason: `credit_note:${cn.number}:exact_amount`,
@@ -339,14 +340,14 @@ async function processTransaction(
       const shouldAuto =
         0.95 >= autoApproveThreshold &&
         Math.abs(tx.amount) <= materialityThreshold;
-      await updateTxStatus(
+      await updateTxStatus(db, 
         tx.id,
         shouldAuto ? "RECONCILED" : "PENDING",
         "CREDIT_NOTE",
         shouldAuto ? "ROUTINE" : "CONFIRMATION"
       );
       if (shouldAuto) {
-        await markInvoicePaid(cn.id, Math.abs(tx.amount));
+        await markInvoicePaid(db, cn.id, Math.abs(tx.amount));
         result.autoApproved++;
       } else {
         result.needsReview++;
@@ -363,7 +364,7 @@ async function processTransaction(
   let matchOutcome: MatchOutcome | null = null;
 
   // 2a. Exact match
-  const exactMatches = await findExactMatch(tx, companyId);
+  const exactMatches = await findExactMatch(tx, db);
   if (exactMatches.length > 0) {
     const best = exactMatches[0];
     matchOutcome = {
@@ -416,7 +417,7 @@ async function processTransaction(
 
   // 2b. Grouped match (only if no exact match)
   if (!matchOutcome) {
-    const grouped = await findGroupedMatch(tx, companyId);
+    const grouped = await findGroupedMatch(tx, db);
     if (grouped) {
       matchOutcome = {
         type: "GROUPED_MATCH",
@@ -434,7 +435,7 @@ async function processTransaction(
   // If we have a fuzzy match, check if a learned pattern suggests the reason
   if (!matchOutcome) {
     // First check if a learned pattern can resolve this directly
-    const learnedPatterns = await prisma.learnedPattern.findMany({
+    const learnedPatterns = await db.learnedPattern.findMany({
       where: {
         companyId,
         isActive: true,
@@ -470,7 +471,7 @@ async function processTransaction(
           };
           // Increment pattern usage
           try {
-            await prisma.learnedPattern.update({
+            await db.learnedPattern.update({
               where: { id: pattern.id },
               data: { occurrences: { increment: 1 }, supervisedApplyCount: { increment: 1 } },
             });
@@ -484,7 +485,7 @@ async function processTransaction(
 
   // 2c. Fuzzy match (only if no match found yet)
   if (!matchOutcome) {
-    const fuzzyMatches = await findFuzzyMatch(tx, companyId);
+    const fuzzyMatches = await findFuzzyMatch(tx, db);
     if (fuzzyMatches.length > 0) {
       const best = fuzzyMatches[0];
       matchOutcome = {
@@ -501,7 +502,7 @@ async function processTransaction(
 
   // 2d. LLM match (only if no other match found)
   if (!matchOutcome) {
-    const llmResult = await findLlmMatch(tx, pendingInvoices, contacts, getScopedDb(companyId));
+    const llmResult = await findLlmMatch(tx, pendingInvoices, contacts, db);
     if (llmResult) {
       matchOutcome = {
         type: "EXACT_MATCH",
@@ -551,7 +552,7 @@ async function processTransaction(
     // For grouped matches, create a reconciliation per invoice
     if (matchOutcome.type === "GROUPED_MATCH" && matchOutcome.invoiceIds.length > 1) {
       for (const invoiceId of matchOutcome.invoiceIds) {
-        await createReconciliation(tx, companyId, {
+        await createReconciliation(db, tx, companyId, {
           type: matchOutcome.type,
           confidence: matchOutcome.confidence,
           matchReason: matchOutcome.matchReason,
@@ -563,7 +564,7 @@ async function processTransaction(
         });
       }
     } else {
-      await createReconciliation(tx, companyId, {
+      await createReconciliation(db, tx, companyId, {
         type: matchOutcome.type,
         confidence: matchOutcome.confidence,
         matchReason: matchOutcome.matchReason,
@@ -576,16 +577,16 @@ async function processTransaction(
     }
 
     const newTxStatus = shouldAutoApprove ? "RECONCILED" : "PENDING";
-    await updateTxStatus(tx.id, newTxStatus, detectedType, priority);
+    await updateTxStatus(db, tx.id, newTxStatus, detectedType, priority);
 
     // Update invoice payment status if auto-approved
     if (shouldAutoApprove && matchOutcome.invoiceId) {
-      await markInvoicePaid(matchOutcome.invoiceId, Math.abs(tx.amount));
+      await markInvoicePaid(db, matchOutcome.invoiceId, Math.abs(tx.amount));
     }
 
     // LEARNING LOOP: create a rule from auto-approved exact matches
     if (shouldAutoApprove && matchOutcome.type === "EXACT_MATCH" && tx.counterpartIban) {
-      await learnFromApproval(tx, companyId, matchOutcome);
+      await learnFromApproval(db, tx, companyId, matchOutcome);
     }
 
     result.matched++;
@@ -618,7 +619,7 @@ async function processTransaction(
       })
         .then(async (explanation) => {
           if (explanation) {
-            await prisma.reconciliation.updateMany({
+            await db.reconciliation.updateMany({
               where: { bankTransactionId: tx.id, companyId, status: "PROPOSED" },
               data: { resolution: explanation },
             });
@@ -636,31 +637,31 @@ async function processTransaction(
   // =====================================================================
 
   // 3a. Financial operation detection
-  const financialResult = await detectFinancialOp(tx, companyId);
+  const financialResult = await detectFinancialOp(tx, db);
   if (financialResult.isFinancial) {
-    await createReconciliation(tx, companyId, {
+    await createReconciliation(db, tx, companyId, {
       type: "MANUAL",
       confidence: 0.85,
       matchReason: `financial_op:principal_${financialResult.suggestedPrincipal}_interest_${financialResult.suggestedInterest}`,
       detectedType: "FINANCIAL_OPERATION",
       autoApprove: false,
     });
-    await updateTxStatus(tx.id, "PENDING", "FINANCIAL_OPERATION", "CONFIRMATION");
+    await updateTxStatus(db, tx.id, "PENDING", "FINANCIAL_OPERATION", "CONFIRMATION");
     result.classified++;
     result.needsReview++;
     return;
   }
 
   // 3b. Rule-based classification
-  const ruleResult = await classifyByRules(tx, companyId);
+  const ruleResult = await classifyByRules(tx, db);
   if (ruleResult) {
     // Resolve the account to get its ID
-    const account = await prisma.account.findFirst({
+    const account = await db.account.findFirst({
       where: { code: ruleResult.accountCode, companyId },
     });
 
     if (account) {
-      const classification = await prisma.bankTransactionClassification.create({
+      const classification = await db.bankTransactionClassification.create({
         data: {
           accountId: account.id,
           cashflowType: ruleResult.cashflowType,
@@ -679,7 +680,7 @@ async function processTransaction(
         materialityThreshold
       );
 
-      await prisma.bankTransaction.update({
+      await db.bankTransaction.update({
         where: { id: tx.id },
         data: {
           classificationId: classification.id,
@@ -689,7 +690,7 @@ async function processTransaction(
         },
       });
 
-      await createReconciliation(tx, companyId, {
+      await createReconciliation(db, tx, companyId, {
         type: "MANUAL",
         confidence: ruleResult.confidence,
         matchReason: `rule:${ruleResult.ruleId}:${ruleResult.ruleName}`,
@@ -710,12 +711,12 @@ async function processTransaction(
   // 3c. LLM classification
   const llmClassification = await classifyByLlm(tx, historicalClassifications);
   if (llmClassification) {
-    const account = await prisma.account.findFirst({
+    const account = await db.account.findFirst({
       where: { code: llmClassification.accountCode, companyId },
     });
 
     if (account) {
-      const classification = await prisma.bankTransactionClassification.create({
+      const classification = await db.bankTransactionClassification.create({
         data: {
           accountId: account.id,
           cashflowType: llmClassification.cashflowType,
@@ -731,7 +732,7 @@ async function processTransaction(
       );
 
       // LLM classifications always require human review
-      await prisma.bankTransaction.update({
+      await db.bankTransaction.update({
         where: { id: tx.id },
         data: {
           classificationId: classification.id,
@@ -740,7 +741,7 @@ async function processTransaction(
         },
       });
 
-      await createReconciliation(tx, companyId, {
+      await createReconciliation(db, tx, companyId, {
         type: "MANUAL",
         confidence: llmClassification.confidence,
         matchReason: `llm_classify:${llmClassification.accountCode}:${llmClassification.llmExplanation}`,
@@ -765,9 +766,9 @@ async function processTransaction(
     materialityThreshold
   );
 
-  await updateTxStatus(tx.id, "PENDING", "UNIDENTIFIED", priority);
+  await updateTxStatus(db, tx.id, "PENDING", "UNIDENTIFIED", priority);
 
-  await createReconciliation(tx, companyId, {
+  await createReconciliation(db, tx, companyId, {
     type: "MANUAL",
     confidence: 0,
     matchReason: "unidentified",
@@ -787,7 +788,7 @@ async function processTransaction(
   })
     .then(async (explanation) => {
       if (explanation) {
-        await prisma.reconciliation.updateMany({
+        await db.reconciliation.updateMany({
           where: { bankTransactionId: tx.id, companyId, status: "PROPOSED" },
           data: { resolution: explanation },
         });
@@ -814,20 +815,21 @@ interface CreateRecoParams {
 }
 
 async function createReconciliation(
+  db: ScopedPrisma,
   tx: BankTransaction,
   companyId: string,
   params: CreateRecoParams
 ): Promise<void> {
   const invoiceAmount = params.invoiceId
     ? (
-        await prisma.invoice.findUnique({
+        await db.invoice.findUnique({
           where: { id: params.invoiceId },
           select: { totalAmount: true },
         })
       )?.totalAmount ?? null
     : null;
 
-  await prisma.reconciliation.create({
+  await db.reconciliation.create({
     data: {
       type: params.type,
       confidenceScore: params.confidence,
@@ -846,12 +848,13 @@ async function createReconciliation(
 }
 
 async function updateTxStatus(
+  db: ScopedPrisma,
   txId: string,
   status: BankTransaction["status"],
   detectedType: DetectedType,
   priority: BankTransaction["priority"]
 ): Promise<void> {
-  await prisma.bankTransaction.update({
+  await db.bankTransaction.update({
     where: { id: txId },
     data: { status, detectedType, priority },
   });
@@ -882,12 +885,13 @@ function resolveDetectedType(match: MatchOutcome): DetectedType {
  * Update invoice payment status after a match is approved.
  * Uses the unified function but wraps it for non-transactional context.
  */
-async function markInvoicePaid(invoiceId: string, paidAmount: number): Promise<void> {
+async function markInvoicePaid(
+  db: ScopedPrisma,invoiceId: string, paidAmount: number): Promise<void> {
   const { updateInvoicePaymentStatus } = await import("./invoice-payments");
   // In the engine, we're not inside a $transaction, so we pass prisma directly
   // The unified function accepts any Prisma-like client
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await updateInvoicePaymentStatus(invoiceId, paidAmount, prisma as any);
+  await updateInvoicePaymentStatus(invoiceId, paidAmount, db as any);
 }
 
 /**
@@ -895,13 +899,14 @@ async function markInvoicePaid(invoiceId: string, paidAmount: number): Promise<v
  * This teaches the system to auto-approve similar transactions in the future.
  */
 async function learnFromApproval(
+  db: ScopedPrisma,
   tx: BankTransaction,
   companyId: string,
   match: MatchOutcome
 ): Promise<void> {
   try {
     // Check if a rule already exists for this IBAN + amount pattern
-    const existingRule = await prisma.matchingRule.findFirst({
+    const existingRule = await db.matchingRule.findFirst({
       where: {
         companyId,
         counterpartIban: tx.counterpartIban,
@@ -912,13 +917,13 @@ async function learnFromApproval(
 
     if (existingRule) {
       // Increment usage counter
-      await prisma.matchingRule.update({
+      await db.matchingRule.update({
         where: { id: existingRule.id },
         data: { timesApplied: { increment: 1 } },
       });
     } else {
       // Create new rule from this successful match
-      await prisma.matchingRule.create({
+      await db.matchingRule.create({
         data: {
           type: "EXACT_AMOUNT_CONTACT",
           isActive: true,
@@ -935,9 +940,10 @@ async function learnFromApproval(
 }
 
 async function loadHistoricalClassifications(
+  db: ScopedPrisma,
   companyId: string
 ): Promise<HistoricalClassification[]> {
-  const classified = await prisma.bankTransaction.findMany({
+  const classified = await db.bankTransaction.findMany({
     where: {
       companyId,
       status: "CLASSIFIED",
