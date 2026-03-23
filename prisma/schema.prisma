@@ -654,6 +654,7 @@ enum DetectedType {
   RETURN
   OVERDUE_INVOICE
   CREDIT_NOTE
+  OPENING_BALANCE
 }
 
 // ============================================================

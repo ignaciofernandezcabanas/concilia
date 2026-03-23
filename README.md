@@ -50,6 +50,7 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 - **Importación PDF**: facturas individuales o masivas con extracción AI
 - **Storage scan**: escaneo de carpeta Drive/OneDrive para PDFs
 - **Excel bulk import**: facturas, contactos y activos fijos desde plantilla Excel
+- **Saldo inicial**: endpoint idempotente con OPENING_BALANCE
 - **Deduplicación**: por holdedId (facturas) y externalId (movimientos)
 
 ### Sistema de aprendizaje
@@ -217,7 +218,7 @@ Ver [CLAUDE.md](CLAUDE.md) para detalles del motor de conciliación, 18 escenari
 - **59 endpoints** API
 - **19 páginas** frontend
 - **16 componentes** React
-- **345 tests** en 29 archivos
+- **352 tests** en 30 archivos
 - **16 categorías** de confianza
 - **12 acciones** de resolución
 - **11 steps** del agente diario

@@ -82,7 +82,7 @@ lib/
 components/                 # 16 React components: Sidebar, ContextSwitcher, ConfidenceBar, InlineChart...
 hooks/useApi.ts             # useFetch, useInvoices, useTransactions...
 prisma/schema.prisma        # 34 modelos, 33 enums
-__tests__/                  # 29 archivos, 345 tests
+__tests__/                  # 30 archivos, 352 tests
 ```
 
 ## Setup Local
