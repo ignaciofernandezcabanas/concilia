@@ -5,11 +5,13 @@ import { buildBankTransaction, buildInvoice, buildReconciliation, buildContact }
 const mockPrisma = vi.hoisted(() => ({
   $transaction: vi.fn(),
   reconciliation: {
+    findFirst: vi.fn(),
     findFirstOrThrow: vi.fn(),
     update: vi.fn(),
     create: vi.fn(),
   },
   bankTransaction: {
+    findFirst: vi.fn(),
     findFirstOrThrow: vi.fn(),
     update: vi.fn(),
     updateMany: vi.fn(),
@@ -57,6 +59,12 @@ vi.mock('@/lib/reconciliation/invoice-payments', () => ({
   updateInvoicePaymentStatus: mockUpdatePayment,
 }));
 
+// Mock calibrator
+const mockCalibrate = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/ai/confidence-calibrator', () => ({
+  calibrateFromDecision: mockCalibrate,
+}));
+
 import { resolveItem } from '@/lib/reconciliation/resolver';
 
 describe('resolveItem — Unified Resolver', () => {
@@ -69,7 +77,11 @@ describe('resolveItem — Unified Resolver', () => {
     mockPrisma.matchingRule.create.mockResolvedValue({});
     mockPrisma.notification.createMany.mockResolvedValue({});
     mockPrisma.user.findMany.mockResolvedValue([]);
+    // Pre-transaction lookups for calibration
+    mockPrisma.reconciliation.findFirst.mockResolvedValue(null);
+    mockPrisma.bankTransaction.findFirst.mockResolvedValue(null);
     mockTrackDecision.mockResolvedValue(undefined);
+    mockCalibrate.mockResolvedValue(undefined);
     mockUpdatePayment.mockResolvedValue({ newStatus: 'PAID', newAmountPaid: 1000, newAmountPending: 0 });
   });
 

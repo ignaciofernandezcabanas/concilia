@@ -10,6 +10,8 @@
 import { prisma } from "@/lib/db";
 import { updateInvoicePaymentStatus } from "./invoice-payments";
 import { trackControllerDecision } from "./decision-tracker";
+import { calibrateFromDecision } from "@/lib/ai/confidence-calibrator";
+import type { ActionCategory } from "@/lib/ai/confidence-engine";
 import type {
   BankTransactionStatus,
   ReconciliationStatus,
@@ -93,6 +95,31 @@ export async function resolveItem(
   companyId: string
 ): Promise<ResolveResult> {
   const { action } = payload;
+
+  // Capture tx data before $transaction for calibration pattern key
+  let txForCalibration: { counterpartIban: string | null; concept: string | null; matchReason: string | null } | null = null;
+  if (payload.reconciliationId) {
+    const reco = await prisma.reconciliation.findFirst({
+      where: { id: payload.reconciliationId, companyId },
+      include: { bankTransaction: { select: { counterpartIban: true, concept: true } } },
+
+    });
+    if (reco) {
+      txForCalibration = {
+        counterpartIban: reco.bankTransaction?.counterpartIban ?? null,
+        concept: reco.bankTransaction?.concept ?? null,
+        matchReason: reco.matchReason,
+      };
+    }
+  } else if (payload.bankTransactionId) {
+    const btx = await prisma.bankTransaction.findFirst({
+      where: { id: payload.bankTransactionId, companyId },
+      select: { counterpartIban: true, concept: true },
+    });
+    if (btx) {
+      txForCalibration = { counterpartIban: btx.counterpartIban, concept: btx.concept, matchReason: null };
+    }
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     switch (action) {
@@ -532,7 +559,47 @@ export async function resolveItem(
     console.warn("[learning] Failed to track decision:", err instanceof Error ? err.message : err);
   }
 
+  // Post-transaction: calibrate confidence from feedback
+  try {
+    const patternKey = txForCalibration?.counterpartIban
+      ? `iban:${txForCalibration.counterpartIban}`
+      : txForCalibration?.concept
+        ? `concept:${txForCalibration.concept.slice(0, 50)}`
+        : "";
+
+    if (patternKey) {
+      const wasModified = action === "reject"
+        || action === "manual_match"
+        || action === "classify"
+        || action === "mark_internal"
+        || action === "mark_intercompany";
+
+      await calibrateFromDecision({
+        wasAutoExecuted: false, // resolver is always called by controller action
+        wasModified,
+        category: inferCategory(txForCalibration?.matchReason, action),
+        patternKey,
+        companyId,
+      });
+    }
+  } catch (err) {
+    console.warn("[learning] Calibration failed:", err instanceof Error ? err.message : err);
+  }
+
   return result;
+}
+
+function inferCategory(matchReason: string | null | undefined, action: string): ActionCategory {
+  const r = matchReason ?? action;
+  if (r.includes("exact")) return "exact_match";
+  if (r.includes("fuzzy")) return "fuzzy_match";
+  if (r.includes("grouped")) return "grouped_match";
+  if (r.includes("rule")) return "rule_application";
+  if (r.includes("llm_match")) return "llm_match";
+  if (r.includes("internal")) return "internal_transfer";
+  if (r.includes("intercompany")) return "intercompany_exact";
+  if (r.includes("classify")) return "llm_classification";
+  return "llm_classification";
 }
 
 // ---------------------------------------------------------------------------
