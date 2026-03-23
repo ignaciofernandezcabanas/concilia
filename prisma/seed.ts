@@ -78,7 +78,17 @@ async function main() {
   // Step 0: Idempotency
   const existing = await prisma.company.findFirst({ where: { cif: COMPANY_CIF } });
   if (existing) {
-    console.log("⚠️  Seed data already exists. Delete the company or run prisma migrate reset.");
+    const p = prisma as any;
+    const hasEntries = await p.journalEntry.findFirst({ where: { companyId: existing.id } });
+    if (hasEntries) {
+      console.log("⚠️  Seed data already exists (including new features). Run prisma migrate reset to re-seed.");
+      return;
+    }
+    console.log("📦 Company exists — seeding new features only...");
+    const user = await prisma.user.findFirst({ where: { companyId: existing.id } });
+    const orgId = (existing as any).organizationId ?? "";
+    await seedNewFeatures(existing.id, orgId, user?.id ?? "");
+    console.log("\n🌱 New features seed completado.");
     return;
   }
 
@@ -441,6 +451,9 @@ async function main() {
   const receivedCount = invoices.filter(i => i.type === "RECEIVED").length;
   const creditCount = invoices.filter(i => i.type.startsWith("CREDIT")).length;
 
+  // ── New features data ──
+  await seedNewFeatures(cid, org.id, userId);
+
   console.log("\n🌱 Seed completado:");
   console.log(`   🏢 Empresa: Alimentación Mediterránea SL`);
   console.log(`   👤 Login: ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
@@ -450,6 +463,9 @@ async function main() {
   console.log(`   📏 Reglas: 4`);
   console.log(`   🧠 Patrones aprendidos: 4`);
   console.log(`   📊 Decisiones históricas: ${decisionData.length}`);
+  console.log(`   📋 Asientos contables: 6`);
+  console.log(`   🏭 Activos fijos: 3`);
+  console.log(`   💰 Presupuesto 2026: 5 cuentas × 12 meses`);
   console.log(`\n   Para ejecutar el engine de conciliación:`);
   console.log(`   POST /api/reconciliation/run\n`);
 }
@@ -534,6 +550,241 @@ function mkDecision(
     companyId,
     createdAt: date,
   };
+}
+
+async function seedNewFeatures(cid: string, orgId: string, userId: string) {
+  console.log("📊 Creating accounting periods, journal entries, fixed assets, budgets...");
+
+  // Helper: find account by code
+  const acc = async (code: string) => {
+    const a = await prisma.account.findFirst({ where: { code, companyId: cid } });
+    if (!a) throw new Error(`Account ${code} not found`);
+    return a.id;
+  };
+
+  // ── Accounting Periods (12 months of 2026) ──
+  for (let month = 1; month <= 12; month++) {
+    await prisma.accountingPeriod.create({
+      data: {
+        year: 2026, month,
+        status: month <= 2 ? "CLOSED" : "OPEN",
+        closedAt: month <= 2 ? d(2026, month + 1, 1) : null,
+        closedById: month <= 2 ? userId : null,
+        companyId: cid,
+      },
+    });
+  }
+  console.log("  ✅ 12 accounting periods");
+
+  // ── Fixed Assets (3) ──
+  const assets = [
+    { name: "Maquinaria envasadora", cost: 25000, life: 120, asset: "213", dep: "681", accum: "281", monthlyDep: round(25000/120) },
+    { name: "Equipo informático oficina", cost: 3600, life: 48, asset: "217", dep: "681", accum: "281", monthlyDep: round(3600/48) },
+    { name: "Vehículo reparto Iveco", cost: 18000, life: 96, asset: "218", dep: "681", accum: "281", monthlyDep: round(18000/96) },
+  ];
+
+  for (const a of assets) {
+    await prisma.fixedAsset.create({
+      data: {
+        name: a.name, acquisitionDate: d(2026, 1, 5),
+        acquisitionCost: a.cost, residualValue: 0,
+        usefulLifeMonths: a.life, depreciationMethod: "LINEAR",
+        accumulatedDepreciation: round(a.monthlyDep * 2),
+        netBookValue: round(a.cost - a.monthlyDep * 2),
+        monthlyDepreciation: a.monthlyDep,
+        lastDepreciationDate: d(2026, 2, 28),
+        status: "ACTIVE",
+        assetAccountId: await acc(a.asset),
+        depreciationAccountId: await acc(a.dep),
+        accumDepAccountId: await acc(a.accum),
+        companyId: cid,
+      },
+    });
+  }
+  console.log("  ✅ 3 fixed assets");
+
+  // ── Journal Entries (6) ──
+  const depAccountId = await acc("681");
+  const accumAccountId = await acc("281");
+  const salaryAccountId = await acc("640");
+  const resultAccountId = await acc("129");
+
+  let entryNum = 1;
+
+  // Entry 1: Jan depreciation (POSTED, AUTO)
+  await prisma.journalEntry.create({
+    data: {
+      number: entryNum++, date: d(2026, 1, 31),
+      description: "Amortización mensual enero 2026",
+      type: "AUTO_DEPRECIATION", status: "POSTED",
+      postedAt: d(2026, 2, 1), postedById: userId,
+      companyId: cid,
+      lines: { create: [
+        { debit: round(assets.reduce((s, a) => s + a.monthlyDep, 0)), credit: 0, accountId: depAccountId },
+        { debit: 0, credit: round(assets.reduce((s, a) => s + a.monthlyDep, 0)), accountId: accumAccountId },
+      ]},
+    },
+  });
+
+  // Entry 2: Feb depreciation (POSTED, AUTO)
+  await prisma.journalEntry.create({
+    data: {
+      number: entryNum++, date: d(2026, 2, 28),
+      description: "Amortización mensual febrero 2026",
+      type: "AUTO_DEPRECIATION", status: "POSTED",
+      postedAt: d(2026, 3, 1), postedById: userId,
+      companyId: cid,
+      lines: { create: [
+        { debit: round(assets.reduce((s, a) => s + a.monthlyDep, 0)), credit: 0, accountId: depAccountId },
+        { debit: 0, credit: round(assets.reduce((s, a) => s + a.monthlyDep, 0)), accountId: accumAccountId },
+      ]},
+    },
+  });
+
+  // Entry 3: Payroll accrual (POSTED, MANUAL)
+  await prisma.journalEntry.create({
+    data: {
+      number: entryNum++, date: d(2026, 2, 28),
+      description: "Nóminas febrero 2026",
+      type: "MANUAL", status: "POSTED",
+      postedAt: d(2026, 2, 28), postedById: userId,
+      companyId: cid,
+      lines: { create: [
+        { debit: 12500, credit: 0, description: "Sueldos brutos", accountId: salaryAccountId },
+        { debit: 0, credit: 12500, description: "Banco nóminas", accountId: accumAccountId },
+      ]},
+    },
+  });
+
+  // Entry 4: Month-end closing (POSTED, CLOSING)
+  await prisma.journalEntry.create({
+    data: {
+      number: entryNum++, date: d(2026, 2, 28),
+      description: "Cierre contable febrero 2026",
+      type: "CLOSING", status: "POSTED",
+      postedAt: d(2026, 3, 1), postedById: userId,
+      companyId: cid,
+      lines: { create: [
+        { debit: 8500, credit: 0, description: "Resultado del periodo", accountId: resultAccountId },
+        { debit: 0, credit: 8500, accountId: depAccountId },
+      ]},
+    },
+  });
+
+  // Entry 5: AI-proposed depreciation Mar (DRAFT)
+  await prisma.journalEntry.create({
+    data: {
+      number: entryNum++, date: d(2026, 3, 31),
+      description: "Amortización mensual marzo 2026 (propuesta AI)",
+      type: "AUTO_DEPRECIATION", status: "DRAFT",
+      sourceType: "depreciation",
+      companyId: cid,
+      lines: { create: [
+        { debit: round(assets.reduce((s, a) => s + a.monthlyDep, 0)), credit: 0, accountId: depAccountId },
+        { debit: 0, credit: round(assets.reduce((s, a) => s + a.monthlyDep, 0)), accountId: accumAccountId },
+      ]},
+    },
+  });
+
+  // Entry 6: Adjustment (POSTED)
+  await prisma.journalEntry.create({
+    data: {
+      number: entryNum++, date: d(2026, 2, 15),
+      description: "Ajuste provisión gastos pendientes",
+      type: "ADJUSTMENT", status: "POSTED",
+      postedAt: d(2026, 2, 15), postedById: userId,
+      companyId: cid,
+      lines: { create: [
+        { debit: 1200, credit: 0, accountId: await acc("629") },
+        { debit: 0, credit: 1200, accountId: accumAccountId },
+      ]},
+    },
+  });
+  console.log("  ✅ 6 journal entries");
+
+  // ── Budget (2026 annual, APPROVED) ──
+  const budget = await prisma.budget.create({
+    data: {
+      year: 2026, name: "Presupuesto anual", status: "APPROVED",
+      companyId: cid,
+    },
+  });
+
+  const budgetAccounts = [
+    { code: "700", amounts: [45000, 42000, 48000, 50000, 47000, 52000, 35000, 30000, 55000, 53000, 49000, 60000] },
+    { code: "600", amounts: [25000, 23000, 27000, 28000, 26000, 29000, 20000, 18000, 30000, 29000, 27000, 33000] },
+    { code: "621", amounts: Array(12).fill(3000) },
+    { code: "628", amounts: [800, 900, 850, 750, 800, 1100, 1200, 1300, 900, 850, 800, 750] },
+    { code: "640", amounts: Array(12).fill(12500) },
+  ];
+
+  for (const ba of budgetAccounts) {
+    for (let month = 1; month <= 12; month++) {
+      await prisma.budgetLine.create({
+        data: { budgetId: budget.id, accountCode: ba.code, month, amount: ba.amounts[month - 1] },
+      });
+    }
+  }
+  console.log("  ✅ Budget 2026 (5 accounts × 12 months)");
+
+  // ── Mark some invoices as OVERDUE for aging page ──
+  const issuedInvoices = await prisma.invoice.findMany({
+    where: { companyId: cid, type: "ISSUED", status: "PENDING" },
+    take: 4,
+    orderBy: { issueDate: "asc" },
+  });
+
+  const overdueDelays = [35, 65, 95, 120]; // days overdue
+  for (let i = 0; i < Math.min(issuedInvoices.length, overdueDelays.length); i++) {
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() - overdueDelays[i]);
+    await prisma.invoice.update({
+      where: { id: issuedInvoices[i].id },
+      data: { status: "OVERDUE", dueDate },
+    });
+  }
+  console.log(`  ✅ ${Math.min(issuedInvoices.length, 4)} invoices marked OVERDUE`);
+
+  // ── Agent Runs (2) ──
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const threeDaysAgo = new Date(); threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+  await prisma.agentRun.create({
+    data: {
+      status: "COMPLETED", startedAt: yesterday,
+      completedAt: new Date(yesterday.getTime() + 45000),
+      companiesProcessed: 1, txsProcessed: 12, txsAutoExecuted: 8,
+      txsToBandeja: 4, llmCallsTotal: 3, llmCostEstimate: 0.015,
+      errorsCount: 0, organizationId: orgId,
+    },
+  });
+
+  await prisma.agentRun.create({
+    data: {
+      status: "COMPLETED_WITH_ERRORS", startedAt: threeDaysAgo,
+      completedAt: new Date(threeDaysAgo.getTime() + 62000),
+      companiesProcessed: 1, txsProcessed: 8, txsAutoExecuted: 5,
+      txsToBandeja: 2, llmCallsTotal: 5, llmCostEstimate: 0.028,
+      errorsCount: 1, organizationId: orgId,
+    },
+  });
+  console.log("  ✅ 2 agent runs");
+
+  // ── Notifications (5 demo) ──
+  const notifs = [
+    { type: "DAILY_BRIEFING", title: "Briefing diario", body: "GRUPO: Alimentación Mediterránea SL facturó 48.200€ en marzo. EBITDA 12.3%. Tesorería estable en 47.254€.\n\nALERTAS: 4 facturas vencidas por 8.750€. Sin anomalías.\n\nACCIÓN HOY: Revisar 4 items en bandeja y aprobar amortización de marzo." },
+    { type: "TREASURY_ALERT", title: "Alerta de tesorería", body: "El saldo proyectado baja a 5.200€ en la semana del 14/04. Cobros esperados: 12.000€. Pagos comprometidos: 18.500€. Considerar adelantar cobros o negociar plazos." },
+    { type: "ANOMALY_DETECTED", title: "Anomalía: 628 Suministros", body: "Gasto en suministros este mes: 2.450€ (media 6 meses: 850€, z-score: 3.2). La transacción más grande: 1.800€ ENDESA — posible regularización anual." },
+    { type: "FISCAL_DEADLINE", title: "Vencimiento fiscal: 303", body: "Modelo 303 — IVA trimestral (T1 2026) — vence el 20/04/2026. IVA repercutido estimado: 8.520€. IVA soportado: 5.340€. Liquidación: 3.180€ a ingresar." },
+    { type: "OVERDUE_INVOICE", title: "Factura vencida: FRA-2026-003", body: "La factura FRA-2026-003 de Distribuciones Levante SL venció hace 95 días con un importe pendiente de 3.200€." },
+  ];
+
+  for (const n of notifs) {
+    await prisma.notification.create({
+      data: { type: n.type as any, title: n.title, body: n.body, userId, companyId: cid },
+    });
+  }
+  console.log("  ✅ 5 notifications");
 }
 
 main()
