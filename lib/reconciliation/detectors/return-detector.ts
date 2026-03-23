@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import type { BankTransaction } from "@prisma/client";
 
 export interface ReturnDetectionResult {
@@ -20,7 +20,7 @@ const RETURN_WINDOW_DAYS = 30;
  */
 export async function detectReturn(
   tx: BankTransaction,
-  companyId: string
+  db: ScopedPrisma
 ): Promise<ReturnDetectionResult> {
   if (!tx.counterpartIban) {
     return { isReturn: false, originalTxId: null, originalReconciliationId: null };
@@ -33,9 +33,8 @@ export async function detectReturn(
   );
 
   // Look for a reconciled transaction with the inverse amount from the same counterpart
-  const originalTx = await prisma.bankTransaction.findFirst({
+  const originalTx = await db.bankTransaction.findFirst({
     where: {
-      companyId,
       id: { not: tx.id },
       amount: inverseAmount,
       counterpartIban: normalizedIban,

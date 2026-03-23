@@ -1,5 +1,5 @@
 import Fuse from "fuse.js";
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import type { BankTransaction, Invoice, Contact, DifferenceReason } from "@prisma/client";
 
 export interface FuzzyMatchResult {
@@ -25,7 +25,7 @@ const AMOUNT_TOLERANCE = 0.05; // 5%
  */
 export async function findFuzzyMatch(
   tx: BankTransaction,
-  companyId: string
+  db: ScopedPrisma
 ): Promise<FuzzyMatchResult[]> {
   const absAmount = Math.abs(tx.amount);
   const isIncome = tx.amount > 0;
@@ -39,9 +39,8 @@ export async function findFuzzyMatch(
   const amountMax = absAmount * (1 + AMOUNT_TOLERANCE);
 
   // Find invoices within the amount tolerance
-  const candidates = await prisma.invoice.findMany({
+  const candidates = await db.invoice.findMany({
     where: {
-      companyId,
       type: { in: [...invoiceTypes] },
       status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
       totalAmount: {

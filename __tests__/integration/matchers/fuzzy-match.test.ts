@@ -20,7 +20,7 @@ describe('findFuzzyMatch', () => {
 
     mockPrisma.invoice.findMany.mockResolvedValue([invoice]);
 
-    const results = await findFuzzyMatch(tx, 'company_1');
+    const results = await findFuzzyMatch(tx, mockPrisma as any);
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].confidence).toBeGreaterThanOrEqual(0.70);
     expect(results[0].confidence).toBeLessThanOrEqual(0.85);
@@ -30,7 +30,7 @@ describe('findFuzzyMatch', () => {
     const tx = buildBankTransaction({ amount: -900, concept: 'Test' }); // 10% off from 1000
     mockPrisma.invoice.findMany.mockResolvedValue([]); // prisma filters by amount range
 
-    const results = await findFuzzyMatch(tx, 'company_1');
+    const results = await findFuzzyMatch(tx, mockPrisma as any);
     expect(results).toEqual([]);
   });
 
@@ -40,7 +40,7 @@ describe('findFuzzyMatch', () => {
 
     mockPrisma.invoice.findMany.mockResolvedValue([invoice]);
 
-    const results = await findFuzzyMatch(tx, 'company_1');
+    const results = await findFuzzyMatch(tx, mockPrisma as any);
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].confidence).toBeLessThanOrEqual(0.75);
   });
@@ -52,7 +52,7 @@ describe('findFuzzyMatch', () => {
 
     mockPrisma.invoice.findMany.mockResolvedValue([invoice]);
 
-    const results = await findFuzzyMatch(tx, 'company_1');
+    const results = await findFuzzyMatch(tx, mockPrisma as any);
     if (results.length > 0) {
       expect(results[0].confidence).toBeLessThanOrEqual(0.85);
     }
@@ -65,7 +65,7 @@ describe('findFuzzyMatch', () => {
 
     mockPrisma.invoice.findMany.mockResolvedValue([invoice]);
 
-    const results = await findFuzzyMatch(tx, 'company_1');
+    const results = await findFuzzyMatch(tx, mockPrisma as any);
     if (results.length > 0) {
       expect(results[0].amountDifference).toBe(15); // 1000 - 985
       expect(results[0].differencePercent).toBeCloseTo(1.5, 1);
@@ -79,7 +79,7 @@ describe('findFuzzyMatch', () => {
 
     mockPrisma.invoice.findMany.mockResolvedValue([invoice]);
 
-    const results = await findFuzzyMatch(tx, 'company_1');
+    const results = await findFuzzyMatch(tx, mockPrisma as any);
     if (results.length > 0) {
       expect(results[0].suggestedDifferenceReason).toBe('BANK_COMMISSION');
     }
@@ -92,7 +92,7 @@ describe('findFuzzyMatch', () => {
 
     mockPrisma.invoice.findMany.mockResolvedValue([invoice]);
 
-    const results = await findFuzzyMatch(tx, 'company_1');
+    const results = await findFuzzyMatch(tx, mockPrisma as any);
     if (results.length > 0) {
       expect(results[0].suggestedDifferenceReason).toBe('EARLY_PAYMENT');
     }

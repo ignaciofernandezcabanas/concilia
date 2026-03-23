@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { prisma } from "@/lib/db"; // GLOBAL-PRISMA: cross-company sibling lookup
 import type { BankTransaction } from "@prisma/client";
 
 export interface IntercompanyResult {

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import type { BankTransaction, Invoice, Contact } from "@prisma/client";
 
 export interface ExactMatchResult {
@@ -20,7 +20,7 @@ export interface ExactMatchResult {
  */
 export async function findExactMatch(
   tx: BankTransaction,
-  companyId: string
+  db: ScopedPrisma
 ): Promise<ExactMatchResult[]> {
   const absAmount = Math.abs(tx.amount);
   const isIncome = tx.amount > 0;
@@ -54,9 +54,8 @@ export async function findExactMatch(
   }
 
   // Find matching contacts
-  const contacts = await prisma.contact.findMany({
+  const contacts = await db.contact.findMany({
     where: {
-      companyId,
       OR: contactFilters,
     },
   });
@@ -68,9 +67,8 @@ export async function findExactMatch(
   const contactIds = contacts.map((c) => c.id);
 
   // Find invoices that match amount, type, contact, and are pending payment
-  const invoices = await prisma.invoice.findMany({
+  const invoices = await db.invoice.findMany({
     where: {
-      companyId,
       contactId: { in: contactIds },
       type: { in: [...invoiceTypes] },
       status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },

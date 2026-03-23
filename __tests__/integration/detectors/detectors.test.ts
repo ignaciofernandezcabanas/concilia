@@ -25,7 +25,7 @@ describe('detectInternalTransfer', () => {
   it('IBAN en OwnBankAccount → isInternal: true', async () => {
     mockPrisma.ownBankAccount.findFirst.mockResolvedValue({ id: 'own_1', iban: 'ES7620770024003102575766' });
     const tx = buildBankTransaction();
-    const result = await detectInternalTransfer(tx, 'company_1');
+    const result = await detectInternalTransfer(tx, mockPrisma as any);
     expect(result.isInternal).toBe(true);
     expect(result.ownAccountId).toBe('own_1');
   });
@@ -33,13 +33,13 @@ describe('detectInternalTransfer', () => {
   it('IBAN no en OwnBankAccount → false', async () => {
     mockPrisma.ownBankAccount.findFirst.mockResolvedValue(null);
     const tx = buildBankTransaction();
-    const result = await detectInternalTransfer(tx, 'company_1');
+    const result = await detectInternalTransfer(tx, mockPrisma as any);
     expect(result.isInternal).toBe(false);
   });
 
   it('sin IBAN → false, no llama a prisma', async () => {
     const tx = buildBankTransaction({ counterpartIban: null });
-    const result = await detectInternalTransfer(tx, 'company_1');
+    const result = await detectInternalTransfer(tx, mockPrisma as any);
     expect(result.isInternal).toBe(false);
     expect(mockPrisma.ownBankAccount.findFirst).not.toHaveBeenCalled();
   });
@@ -47,7 +47,7 @@ describe('detectInternalTransfer', () => {
   it('normaliza IBAN con espacios', async () => {
     mockPrisma.ownBankAccount.findFirst.mockResolvedValue({ id: 'own_1' });
     const tx = buildBankTransaction({ counterpartIban: 'ES76 2077 0024 0031 0257 5766' });
-    await detectInternalTransfer(tx, 'company_1');
+    await detectInternalTransfer(tx, mockPrisma as any);
     expect(mockPrisma.ownBankAccount.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ iban: 'ES7620770024003102575766' }) })
     );
@@ -67,7 +67,7 @@ describe('detectDuplicates', () => {
     mockPrisma.duplicateGroup.create.mockResolvedValue({ id: 'group_1' });
 
     const tx = buildBankTransaction({ valueDate: new Date('2026-03-15') });
-    const result = await detectDuplicates(tx, 'company_1');
+    const result = await detectDuplicates(tx, mockPrisma as any);
     expect(result.isDuplicate).toBe(true);
     expect(result.groupId).toBe('group_1');
   });
@@ -77,14 +77,14 @@ describe('detectDuplicates', () => {
     mockPrisma.bankTransaction.findMany.mockResolvedValue([dup]);
 
     const tx = buildBankTransaction();
-    const result = await detectDuplicates(tx, 'company_1');
+    const result = await detectDuplicates(tx, mockPrisma as any);
     expect(result.isDuplicate).toBe(false);
   });
 
   it('sin candidatos → false', async () => {
     mockPrisma.bankTransaction.findMany.mockResolvedValue([]);
     const tx = buildBankTransaction();
-    const result = await detectDuplicates(tx, 'company_1');
+    const result = await detectDuplicates(tx, mockPrisma as any);
     expect(result.isDuplicate).toBe(false);
   });
 
@@ -94,7 +94,7 @@ describe('detectDuplicates', () => {
     mockPrisma.duplicateGroup.create.mockResolvedValue({ id: 'group_1' });
 
     const tx = buildBankTransaction({ counterpartIban: null, concept: 'COMISION MANTENIMIENTO' });
-    const result = await detectDuplicates(tx, 'company_1');
+    const result = await detectDuplicates(tx, mockPrisma as any);
     expect(result.isDuplicate).toBe(true);
   });
 
@@ -103,7 +103,7 @@ describe('detectDuplicates', () => {
     mockPrisma.bankTransaction.findMany.mockResolvedValue([dup]);
 
     const tx = buildBankTransaction({ counterpartIban: null, concept: 'COMISION MANTENIMIENTO' });
-    const result = await detectDuplicates(tx, 'company_1');
+    const result = await detectDuplicates(tx, mockPrisma as any);
     expect(result.isDuplicate).toBe(false);
   });
 });
@@ -125,14 +125,14 @@ describe('detectReturn', () => {
     mockPrisma.bankTransaction.findFirst.mockResolvedValue(original);
 
     const tx = buildBankTransaction({ amount: -1000 }); // inverse
-    const result = await detectReturn(tx, 'company_1');
+    const result = await detectReturn(tx, mockPrisma as any);
     expect(result.isReturn).toBe(true);
     expect(result.originalTxId).toBe('tx_orig');
   });
 
   it('sin IBAN → false', async () => {
     const tx = buildBankTransaction({ counterpartIban: null });
-    const result = await detectReturn(tx, 'company_1');
+    const result = await detectReturn(tx, mockPrisma as any);
     expect(result.isReturn).toBe(false);
     expect(mockPrisma.bankTransaction.findFirst).not.toHaveBeenCalled();
   });
@@ -140,14 +140,14 @@ describe('detectReturn', () => {
   it('tx original no reconciliada → false', async () => {
     mockPrisma.bankTransaction.findFirst.mockResolvedValue(null);
     const tx = buildBankTransaction({ amount: -1000 });
-    const result = await detectReturn(tx, 'company_1');
+    const result = await detectReturn(tx, mockPrisma as any);
     expect(result.isReturn).toBe(false);
   });
 
   it('busca con importe inverso y mismo IBAN normalizado', async () => {
     mockPrisma.bankTransaction.findFirst.mockResolvedValue(null);
     const tx = buildBankTransaction({ amount: -500, counterpartIban: 'es76 2077 0024' });
-    await detectReturn(tx, 'company_1');
+    await detectReturn(tx, mockPrisma as any);
 
     const call = mockPrisma.bankTransaction.findFirst.mock.calls[0][0].where;
     expect(call.amount).toBe(500); // inverse of -500
@@ -165,13 +165,13 @@ describe('detectFinancialOp', () => {
 
   it('tx positiva → isFinancial: false', async () => {
     const tx = buildBankTransaction({ amount: 1000 });
-    const result = await detectFinancialOp(tx, 'company_1');
+    const result = await detectFinancialOp(tx, mockPrisma as any);
     expect(result.isFinancial).toBe(false);
   });
 
   it('sin IBAN → false', async () => {
     const tx = buildBankTransaction({ amount: -500, counterpartIban: null });
-    const result = await detectFinancialOp(tx, 'company_1');
+    const result = await detectFinancialOp(tx, mockPrisma as any);
     expect(result.isFinancial).toBe(false);
   });
 
@@ -185,7 +185,7 @@ describe('detectFinancialOp', () => {
     mockPrisma.matchingRule.findFirst.mockResolvedValue(null);
 
     const tx = buildBankTransaction({ amount: -500, valueDate: new Date('2026-03-15') });
-    const result = await detectFinancialOp(tx, 'company_1');
+    const result = await detectFinancialOp(tx, mockPrisma as any);
     expect(result.isFinancial).toBe(true);
   });
 
@@ -195,7 +195,7 @@ describe('detectFinancialOp', () => {
     ]);
 
     const tx = buildBankTransaction({ amount: -500 });
-    const result = await detectFinancialOp(tx, 'company_1');
+    const result = await detectFinancialOp(tx, mockPrisma as any);
     expect(result.isFinancial).toBe(false);
   });
 
@@ -209,7 +209,7 @@ describe('detectFinancialOp', () => {
     mockPrisma.matchingRule.findFirst.mockResolvedValue(null);
 
     const tx = buildBankTransaction({ amount: -1000, valueDate: new Date('2026-03-15') });
-    const result = await detectFinancialOp(tx, 'company_1');
+    const result = await detectFinancialOp(tx, mockPrisma as any);
     expect(result.suggestedPrincipal).toBe(850);
     expect(result.suggestedInterest).toBe(150);
   });
@@ -225,7 +225,7 @@ describe('detectFinancialOp', () => {
     );
 
     const tx = buildBankTransaction({ amount: -1000, valueDate: new Date('2026-03-15') });
-    const result = await detectFinancialOp(tx, 'company_1');
+    const result = await detectFinancialOp(tx, mockPrisma as any);
     expect(result.suggestedPrincipal).toBe(900);
     expect(result.suggestedInterest).toBe(100);
   });

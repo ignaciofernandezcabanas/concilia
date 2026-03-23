@@ -24,7 +24,7 @@ describe('findGroupedMatch', () => {
     mockPrisma.contact.findFirst.mockResolvedValue(contact);
     mockPrisma.invoice.findMany.mockResolvedValue([inv1, inv2]);
 
-    const result = await findGroupedMatch(tx, 'company_1');
+    const result = await findGroupedMatch(tx, mockPrisma as any);
     expect(result).not.toBeNull();
     expect(result!.invoices.length).toBe(2);
     expect(result!.totalAmount).toBeCloseTo(1000, 2);
@@ -39,7 +39,7 @@ describe('findGroupedMatch', () => {
     mockPrisma.contact.findFirst.mockResolvedValue(contact);
     mockPrisma.invoice.findMany.mockResolvedValue([inv1, inv2]);
 
-    const result = await findGroupedMatch(tx, 'company_1');
+    const result = await findGroupedMatch(tx, mockPrisma as any);
     expect(result!.confidence).toBe(0.95);
   });
 
@@ -52,7 +52,7 @@ describe('findGroupedMatch', () => {
     mockPrisma.contact.findFirst.mockResolvedValue(contact);
     mockPrisma.invoice.findMany.mockResolvedValue(invoices);
 
-    const result = await findGroupedMatch(tx, 'company_1');
+    const result = await findGroupedMatch(tx, mockPrisma as any);
     expect(result).not.toBeNull();
     expect(result!.confidence).toBeLessThan(0.95);
     expect(result!.confidence).toBeGreaterThanOrEqual(0.85);
@@ -60,7 +60,7 @@ describe('findGroupedMatch', () => {
 
   it('sin IBAN → null', async () => {
     const tx = buildBankTransaction({ counterpartIban: null });
-    const result = await findGroupedMatch(tx, 'company_1');
+    const result = await findGroupedMatch(tx, mockPrisma as any);
     expect(result).toBeNull();
     expect(mockPrisma.contact.findFirst).not.toHaveBeenCalled();
   });
@@ -69,7 +69,7 @@ describe('findGroupedMatch', () => {
     const tx = buildBankTransaction();
     mockPrisma.contact.findFirst.mockResolvedValue(null);
 
-    const result = await findGroupedMatch(tx, 'company_1');
+    const result = await findGroupedMatch(tx, mockPrisma as any);
     expect(result).toBeNull();
   });
 
@@ -80,7 +80,7 @@ describe('findGroupedMatch', () => {
     mockPrisma.contact.findFirst.mockResolvedValue(contact);
     mockPrisma.invoice.findMany.mockResolvedValue([inv1]);
 
-    const result = await findGroupedMatch(tx, 'company_1');
+    const result = await findGroupedMatch(tx, mockPrisma as any);
     expect(result).toBeNull();
   });
 
@@ -92,7 +92,7 @@ describe('findGroupedMatch', () => {
     mockPrisma.contact.findFirst.mockResolvedValue(contact);
     mockPrisma.invoice.findMany.mockResolvedValue([inv1, inv2]);
 
-    const result = await findGroupedMatch(tx, 'company_1');
+    const result = await findGroupedMatch(tx, mockPrisma as any);
     expect(result).toBeNull();
   });
 
@@ -105,7 +105,7 @@ describe('findGroupedMatch', () => {
     mockPrisma.contact.findFirst.mockResolvedValue(contact);
     mockPrisma.invoice.findMany.mockResolvedValue([inv1, inv2, inv3]);
 
-    const result = await findGroupedMatch(tx, 'company_1');
+    const result = await findGroupedMatch(tx, mockPrisma as any);
     expect(result).not.toBeNull();
     expect(result!.matchReason).toContain('grouped_');
   });
@@ -115,7 +115,7 @@ describe('findGroupedMatch', () => {
     mockPrisma.contact.findFirst.mockResolvedValue(contact);
     mockPrisma.invoice.findMany.mockResolvedValue([]);
 
-    await findGroupedMatch(tx, 'company_1');
+    await findGroupedMatch(tx, mockPrisma as any);
 
     const invoiceCall = mockPrisma.invoice.findMany.mock.calls[0][0];
     expect(invoiceCall.where.type.in).toContain('ISSUED');

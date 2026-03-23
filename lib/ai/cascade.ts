@@ -37,7 +37,7 @@ export async function classifyWithCascade(
   threshold: number
 ): Promise<CascadeResult> {
   // ── Level 1: Deterministic (rules) ──
-  const ruleResult = await classifyByRules(tx, tx.companyId);
+  const ruleResult = await classifyByRules(tx, db);
 
   if (ruleResult) {
     const confidence = calculateConfidence({

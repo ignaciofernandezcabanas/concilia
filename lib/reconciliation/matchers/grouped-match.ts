@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import type { BankTransaction, Invoice, Contact } from "@prisma/client";
 
 export interface GroupedMatchResult {
@@ -26,7 +26,7 @@ const EPSILON = 0.005;
  */
 export async function findGroupedMatch(
   tx: BankTransaction,
-  companyId: string
+  db: ScopedPrisma
 ): Promise<GroupedMatchResult | null> {
   const absAmount = Math.abs(tx.amount);
   const isIncome = tx.amount > 0;
@@ -42,9 +42,8 @@ export async function findGroupedMatch(
 
   const normalizedIban = tx.counterpartIban.replace(/\s/g, "").toUpperCase();
 
-  const contact = await prisma.contact.findFirst({
+  const contact = await db.contact.findFirst({
     where: {
-      companyId,
       iban: normalizedIban,
     },
   });
@@ -54,9 +53,8 @@ export async function findGroupedMatch(
   }
 
   // Get all pending invoices for this contact, sorted by issue date
-  const pendingInvoices = await prisma.invoice.findMany({
+  const pendingInvoices = await db.invoice.findMany({
     where: {
-      companyId,
       contactId: contact.id,
       type: { in: [...invoiceTypes] },
       status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },

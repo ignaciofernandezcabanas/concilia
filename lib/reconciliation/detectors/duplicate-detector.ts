@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import type { BankTransaction } from "@prisma/client";
 
 export interface DuplicateDetectionResult {
@@ -18,15 +18,14 @@ const DUPLICATE_WINDOW_HOURS = 48;
  */
 export async function detectDuplicates(
   tx: BankTransaction,
-  companyId: string
+  db: ScopedPrisma
 ): Promise<DuplicateDetectionResult> {
   const windowMs = DUPLICATE_WINDOW_HOURS * 60 * 60 * 1000;
   const dateFrom = new Date(tx.valueDate.getTime() - windowMs);
   const dateTo = new Date(tx.valueDate.getTime() + windowMs);
 
-  const candidates = await prisma.bankTransaction.findMany({
+  const candidates = await db.bankTransaction.findMany({
     where: {
-      companyId,
       id: { not: tx.id },
       amount: tx.amount,
       valueDate: {
@@ -77,13 +76,13 @@ export async function detectDuplicates(
   if (existingGroupTx?.duplicateGroupId) {
     // Add this transaction to the existing group
     groupId = existingGroupTx.duplicateGroupId;
-    await prisma.bankTransaction.update({
+    await db.bankTransaction.update({
       where: { id: tx.id },
       data: { duplicateGroupId: groupId },
     });
   } else {
     // Create a new duplicate group containing all matching transactions + this one
-    const group = await prisma.duplicateGroup.create({
+    const group = await db.duplicateGroup.create({
       data: {
         status: "PENDING",
         transactions: {

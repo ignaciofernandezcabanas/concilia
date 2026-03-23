@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import type { BankTransaction } from "@prisma/client";
 
 export interface FinancialOpResult {
@@ -23,7 +23,7 @@ const MIN_PATTERN_OCCURRENCES = 2;
  */
 export async function detectFinancialOp(
   tx: BankTransaction,
-  companyId: string
+  db: ScopedPrisma
 ): Promise<FinancialOpResult> {
   // Financial operations are typically outgoing (negative)
   if (tx.amount >= 0 || !tx.counterpartIban) {
@@ -38,9 +38,8 @@ export async function detectFinancialOp(
   const amountMax = absAmount * 1.01;
 
   // Look for historical transactions with similar amount from the same IBAN
-  const historicalTx = await prisma.bankTransaction.findMany({
+  const historicalTx = await db.bankTransaction.findMany({
     where: {
-      companyId,
       id: { not: tx.id },
       counterpartIban: normalizedIban,
       amount: {
@@ -70,9 +69,8 @@ export async function detectFinancialOp(
   }
 
   // Check if there's an existing FINANCIAL_SPLIT rule for this counterpart
-  const splitRule = await prisma.matchingRule.findFirst({
+  const splitRule = await db.matchingRule.findFirst({
     where: {
-      companyId,
       type: "FINANCIAL_SPLIT",
       counterpartIban: normalizedIban,
       isActive: true,

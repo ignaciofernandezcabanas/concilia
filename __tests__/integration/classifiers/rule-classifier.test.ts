@@ -19,7 +19,7 @@ describe('classifyByRules', () => {
       buildMatchingRule({ type: 'IBAN_CLASSIFY', accountCode: '626' }),
     ]);
     const tx = buildBankTransaction();
-    const result = await classifyByRules(tx, 'company_1');
+    const result = await classifyByRules(tx, mockPrisma as any);
     expect(result).not.toBeNull();
     expect(result!.confidence).toBeGreaterThanOrEqual(0.95);
     expect(result!.accountCode).toBe('626');
@@ -30,7 +30,7 @@ describe('classifyByRules', () => {
       buildMatchingRule({ type: 'CONCEPT_CLASSIFY', pattern: 'COMISION.*MANT', counterpartIban: null, accountCode: '626' }),
     ]);
     const tx = buildBankTransaction({ concept: 'COMISION MANTENIMIENTO CTA' });
-    const result = await classifyByRules(tx, 'company_1');
+    const result = await classifyByRules(tx, mockPrisma as any);
     expect(result).not.toBeNull();
     expect(result!.accountCode).toBe('626');
   });
@@ -40,7 +40,7 @@ describe('classifyByRules', () => {
       buildMatchingRule({ type: 'CONCEPT_CLASSIFY', pattern: '[invalid(regex', counterpartIban: null, accountCode: '628' }),
     ]);
     const tx = buildBankTransaction({ concept: 'pago con [invalid(regex incluido' });
-    const result = await classifyByRules(tx, 'company_1');
+    const result = await classifyByRules(tx, mockPrisma as any);
     expect(result).not.toBeNull();
   });
 
@@ -49,7 +49,7 @@ describe('classifyByRules', () => {
       buildMatchingRule({ type: 'CONCEPT_CLASSIFY', pattern: null, conceptContains: 'VODAFONE', counterpartIban: null, accountCode: '628' }),
     ]);
     const tx = buildBankTransaction({ concept: 'RECIBO VODAFONE MOVIL' });
-    const result = await classifyByRules(tx, 'company_1');
+    const result = await classifyByRules(tx, mockPrisma as any);
     expect(result).not.toBeNull();
     expect(result!.accountCode).toBe('628');
   });
@@ -59,7 +59,7 @@ describe('classifyByRules', () => {
       buildMatchingRule({ type: 'EXACT_AMOUNT_CONTACT', minAmount: 900, maxAmount: 1100, accountCode: '629' }),
     ]);
     const tx = buildBankTransaction({ amount: -1000 });
-    const result = await classifyByRules(tx, 'company_1');
+    const result = await classifyByRules(tx, mockPrisma as any);
     expect(result).not.toBeNull();
     expect(result!.confidence).toBeGreaterThanOrEqual(0.92);
   });
@@ -69,7 +69,7 @@ describe('classifyByRules', () => {
       buildMatchingRule({ type: 'EXACT_AMOUNT_CONTACT', minAmount: 100, maxAmount: 200, accountCode: '629' }),
     ]);
     const tx = buildBankTransaction({ amount: -1000 }); // outside 100-200
-    const result = await classifyByRules(tx, 'company_1');
+    const result = await classifyByRules(tx, mockPrisma as any);
     expect(result).toBeNull();
   });
 
@@ -78,7 +78,7 @@ describe('classifyByRules', () => {
       buildMatchingRule({ type: 'IBAN_CLASSIFY', transactionDirection: 'income', accountCode: '700' }),
     ]);
     const tx = buildBankTransaction({ amount: -500 }); // expense
-    const result = await classifyByRules(tx, 'company_1');
+    const result = await classifyByRules(tx, mockPrisma as any);
     expect(result).toBeNull();
   });
 
@@ -87,7 +87,7 @@ describe('classifyByRules', () => {
       buildMatchingRule({ type: 'IBAN_CLASSIFY', transactionDirection: 'expense', accountCode: '629' }),
     ]);
     const tx = buildBankTransaction({ amount: 500 }); // income
-    const result = await classifyByRules(tx, 'company_1');
+    const result = await classifyByRules(tx, mockPrisma as any);
     expect(result).toBeNull();
   });
 
@@ -98,14 +98,14 @@ describe('classifyByRules', () => {
       buildMatchingRule({ id: 'r_low', priority: 0, type: 'IBAN_CLASSIFY', accountCode: '620' }),
     ]);
     const tx = buildBankTransaction();
-    const result = await classifyByRules(tx, 'company_1');
+    const result = await classifyByRules(tx, mockPrisma as any);
     expect(result!.accountCode).toBe('629');
   });
 
   it('sin reglas → null', async () => {
     mockPrisma.matchingRule.findMany.mockResolvedValue([]);
     const tx = buildBankTransaction();
-    const result = await classifyByRules(tx, 'company_1');
+    const result = await classifyByRules(tx, mockPrisma as any);
     expect(result).toBeNull();
   });
 
@@ -114,7 +114,7 @@ describe('classifyByRules', () => {
       buildMatchingRule({ id: 'r1', type: 'IBAN_CLASSIFY', accountCode: '626' }),
     ]);
     const tx = buildBankTransaction();
-    await classifyByRules(tx, 'company_1');
+    await classifyByRules(tx, mockPrisma as any);
 
     expect(mockPrisma.matchingRule.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -132,7 +132,7 @@ describe('classifyByRules', () => {
       buildMatchingRule({ type: 'IBAN_CLASSIFY', timesApplied: 100, accountCode: '626' }),
     ]);
     const tx = buildBankTransaction();
-    const result = await classifyByRules(tx, 'company_1');
+    const result = await classifyByRules(tx, mockPrisma as any);
     // Base 0.95 + min(0.04, 100*0.005) = 0.95 + 0.04 = 0.99
     expect(result!.confidence).toBe(0.99);
   });
@@ -142,14 +142,14 @@ describe('classifyByRules', () => {
       buildMatchingRule({ type: 'FINANCIAL_SPLIT', accountCode: '170' }),
     ]);
     const tx = buildBankTransaction({ amount: 500 }); // positive
-    const result = await classifyByRules(tx, 'company_1');
+    const result = await classifyByRules(tx, mockPrisma as any);
     expect(result).toBeNull();
   });
 
   it('filtra por status ACTIVE (no PAUSED)', async () => {
     mockPrisma.matchingRule.findMany.mockResolvedValue([]);
     const tx = buildBankTransaction();
-    await classifyByRules(tx, 'company_1');
+    await classifyByRules(tx, mockPrisma as any);
 
     expect(mockPrisma.matchingRule.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -163,7 +163,7 @@ describe('classifyByRules', () => {
       buildMatchingRule({ type: 'IBAN_CLASSIFY', counterpartName: 'PROVEEDOR', accountCode: '629' }),
     ]);
     const tx = buildBankTransaction({ counterpartName: 'PROVEEDOR TEST SL' });
-    const result = await classifyByRules(tx, 'company_1');
+    const result = await classifyByRules(tx, mockPrisma as any);
     expect(result).not.toBeNull();
   });
 });

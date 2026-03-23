@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import type { BankTransaction } from "@prisma/client";
 
 export interface InternalTransferResult {
@@ -14,7 +14,7 @@ export interface InternalTransferResult {
  */
 export async function detectInternalTransfer(
   tx: BankTransaction,
-  companyId: string
+  db: ScopedPrisma
 ): Promise<InternalTransferResult> {
   if (!tx.counterpartIban) {
     return { isInternal: false, ownAccountId: null };
@@ -22,9 +22,8 @@ export async function detectInternalTransfer(
 
   const normalizedIban = tx.counterpartIban.replace(/\s/g, "").toUpperCase();
 
-  const ownAccount = await prisma.ownBankAccount.findFirst({
+  const ownAccount = await db.ownBankAccount.findFirst({
     where: {
-      companyId,
       isActive: true,
       iban: normalizedIban,
     },

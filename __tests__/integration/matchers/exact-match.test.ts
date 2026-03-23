@@ -22,7 +22,7 @@ describe('findExactMatch', () => {
     mockPrisma.contact.findMany.mockResolvedValue([contact]);
     mockPrisma.invoice.findMany.mockResolvedValue([invoice]);
 
-    const results = await findExactMatch(tx, 'company_1');
+    const results = await findExactMatch(tx, mockPrisma as any);
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].confidence).toBeGreaterThanOrEqual(0.95);
     expect(results[0].matchReason).toContain('exact_amount');
@@ -33,13 +33,13 @@ describe('findExactMatch', () => {
     const tx = buildBankTransaction({ amount: -1000 });
     mockPrisma.contact.findMany.mockResolvedValue([]);
 
-    const results = await findExactMatch(tx, 'company_1');
+    const results = await findExactMatch(tx, mockPrisma as any);
     expect(results).toEqual([]);
   });
 
   it('sin IBAN ni CIF → array vacío, no busca facturas', async () => {
     const tx = buildBankTransaction({ counterpartIban: null, counterpartName: null });
-    const results = await findExactMatch(tx, 'company_1');
+    const results = await findExactMatch(tx, mockPrisma as any);
     expect(results).toEqual([]);
     expect(mockPrisma.contact.findMany).not.toHaveBeenCalled();
   });
@@ -50,7 +50,7 @@ describe('findExactMatch', () => {
     mockPrisma.contact.findMany.mockResolvedValue([contact]);
     mockPrisma.invoice.findMany.mockResolvedValue([]);
 
-    await findExactMatch(tx, 'company_1');
+    await findExactMatch(tx, mockPrisma as any);
 
     const invoiceCall = mockPrisma.invoice.findMany.mock.calls[0][0];
     expect(invoiceCall.where.type.in).toContain('ISSUED');
@@ -63,7 +63,7 @@ describe('findExactMatch', () => {
     mockPrisma.contact.findMany.mockResolvedValue([contact]);
     mockPrisma.invoice.findMany.mockResolvedValue([]);
 
-    await findExactMatch(tx, 'company_1');
+    await findExactMatch(tx, mockPrisma as any);
 
     const invoiceCall = mockPrisma.invoice.findMany.mock.calls[0][0];
     expect(invoiceCall.where.type.in).toContain('RECEIVED');
@@ -79,7 +79,7 @@ describe('findExactMatch', () => {
     mockPrisma.contact.findMany.mockResolvedValue([contact]);
     mockPrisma.invoice.findMany.mockResolvedValue([inv1, inv2]);
 
-    const results = await findExactMatch(tx, 'company_1');
+    const results = await findExactMatch(tx, mockPrisma as any);
     expect(results.length).toBe(2);
     expect(results[0].confidence).toBeGreaterThanOrEqual(results[1].confidence);
   });
@@ -90,7 +90,7 @@ describe('findExactMatch', () => {
     mockPrisma.contact.findMany.mockResolvedValue([contact]);
     mockPrisma.invoice.findMany.mockResolvedValue([]);
 
-    await findExactMatch(tx, 'company_1');
+    await findExactMatch(tx, mockPrisma as any);
     const contactCall = mockPrisma.contact.findMany.mock.calls[0][0];
     expect(contactCall.where.OR).toEqual(
       expect.arrayContaining([expect.objectContaining({ cif: 'B12345678' })])
@@ -103,7 +103,7 @@ describe('findExactMatch', () => {
     mockPrisma.contact.findMany.mockResolvedValue([contact]);
     mockPrisma.invoice.findMany.mockResolvedValue([]);
 
-    await findExactMatch(tx, 'company_1');
+    await findExactMatch(tx, mockPrisma as any);
     const invoiceCall = mockPrisma.invoice.findMany.mock.calls[0][0];
     expect(invoiceCall.where.status.in).toEqual(['PENDING', 'PARTIAL', 'OVERDUE']);
   });
@@ -114,7 +114,7 @@ describe('findExactMatch', () => {
     mockPrisma.contact.findMany.mockResolvedValue([contact]);
     mockPrisma.invoice.findMany.mockResolvedValue([]);
 
-    await findExactMatch(tx, 'company_1');
+    await findExactMatch(tx, mockPrisma as any);
     const contactCall = mockPrisma.contact.findMany.mock.calls[0][0];
     expect(contactCall.where.OR[0].iban).toBe('ES7620770024003102575766');
   });

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import type { BankTransaction, CashflowType } from "@prisma/client";
 
 export interface RuleClassificationResult {
@@ -21,11 +21,10 @@ export interface RuleClassificationResult {
  */
 export async function classifyByRules(
   tx: BankTransaction,
-  companyId: string
+  db: ScopedPrisma
 ): Promise<RuleClassificationResult | null> {
-  const rules = await prisma.matchingRule.findMany({
+  const rules = await db.matchingRule.findMany({
     where: {
-      companyId,
       isActive: true,
       status: "ACTIVE",
     },
@@ -116,7 +115,7 @@ export async function classifyByRules(
     if (!rule.accountCode && !rule.cashflowType) continue;
 
     // ── Match found — update timesApplied + lastExecutedAt ──
-    prisma.matchingRule.update({
+    db.matchingRule.update({
       where: { id: rule.id },
       data: { timesApplied: { increment: 1 }, lastExecutedAt: new Date() },
     }).catch((err) => console.warn("[rule-classifier] Non-critical operation failed:", err instanceof Error ? err.message : err));

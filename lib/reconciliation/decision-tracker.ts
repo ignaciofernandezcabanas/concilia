@@ -9,7 +9,7 @@
  * 5. Only stores DEFINITIVE decisions (ignores provisional/later-corrected ones)
  */
 
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 
 interface DecisionContext {
   reconciliationId: string;
@@ -25,16 +25,16 @@ interface DecisionContext {
   createdExplicitRule?: boolean;
 }
 
-export async function trackControllerDecision(ctx: DecisionContext): Promise<void> {
+export async function trackControllerDecision(db: ScopedPrisma, ctx: DecisionContext): Promise<void> {
   try {
     // Load context — either from reconciliation or directly from bank transaction
-    let reco: Awaited<ReturnType<typeof prisma.reconciliation.findUnique>> & {
+    let reco: Awaited<ReturnType<typeof db.reconciliation.findUnique>> & {
       bankTransaction?: { amount: number; counterpartIban: string | null; counterpartName: string | null; concept: string | null; valueDate: Date; reconciliations?: unknown[] } | null;
       invoice?: { contact?: { name: string; cif: string | null } | null } | null;
     } | null = null;
 
     if (ctx.reconciliationId) {
-      reco = await prisma.reconciliation.findUnique({
+      reco = await db.reconciliation.findUnique({
         where: { id: ctx.reconciliationId },
         include: {
           bankTransaction: {
@@ -49,7 +49,7 @@ export async function trackControllerDecision(ctx: DecisionContext): Promise<voi
 
     // If no reco but we have a bankTransactionId, load tx directly
     if (!reco && ctx.bankTransactionId) {
-      const tx = await prisma.bankTransaction.findUnique({ where: { id: ctx.bankTransactionId } });
+      const tx = await db.bankTransaction.findUnique({ where: { id: ctx.bankTransactionId } });
       if (tx) {
         // Create a minimal reco-like object for context extraction
         reco = {
@@ -93,7 +93,7 @@ export async function trackControllerDecision(ctx: DecisionContext): Promise<voi
     if (tx?.counterpartIban) {
       const threeMonthsAgo = new Date();
       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-      const count = await prisma.bankTransaction.count({
+      const count = await db.bankTransaction.count({
         where: {
           companyId: ctx.companyId,
           counterpartIban: tx.counterpartIban,
@@ -105,7 +105,7 @@ export async function trackControllerDecision(ctx: DecisionContext): Promise<voi
 
     // Mark any previous provisional decision for this tx as non-definitive
     if (ctx.bankTransactionId) {
-      await prisma.controllerDecision.updateMany({
+      await db.controllerDecision.updateMany({
         where: {
           bankTransactionId: ctx.bankTransactionId,
           companyId: ctx.companyId,
@@ -116,7 +116,7 @@ export async function trackControllerDecision(ctx: DecisionContext): Promise<voi
     }
 
     // Store the decision
-    await prisma.controllerDecision.create({
+    await db.controllerDecision.create({
       data: {
         systemProposal,
         systemConfidence,
@@ -145,7 +145,7 @@ export async function trackControllerDecision(ctx: DecisionContext): Promise<voi
 
     // Update implicit learned patterns
     if (wasModified && ctx.correctedField && ctx.correctedTo) {
-      await updateLearnedPattern(ctx);
+      await updateLearnedPattern(db, ctx);
     }
   } catch (err) {
     // Non-critical — don't break the resolve flow
@@ -156,8 +156,8 @@ export async function trackControllerDecision(ctx: DecisionContext): Promise<voi
 /**
  * Update or create an implicit learned pattern from a controller correction.
  */
-async function updateLearnedPattern(ctx: DecisionContext): Promise<void> {
-  const reco = await prisma.reconciliation.findUnique({
+async function updateLearnedPattern(db: ScopedPrisma, ctx: DecisionContext): Promise<void> {
+  const reco = await db.reconciliation.findUnique({
     where: { id: ctx.reconciliationId },
     include: { bankTransaction: true },
   });
@@ -166,7 +166,7 @@ async function updateLearnedPattern(ctx: DecisionContext): Promise<void> {
   const tx = reco.bankTransaction;
   const patternKey = `${ctx.correctedField}:${tx.counterpartIban ?? "noiban"}`;
 
-  const existing = await prisma.learnedPattern.findFirst({
+  const existing = await db.learnedPattern.findFirst({
     where: {
       companyId: ctx.companyId,
       counterpartIban: tx.counterpartIban,
@@ -178,7 +178,7 @@ async function updateLearnedPattern(ctx: DecisionContext): Promise<void> {
   if (existing) {
     // Check if the prediction matches
     const isCorrect = existing.predictedAction === ctx.correctedTo;
-    await prisma.learnedPattern.update({
+    await db.learnedPattern.update({
       where: { id: existing.id },
       data: {
         occurrences: { increment: 1 },
@@ -192,7 +192,7 @@ async function updateLearnedPattern(ctx: DecisionContext): Promise<void> {
     });
   } else {
     // Create new pattern
-    await prisma.learnedPattern.create({
+    await db.learnedPattern.create({
       data: {
         type: ctx.correctedField ?? "correction",
         counterpartIban: tx.counterpartIban,
