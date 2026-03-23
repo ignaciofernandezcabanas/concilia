@@ -7,7 +7,7 @@
  *   Haber: 281 Amortización acumulada del inm. material
  */
 
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 
 export interface DepreciationResult {
   assetsProcessed: number;
@@ -17,7 +17,7 @@ export interface DepreciationResult {
 }
 
 export async function runMonthlyDepreciation(
-  companyId: string,
+  db: ScopedPrisma,
   year: number,
   month: number
 ): Promise<DepreciationResult> {
@@ -28,8 +28,8 @@ export async function runMonthlyDepreciation(
     errors: [],
   };
 
-  const assets = await prisma.fixedAsset.findMany({
-    where: { companyId, status: "ACTIVE" },
+  const assets = await db.fixedAsset.findMany({
+    where: { status: "ACTIVE" },
     include: {
       depreciationAccount: { select: { id: true, code: true } },
       accumDepAccount: { select: { id: true, code: true } },
@@ -37,8 +37,7 @@ export async function runMonthlyDepreciation(
   });
 
   // Get next journal entry number
-  const lastEntry = await prisma.journalEntry.findFirst({
-    where: { companyId },
+  const lastEntry = await db.journalEntry.findFirst({
     orderBy: { number: "desc" },
     select: { number: true },
   });
@@ -64,7 +63,7 @@ export async function runMonthlyDepreciation(
       const maxRemaining = asset.acquisitionCost - asset.residualValue - asset.accumulatedDepreciation;
       if (maxRemaining <= 0) {
         // Fully depreciated
-        await prisma.fixedAsset.update({
+        await db.fixedAsset.update({
           where: { id: asset.id },
           data: { status: "FULLY_DEPRECIATED" },
         });
@@ -76,9 +75,8 @@ export async function runMonthlyDepreciation(
 
       if (depAmount <= 0) continue;
 
-      // Create journal entry
-      await prisma.journalEntry.create({
-        data: {
+      // Create journal entry (companyId injected by scoped db)
+      await (db as any).journalEntry.create({ data: {
           number: nextNumber++,
           date: depDate,
           description: `Amortización mensual: ${asset.name} (${month}/${year})`,
@@ -87,7 +85,6 @@ export async function runMonthlyDepreciation(
           sourceType: "depreciation",
           sourceId: asset.id,
           postedAt: new Date(),
-          companyId,
           lines: {
             create: [
               {
@@ -112,7 +109,7 @@ export async function runMonthlyDepreciation(
       const newNBV = Math.round((asset.acquisitionCost - newAccumDep) * 100) / 100;
       const isFullyDepreciated = newAccumDep >= asset.acquisitionCost - asset.residualValue - 0.01;
 
-      await prisma.fixedAsset.update({
+      await db.fixedAsset.update({
         where: { id: asset.id },
         data: {
           accumulatedDepreciation: newAccumDep,

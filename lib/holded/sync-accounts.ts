@@ -5,7 +5,7 @@
  * from the first digit of the account code.
  */
 
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import { HoldedClient, type HoldedAccount } from "./client";
 
 // ---------------------------------------------------------------------------
@@ -23,6 +23,7 @@ export interface SyncAccountsResult {
 // ---------------------------------------------------------------------------
 
 export async function syncAccounts(
+  db: ScopedPrisma,
   companyId: string,
   apiKey: string,
 ): Promise<SyncAccountsResult> {
@@ -42,12 +43,12 @@ export async function syncAccounts(
 
       const parentCode = deriveParentCode(account.accountNum);
 
-      const existed = await prisma.account.findUnique({
+      const existed = await db.account.findUnique({
         where: { code_companyId: { code: account.accountNum, companyId } },
         select: { id: true },
       });
 
-      await prisma.account.upsert({
+      await db.account.upsert({
         where: {
           code_companyId: { code: account.accountNum, companyId },
         },
@@ -81,7 +82,7 @@ export async function syncAccounts(
     }
   }
 
-  await prisma.syncLog.create({
+  await db.syncLog.create({
     data: {
       companyId,
       source: "holded",

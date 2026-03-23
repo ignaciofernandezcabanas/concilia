@@ -4,7 +4,7 @@
  * Returns the appropriate storage or email provider based on the integration type.
  */
 
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import { decryptJson } from "@/lib/crypto";
 import { GoogleDriveProvider } from "./google-drive";
 import { OneDriveProvider } from "./onedrive";
@@ -18,12 +18,11 @@ export type { EmailProvider, EmailMessage, EmailAttachment } from "./types";
  * Returns null if no storage integration is configured.
  */
 export async function getStorageProvider(
-  companyId: string
+  db: ScopedPrisma
 ): Promise<StorageProvider | null> {
   // Check for Google Drive integration
-  const driveIntegration = await prisma.integration.findFirst({
+  const driveIntegration = await db.integration.findFirst({
     where: {
-      companyId,
       type: "GOOGLE_DRIVE",
       status: "CONNECTED",
     },
@@ -36,9 +35,8 @@ export async function getStorageProvider(
   }
 
   // Check for OneDrive integration
-  const onedriveIntegration = await prisma.integration.findFirst({
+  const onedriveIntegration = await db.integration.findFirst({
     where: {
-      companyId,
       type: "ONEDRIVE",
       status: "CONNECTED",
     },

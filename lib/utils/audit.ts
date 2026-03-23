@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 
 interface CreateAuditLogParams {
   userId: string;
@@ -16,11 +16,12 @@ interface CreateAuditLogParams {
  * not block the main operation.
  */
 export async function createAuditLog(
+  db: ScopedPrisma,
   params: CreateAuditLogParams
 ): Promise<void> {
   const { userId, action, entityType, entityId, details } = params;
 
-  await prisma.auditLog.create({
+  await db.auditLog.create({
     data: {
       userId,
       action,

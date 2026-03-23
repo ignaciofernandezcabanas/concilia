@@ -14,7 +14,7 @@
  *    then adds investment and financing flows.
  */
 
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import { generatePyG } from "./pyg-generator";
 
 // ---------------------------------------------------------------------------
@@ -48,7 +48,6 @@ export interface TreasuryMonth {
 }
 
 export interface TreasuryReport {
-  companyId: string;
   mode: "direct";
   from: string;
   to: string;
@@ -74,7 +73,6 @@ export interface EFESection {
 }
 
 export interface EFEReport {
-  companyId: string;
   mode: "indirect";
   from: string;
   to: string;
@@ -158,13 +156,12 @@ function classifyTransaction(
 // ---------------------------------------------------------------------------
 
 async function generateTreasuryReport(
-  companyId: string,
+  db: ScopedPrisma,
   from: Date,
   to: Date
 ): Promise<TreasuryReport> {
-  const transactions = await prisma.bankTransaction.findMany({
+  const transactions = await db.bankTransaction.findMany({
     where: {
-      companyId,
       valueDate: { gte: from, lte: to },
       status: { notIn: ["DUPLICATE", "IGNORED"] },
     },
@@ -178,9 +175,8 @@ async function generateTreasuryReport(
 
   // Get the opening balance: the balanceAfter of the most recent transaction
   // before the reporting period
-  const lastTxBefore = await prisma.bankTransaction.findFirst({
+  const lastTxBefore = await db.bankTransaction.findFirst({
     where: {
-      companyId,
       valueDate: { lt: from },
       balanceAfter: { not: null },
       status: { notIn: ["DUPLICATE", "IGNORED"] },
@@ -292,7 +288,6 @@ async function generateTreasuryReport(
   );
 
   return {
-    companyId,
     mode: "direct",
     from: from.toISOString().slice(0, 10),
     to: to.toISOString().slice(0, 10),
@@ -314,18 +309,17 @@ async function generateTreasuryReport(
 // ---------------------------------------------------------------------------
 
 async function generateEFEReport(
-  companyId: string,
+  db: ScopedPrisma,
   from: Date,
   to: Date
 ): Promise<EFEReport> {
   // 1. Get resultado antes de impuestos (A.3) from PyG
-  const pyg = await generatePyG(companyId, from, to, "titles", false);
+  const pyg = await generatePyG(db, from, to, "titles", false);
   const resultadoAntesImpuestos = pyg.results.resultadoAntesImpuestos;
 
   // 2. Fetch non-cash adjustments from classified transactions
-  const nonCashTx = await prisma.bankTransaction.findMany({
+  const nonCashTx = await db.bankTransaction.findMany({
     where: {
-      companyId,
       valueDate: { gte: from, lte: to },
       status: { notIn: ["DUPLICATE", "IGNORED"] },
       classification: {
@@ -347,8 +341,8 @@ async function generateEFEReport(
 
   // 5. Working capital changes — compare invoices pending at start vs end
   const [pendingStart, pendingEnd] = await Promise.all([
-    getWorkingCapitalSnapshot(companyId, from),
-    getWorkingCapitalSnapshot(companyId, to),
+    getWorkingCapitalSnapshot(db, from),
+    getWorkingCapitalSnapshot(db, to),
   ]);
 
   const wcDeudores =
@@ -364,9 +358,8 @@ async function generateEFEReport(
     resultadoAntesImpuestos + amortizacion + provisiones + wcChange + otherNonCash;
 
   // 6. Investment flows
-  const investingTx = await prisma.bankTransaction.findMany({
+  const investingTx = await db.bankTransaction.findMany({
     where: {
-      companyId,
       valueDate: { gte: from, lte: to },
       status: { notIn: ["DUPLICATE", "IGNORED"] },
       classification: { cashflowType: "INVESTING" },
@@ -375,9 +368,8 @@ async function generateEFEReport(
   const flujosInversion = investingTx.reduce((s, tx) => s + tx.amount, 0);
 
   // 7. Financing flows
-  const financingTx = await prisma.bankTransaction.findMany({
+  const financingTx = await db.bankTransaction.findMany({
     where: {
-      companyId,
       valueDate: { gte: from, lte: to },
       status: { notIn: ["DUPLICATE", "IGNORED"] },
       classification: { cashflowType: "FINANCING" },
@@ -386,9 +378,8 @@ async function generateEFEReport(
   const flujosFinanciacion = financingTx.reduce((s, tx) => s + tx.amount, 0);
 
   // 8. Cash position
-  const lastTxBefore = await prisma.bankTransaction.findFirst({
+  const lastTxBefore = await db.bankTransaction.findFirst({
     where: {
-      companyId,
       valueDate: { lt: from },
       balanceAfter: { not: null },
       status: { notIn: ["DUPLICATE", "IGNORED"] },
@@ -462,7 +453,6 @@ async function generateEFEReport(
   ];
 
   return {
-    companyId,
     mode: "indirect",
     from: from.toISOString().slice(0, 10),
     to: to.toISOString().slice(0, 10),
@@ -492,13 +482,12 @@ interface WorkingCapitalSnapshot {
 }
 
 async function getWorkingCapitalSnapshot(
-  companyId: string,
+  db: ScopedPrisma,
   asOf: Date
 ): Promise<WorkingCapitalSnapshot> {
   // Issued invoices not fully paid by asOf date
-  const issuedPending = await prisma.invoice.aggregate({
+  const issuedPending = await db.invoice.aggregate({
     where: {
-      companyId,
       type: { in: ["ISSUED", "CREDIT_ISSUED"] },
       issueDate: { lte: asOf },
       status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
@@ -507,9 +496,8 @@ async function getWorkingCapitalSnapshot(
   });
 
   // Received invoices not fully paid by asOf date
-  const receivedPending = await prisma.invoice.aggregate({
+  const receivedPending = await db.invoice.aggregate({
     where: {
-      companyId,
       type: { in: ["RECEIVED", "CREDIT_RECEIVED"] },
       issueDate: { lte: asOf },
       status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
@@ -528,15 +516,15 @@ async function getWorkingCapitalSnapshot(
 // ---------------------------------------------------------------------------
 
 export async function generateCashflow(
-  companyId: string,
+  db: ScopedPrisma,
   from: Date,
   to: Date,
   mode: CashflowMode = "direct"
 ): Promise<CashflowReport> {
   if (mode === "indirect") {
-    return generateEFEReport(companyId, from, to);
+    return generateEFEReport(db, from, to);
   }
-  return generateTreasuryReport(companyId, from, to);
+  return generateTreasuryReport(db, from, to);
 }
 
 // ---------------------------------------------------------------------------

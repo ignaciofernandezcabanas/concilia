@@ -6,7 +6,7 @@
  * - Holded dates are Unix timestamps (seconds) and are converted to Date.
  */
 
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import { HoldedClient, type HoldedInvoice } from "./client";
 import type { InvoiceType, InvoiceStatus } from "@prisma/client";
 
@@ -25,6 +25,7 @@ export interface SyncInvoicesResult {
 // ---------------------------------------------------------------------------
 
 export async function syncInvoices(
+  db: ScopedPrisma,
   companyId: string,
   apiKey: string,
 ): Promise<SyncInvoicesResult> {
@@ -32,7 +33,7 @@ export async function syncInvoices(
   const result: SyncInvoicesResult = { created: 0, updated: 0, errors: [] };
 
   // Determine last successful sync to enable incremental fetching
-  const lastSync = await prisma.syncLog.findFirst({
+  const lastSync = await db.syncLog.findFirst({
     where: { companyId, source: "holded", action: "sync-invoices", status: "success" },
     orderBy: { startedAt: "desc" },
   });
@@ -53,17 +54,17 @@ export async function syncInvoices(
     try {
       const data = mapHoldedInvoice(doc, type, companyId);
 
-      const existing = await prisma.invoice.findUnique({
+      const existing = await db.invoice.findUnique({
         where: { holdedId_companyId: { holdedId: doc.id, companyId } },
       });
 
       if (existing) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await prisma.invoice.update({ where: { id: existing.id }, data: data as any });
+        await db.invoice.update({ where: { id: existing.id }, data: data as any });
         result.updated++;
       } else {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await prisma.invoice.create({ data: data as any });
+        await db.invoice.create({ data: data as any });
         result.created++;
       }
     } catch (err) {
@@ -76,7 +77,7 @@ export async function syncInvoices(
   }
 
   // Write sync log
-  await prisma.syncLog.create({
+  await db.syncLog.create({
     data: {
       companyId,
       source: "holded",

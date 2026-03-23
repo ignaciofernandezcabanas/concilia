@@ -10,7 +10,7 @@
  * Produces a week-by-week or month-by-month forecast.
  */
 
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 
 export interface ForecastWeek {
   weekStart: string; // ISO date
@@ -32,7 +32,6 @@ export interface ForecastItem {
 }
 
 export interface ForecastReport {
-  companyId: string;
   currentBalance: number;
   balanceDate: string;
   weeks: ForecastWeek[];
@@ -49,14 +48,14 @@ export interface ForecastReport {
  * Generates a treasury forecast for the next N weeks.
  */
 export async function generateForecast(
-  companyId: string,
+  db: ScopedPrisma,
   horizonWeeks: number = 12
 ): Promise<ForecastReport> {
   const now = new Date();
 
   // 1. Get current bank balance from latest transaction
-  const latestTx = await prisma.bankTransaction.findFirst({
-    where: { companyId, balanceAfter: { not: null } },
+  const latestTx = await db.bankTransaction.findFirst({
+    where: { balanceAfter: { not: null } },
     orderBy: { valueDate: "desc" },
     select: { balanceAfter: true, valueDate: true },
   });
@@ -65,9 +64,8 @@ export async function generateForecast(
   const balanceDate = latestTx?.valueDate ?? now;
 
   // 2. Get pending invoices with due dates
-  const pendingInvoices = await prisma.invoice.findMany({
+  const pendingInvoices = await db.invoice.findMany({
     where: {
-      companyId,
       status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
       dueDate: { not: null },
     },
@@ -81,9 +79,8 @@ export async function generateForecast(
   const threeMonthsAgo = new Date(now);
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
-  const classifiedTx = await prisma.bankTransaction.findMany({
+  const classifiedTx = await db.bankTransaction.findMany({
     where: {
-      companyId,
       status: "CLASSIFIED",
       valueDate: { gte: threeMonthsAgo },
       classification: { isNot: null },
@@ -183,7 +180,6 @@ export async function generateForecast(
   const totalOutflows = weeks.reduce((s, w) => s + w.expectedOutflows, 0);
 
   return {
-    companyId,
     currentBalance,
     balanceDate: balanceDate.toISOString().slice(0, 10),
     weeks,

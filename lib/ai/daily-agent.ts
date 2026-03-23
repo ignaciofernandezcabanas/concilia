@@ -5,7 +5,8 @@
  * Creates an AgentRun record to track progress and metrics.
  */
 
-import { prisma } from "@/lib/db";
+import { prisma } from "@/lib/db"; // GLOBAL-PRISMA: orchestrator creates scoped dbs per company
+import { getScopedDb } from "@/lib/db-scoped";
 import { runReconciliation } from "@/lib/reconciliation/engine";
 import { runMonthlyDepreciation } from "@/lib/accounting/depreciation";
 import { detectIntercompany } from "@/lib/reconciliation/detectors/intercompany-detector";
@@ -100,6 +101,7 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
   // ══════════════════════════════════════
 
   for (const company of org.companies) {
+    const companyDb = getScopedDb(company.id);
     const results: StepResult[] = [];
     let llmCallsThisCompany = 0;
 
@@ -130,7 +132,7 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
     // Step 3: Auto entries (depreciation)
     results.push(await runStep("auto_entries", async () => {
       const now = new Date();
-      const depResult = await runMonthlyDepreciation(company.id, now.getFullYear(), now.getMonth() + 1);
+      const depResult = await runMonthlyDepreciation(companyDb, now.getFullYear(), now.getMonth() + 1);
       return {
         assetsProcessed: depResult.assetsProcessed,
         entriesCreated: depResult.entriesCreated,
@@ -247,10 +249,10 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
   // Step 7: Treasury forecast
   let forecastJson = "{}";
   const step7 = await runStep("treasury", async () => {
-    const companyId = org.companies[0]?.id;
-    if (!companyId) return { skipped: true };
+    const firstCompanyId = org.companies[0]?.id;
+    if (!firstCompanyId) return { skipped: true };
 
-    const forecast = await generateForecast(companyId, 8);
+    const forecast = await generateForecast(getScopedDb(firstCompanyId), 8);
     forecastJson = JSON.stringify(forecast.weeks.slice(0, 4).map((w) => ({
       week: w.weekStart,
       balance: w.projectedBalance,

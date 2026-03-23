@@ -13,6 +13,7 @@ const mockPrisma = vi.hoisted(() => ({
   notification: { create: vi.fn() },
 }));
 vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
+vi.mock("@/lib/db-scoped", () => ({ getScopedDb: () => mockPrisma }));
 
 const mockRunReconciliation = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/reconciliation/engine", () => ({
@@ -207,7 +208,7 @@ describe("Daily Agent", () => {
 
     await runDailyAgent(ORG_ID);
 
-    expect(mockRunDepreciation).toHaveBeenCalledWith("c1", now.getFullYear(), now.getMonth() + 1);
+    expect(mockRunDepreciation).toHaveBeenCalledWith(expect.anything(), now.getFullYear(), now.getMonth() + 1);
   });
 
   it("intercompany exact mirror → auto-confirms", async () => {

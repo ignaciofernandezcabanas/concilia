@@ -7,7 +7,7 @@
  * - Classified transactions (by PGC account group)
  */
 
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 
 export interface BalanceLineData {
   code: string;
@@ -15,7 +15,6 @@ export interface BalanceLineData {
 }
 
 export interface BalanceReport {
-  companyId: string;
   asOf: string;
   currency: string;
   lines: BalanceLineData[];
@@ -32,13 +31,12 @@ export interface BalanceReport {
 }
 
 export async function generateBalance(
-  companyId: string,
+  db: ScopedPrisma,
   asOf: Date
 ): Promise<BalanceReport> {
   // ── Deudores comerciales: facturas emitidas pendientes ──
-  const deudores = await prisma.invoice.aggregate({
+  const deudores = await db.invoice.aggregate({
     where: {
-      companyId,
       type: { in: ["ISSUED", "CREDIT_RECEIVED"] },
       issueDate: { lte: asOf },
       status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
@@ -48,9 +46,8 @@ export async function generateBalance(
   const deudoresTotal = deudores._sum.amountPending ?? 0;
 
   // ── Acreedores comerciales: facturas recibidas pendientes ──
-  const acreedores = await prisma.invoice.aggregate({
+  const acreedores = await db.invoice.aggregate({
     where: {
-      companyId,
       type: { in: ["RECEIVED", "CREDIT_ISSUED"] },
       issueDate: { lte: asOf },
       status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
@@ -60,9 +57,8 @@ export async function generateBalance(
   const acreedoresTotal = Math.abs(acreedores._sum.amountPending ?? 0);
 
   // ── Efectivo: último saldo bancario conocido ──
-  const lastTx = await prisma.bankTransaction.findFirst({
+  const lastTx = await db.bankTransaction.findFirst({
     where: {
-      companyId,
       valueDate: { lte: asOf },
       balanceAfter: { not: null },
       status: { notIn: ["DUPLICATE", "IGNORED"] },
@@ -73,18 +69,16 @@ export async function generateBalance(
   const efectivo = lastTx?.balanceAfter ?? 0;
 
   // ── Result of the period (from PyG): ingresos - gastos ──
-  const invoiceIncome = await prisma.invoice.aggregate({
+  const invoiceIncome = await db.invoice.aggregate({
     where: {
-      companyId,
       type: { in: ["ISSUED", "CREDIT_RECEIVED"] },
       issueDate: { lte: asOf },
       status: { notIn: ["CANCELLED"] },
     },
     _sum: { totalAmount: true },
   });
-  const invoiceExpense = await prisma.invoice.aggregate({
+  const invoiceExpense = await db.invoice.aggregate({
     where: {
-      companyId,
       type: { in: ["RECEIVED", "CREDIT_ISSUED"] },
       issueDate: { lte: asOf },
       status: { notIn: ["CANCELLED"] },
@@ -130,7 +124,6 @@ export async function generateBalance(
   );
 
   return {
-    companyId,
     asOf: asOf.toISOString().slice(0, 10),
     currency: "EUR",
     lines,

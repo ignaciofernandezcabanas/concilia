@@ -32,7 +32,7 @@
  * EBITDA = A.1 + amortización (line 8, sign reversed since it's an expense)
  */
 
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -52,7 +52,6 @@ export interface PyGLineDetail {
 }
 
 export interface PyGReport {
-  companyId: string;
   from: string;
   to: string;
   level: PyGLevel;
@@ -113,17 +112,16 @@ const FINANCIAL_LINES = ["12", "13", "14", "15", "16"];
 // ---------------------------------------------------------------------------
 
 export async function generatePyG(
-  companyId: string,
+  db: ScopedPrisma,
   from: Date,
   to: Date,
   level: PyGLevel = "titles",
   includeEbitda: boolean = true
 ): Promise<PyGReport> {
   // Fetch invoice lines with their PGC account mapping (accrual basis)
-  const invoiceLines = await prisma.invoiceLine.findMany({
+  const invoiceLines = await db.invoiceLine.findMany({
     where: {
       invoice: {
-        companyId,
         issueDate: { gte: from, lte: to },
         status: { notIn: ["CANCELLED"] },
       },
@@ -136,9 +134,8 @@ export async function generatePyG(
   });
 
   // Fetch classified bank transactions (for items without invoice mapping)
-  const classifiedTx = await prisma.bankTransaction.findMany({
+  const classifiedTx = await db.bankTransaction.findMany({
     where: {
-      companyId,
       valueDate: { gte: from, lte: to },
       status: "CLASSIFIED",
       classification: { isNot: null },
@@ -374,7 +371,6 @@ export async function generatePyG(
   }
 
   return {
-    companyId,
     from: from.toISOString().slice(0, 10),
     to: to.toISOString().slice(0, 10),
     level,

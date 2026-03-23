@@ -6,7 +6,7 @@
  * that the difference equals the sum of the unreconciled sections.
  */
 
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,7 +36,6 @@ export interface UnreconciledTransaction {
 }
 
 export interface ReconciliationReportData {
-  companyId: string;
   month: string; // "2026-03"
   currency: string;
 
@@ -74,7 +73,7 @@ export interface ReconciliationReportData {
 // ---------------------------------------------------------------------------
 
 export async function generateReconciliationReport(
-  companyId: string,
+  db: ScopedPrisma,
   month: string // "2026-03"
 ): Promise<ReconciliationReportData> {
   const [year, monthNum] = month.split("-").map(Number);
@@ -82,9 +81,8 @@ export async function generateReconciliationReport(
   const to = new Date(year, monthNum, 0, 23, 59, 59, 999); // last day of month
 
   // 1. Get all invoices in the period
-  const invoices = await prisma.invoice.findMany({
+  const invoices = await db.invoice.findMany({
     where: {
-      companyId,
       issueDate: { gte: from, lte: to },
       status: { not: "CANCELLED" },
     },
@@ -98,9 +96,8 @@ export async function generateReconciliationReport(
   });
 
   // 2. Get all bank transactions in the period
-  const transactions = await prisma.bankTransaction.findMany({
+  const transactions = await db.bankTransaction.findMany({
     where: {
-      companyId,
       valueDate: { gte: from, lte: to },
       status: { notIn: ["DUPLICATE", "IGNORED"] },
     },
@@ -120,9 +117,8 @@ export async function generateReconciliationReport(
   }, 0);
 
   // 4. Get bank balance at end of month
-  const lastTx = await prisma.bankTransaction.findFirst({
+  const lastTx = await db.bankTransaction.findFirst({
     where: {
-      companyId,
       valueDate: { lte: to },
       balanceAfter: { not: null },
       status: { notIn: ["DUPLICATE", "IGNORED"] },
@@ -208,7 +204,6 @@ export async function generateReconciliationReport(
     totalItems > 0 ? roundTwo((reconciledCount / totalItems) * 100) : 100;
 
   return {
-    companyId,
     month,
     currency: "EUR",
     saldoHolded: roundTwo(saldoHolded),

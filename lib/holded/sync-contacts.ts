@@ -5,7 +5,7 @@
  * Holded's type string to our ContactType enum.
  */
 
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import { HoldedClient, type HoldedContact } from "./client";
 import type { ContactType } from "@prisma/client";
 
@@ -24,6 +24,7 @@ export interface SyncContactsResult {
 // ---------------------------------------------------------------------------
 
 export async function syncContacts(
+  db: ScopedPrisma,
   companyId: string,
   apiKey: string,
 ): Promise<SyncContactsResult> {
@@ -36,7 +37,7 @@ export async function syncContacts(
     try {
       const data = mapContact(contact, companyId);
 
-      await prisma.contact.upsert({
+      await db.contact.upsert({
         where: {
           holdedId_companyId: { holdedId: contact.id, companyId },
         },
@@ -52,7 +53,7 @@ export async function syncContacts(
       // We don't have a reliable way to distinguish create vs update from
       // upsert return value without a prior query, so count as updated when
       // the record already existed.
-      const existed = await prisma.contact.findUnique({
+      const existed = await db.contact.findUnique({
         where: {
           holdedId_companyId: { holdedId: contact.id, companyId },
         },
@@ -73,7 +74,7 @@ export async function syncContacts(
     }
   }
 
-  await prisma.syncLog.create({
+  await db.syncLog.create({
     data: {
       companyId,
       source: "holded",

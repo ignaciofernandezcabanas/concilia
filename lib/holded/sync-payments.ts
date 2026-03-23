@@ -5,7 +5,7 @@
  * the Holded API, upserts them, and recalculates the invoice totals.
  */
 
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import { HoldedClient, type HoldedPayment } from "./client";
 import type { InvoiceStatus } from "@prisma/client";
 
@@ -25,6 +25,7 @@ export interface SyncPaymentsResult {
 // ---------------------------------------------------------------------------
 
 export async function syncPayments(
+  db: ScopedPrisma,
   companyId: string,
   apiKey: string,
 ): Promise<SyncPaymentsResult> {
@@ -37,7 +38,7 @@ export async function syncPayments(
   };
 
   // Get all invoices that have a holdedId (i.e. synced from Holded)
-  const invoices = await prisma.invoice.findMany({
+  const invoices = await db.invoice.findMany({
     where: { companyId, holdedId: { not: null } },
     select: { id: true, holdedId: true, totalAmount: true },
   });
@@ -51,11 +52,11 @@ export async function syncPayments(
 
       for (const payment of payments) {
         const existing = payment.id
-          ? await prisma.payment.findUnique({ where: { holdedId: payment.id } })
+          ? await db.payment.findUnique({ where: { holdedId: payment.id } })
           : null;
 
         if (existing) {
-          await prisma.payment.update({
+          await db.payment.update({
             where: { id: existing.id },
             data: {
               amount: payment.amount,
@@ -65,7 +66,7 @@ export async function syncPayments(
           });
           result.updated++;
         } else {
-          await prisma.payment.create({
+          await db.payment.create({
             data: {
               holdedId: payment.id ?? null,
               amount: payment.amount,
@@ -82,7 +83,7 @@ export async function syncPayments(
 
       // Recalculate amountPaid from all payments in the database
       // (not just this batch, in case manual payments exist)
-      const aggregation = await prisma.payment.aggregate({
+      const aggregation = await db.payment.aggregate({
         where: { invoiceId: invoice.id },
         _sum: { amount: true },
       });
@@ -91,7 +92,7 @@ export async function syncPayments(
       const amountPending = roundTwo(invoice.totalAmount - amountPaid);
       const status = deriveStatus(amountPaid, amountPending, invoice.totalAmount);
 
-      await prisma.invoice.update({
+      await db.invoice.update({
         where: { id: invoice.id },
         data: { amountPaid, amountPending, status },
       });
@@ -109,7 +110,7 @@ export async function syncPayments(
     }
   }
 
-  await prisma.syncLog.create({
+  await db.syncLog.create({
     data: {
       companyId,
       source: "holded",

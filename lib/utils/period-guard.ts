@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 import type { PeriodStatus } from "@prisma/client";
 
 /**
@@ -7,20 +7,20 @@ import type { PeriodStatus } from "@prisma/client";
  * Returns an error message if the period is closed or locked.
  */
 export async function checkPeriodOpen(
+  db: ScopedPrisma,
   companyId: string,
   date: Date
 ): Promise<string | null> {
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
 
-  const period = await prisma.accountingPeriod.findUnique({
+  const period = await db.accountingPeriod.findUnique({
     where: {
       companyId_year_month: { companyId, year, month },
     },
     select: { status: true },
   });
 
-  // If no period record exists, it's implicitly open
   if (!period) return null;
 
   if (period.status === "CLOSED") {
@@ -38,11 +38,12 @@ export async function checkPeriodOpen(
  * Returns the status of a period, or "OPEN" if it doesn't exist.
  */
 export async function getPeriodStatus(
+  db: ScopedPrisma,
   companyId: string,
   year: number,
   month: number
 ): Promise<PeriodStatus> {
-  const period = await prisma.accountingPeriod.findUnique({
+  const period = await db.accountingPeriod.findUnique({
     where: {
       companyId_year_month: { companyId, year, month },
     },
