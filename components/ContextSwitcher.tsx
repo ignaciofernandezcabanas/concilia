@@ -11,6 +11,7 @@ import {
   Check,
   Layers,
   Plus,
+  Settings,
 } from "lucide-react";
 
 interface OrgCompany {
@@ -20,6 +21,7 @@ interface OrgCompany {
   cif: string | null;
   type: string;
   role: string;
+  ownershipPercentage?: number | null;
 }
 
 interface Membership {
@@ -168,6 +170,9 @@ export default function ContextSwitcher() {
                     <Building2 size={14} className="text-text-tertiary shrink-0" />
                     <span className="flex-1 text-left truncate text-text-primary">
                       {co.shortName || co.name}
+                      {co.ownershipPercentage != null && co.ownershipPercentage < 100 && (
+                        <span className="text-[10px] text-text-tertiary ml-1">({co.ownershipPercentage}%)</span>
+                      )}
                     </span>
                     <span className="text-[10px] text-text-tertiary">
                       {co.cif}
@@ -181,8 +186,18 @@ export default function ContextSwitcher() {
             );
           })}
 
-          {/* Add company */}
+          {/* Management links */}
           <div className="border-t border-subtle">
+            <button
+              onClick={() => {
+                setOpen(false);
+                router.push("/ajustes/sociedades");
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-text-secondary hover:bg-hover transition-colors"
+            >
+              <Settings size={14} />
+              <span>Gestionar sociedades</span>
+            </button>
             <button
               onClick={() => {
                 setOpen(false);

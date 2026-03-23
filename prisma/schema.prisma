@@ -85,6 +85,18 @@ enum CompanyType {
   STANDALONE
 }
 
+enum ConsolidationMethod {
+  FULL                // >50% control — consolidación global
+  EQUITY              // 20-50% influencia significativa — puesta en equivalencia
+  PROPORTIONAL        // Joint venture — consolidación proporcional (IFRS 11)
+  NOT_CONSOLIDATED    // <20% sin influencia — inversión financiera
+}
+
+enum NciMethod {
+  FAIR_VALUE          // Goodwill incluye parte NCI (full goodwill)
+  PROPORTIONATE       // Goodwill solo parte del grupo (partial goodwill)
+}
+
 // ============================================================
 // EMPRESA Y USUARIOS
 // ============================================================
@@ -129,6 +141,34 @@ model Company {
   fixedAssets            FixedAsset[]
   budgets                Budget[]
 
+  // === Consolidation fields ===
+  legalName              String?
+  registrationNumber     String?
+  taxJurisdiction        String    @default("ES")
+  localGaap              String    @default("PGC_PYMES")
+  functionalCurrency     String    @default("EUR")
+  presentationCurrency   String?
+
+  // Group structure
+  parentCompanyId        String?
+  parentCompany          Company?  @relation("SubsidiaryOf", fields: [parentCompanyId], references: [id])
+  subsidiaries           Company[] @relation("SubsidiaryOf")
+  consolidationMethod    ConsolidationMethod @default(FULL)
+  ownershipPercentage    Float?    @default(100)
+  nciMethod              NciMethod?
+  acquisitionDate        DateTime?
+  isHoldingCompany       Boolean   @default(false)
+  fiscalYearEndMonth     Int       @default(12)
+  firstConsolidationPeriod String?
+
+  // Segments (IFRS 8)
+  segment                String?
+  geographicRegion       String?
+
+  // Status
+  isActive               Boolean   @default(true)
+  deactivationDate       DateTime?
+  deactivationReason     String?
 }
 
 // ============================================================

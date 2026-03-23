@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db"; // GLOBAL-PRISMA: creates new Organization/Company
 import { createServerClient } from "@/lib/supabase";
 import { z } from "zod";
+import { seedPgcAccounts } from "@/lib/utils/seed-pgc";
 
 const addCompanySchema = z.object({
   company: z.object({
@@ -133,20 +134,4 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function seedPgcAccounts(companyId: string) {
-  const { PGC_SEED_ACCOUNTS } = await import("@/lib/pgc-seed-data");
-  for (const acc of PGC_SEED_ACCOUNTS) {
-    await prisma.account.upsert({
-      where: { code_companyId: { code: acc.code, companyId } },
-      create: {
-        code: acc.code,
-        name: acc.name,
-        group: acc.group,
-        parentCode: acc.code.length > 1 ? acc.code.slice(0, -1) : null,
-        pygLine: acc.pygLine ?? null,
-        companyId,
-      },
-      update: {},
-    });
-  }
-}
+// seedPgcAccounts imported from shared utility

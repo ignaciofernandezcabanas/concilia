@@ -8,7 +8,11 @@ import { generateBalance } from "@/lib/reports/balance-generator";
  * GET /api/reports/consolidated?report=pyg|balance&from=2026-01-01&to=2026-03-31
  *
  * Consolidated report across all companies in the user's active organization.
- * Only available for OWNER/ADMIN memberships.
+ * Applies consolidation method per company:
+ *   FULL: 100% of lines + NCI row for minority interest
+ *   EQUITY: single line = ownership% × resultado
+ *   PROPORTIONAL: each line × ownership%
+ *   NOT_CONSOLIDATED: excluded
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
@@ -25,7 +29,6 @@ export const GET = withAuth(
       );
     }
 
-    // Get organization
     const company = await db.company.findUnique({
       where: { id: ctx.company.id },
       select: { organizationId: true },
@@ -38,27 +41,56 @@ export const GET = withAuth(
       );
     }
 
-    // Get all companies in the org
+    // Get all active companies with consolidation config
     const orgCompanies = await db.company.findMany({
-      where: { organizationId: company.organizationId },
-      select: { id: true, name: true, shortName: true },
+      where: { organizationId: company.organizationId, isActive: true },
+      select: {
+        id: true, name: true, shortName: true,
+        consolidationMethod: true, ownershipPercentage: true,
+      },
     });
 
     if (report === "pyg") {
       const results = await Promise.all(
-        orgCompanies.map(async (co) => {
-          const pyg = await generatePyG(getScopedDb(co.id), new Date(from), new Date(to));
-          return { company: co, report: pyg };
-        })
+        orgCompanies
+          .filter((co) => co.consolidationMethod !== "NOT_CONSOLIDATED")
+          .map(async (co) => {
+            const pyg = await generatePyG(getScopedDb(co.id), new Date(from), new Date(to));
+            return { company: co, report: pyg };
+          })
       );
 
-      // Aggregate totals
+      // Aggregate by consolidation method
       const consolidated: Record<string, number> = {};
+      let nciTotal = 0;
+
       for (const r of results) {
-        if (r.report && typeof r.report === "object" && "lines" in r.report) {
-          const lines = r.report.lines as Array<{ code: string; amount: number }>;
+        if (!r.report || typeof r.report !== "object" || !("lines" in r.report)) continue;
+
+        const lines = r.report.lines as Array<{ code: string; amount: number }>;
+        const method = r.company.consolidationMethod;
+        const pct = (r.company.ownershipPercentage ?? 100) / 100;
+
+        if (method === "FULL") {
+          // Include 100% of lines
           for (const line of lines) {
             consolidated[line.code] = (consolidated[line.code] ?? 0) + line.amount;
+          }
+          // Calculate NCI if <100% ownership
+          if (pct < 1) {
+            const resultado = (r.report as any).results?.resultadoEjercicio ?? 0;
+            nciTotal += (1 - pct) * resultado;
+          }
+        } else if (method === "EQUITY") {
+          // Single line: ownership% × resultado
+          const resultado = (r.report as any).results?.resultadoEjercicio ?? 0;
+          const equityAmount = pct * resultado;
+          // Add to financial income line (line 12 in PGC)
+          consolidated["12"] = (consolidated["12"] ?? 0) + equityAmount;
+        } else if (method === "PROPORTIONAL") {
+          // Each line × ownership%
+          for (const line of lines) {
+            consolidated[line.code] = (consolidated[line.code] ?? 0) + line.amount * pct;
           }
         }
       }
@@ -67,31 +99,38 @@ export const GET = withAuth(
         type: "consolidated_pyg",
         organizationId: company.organizationId,
         period: { from, to },
-        companies: results.map((r) => ({
-          id: r.company.id,
-          name: r.company.shortName ?? r.company.name,
+        companies: orgCompanies.map((co) => ({
+          id: co.id,
+          name: co.shortName ?? co.name,
+          method: co.consolidationMethod,
+          ownership: co.ownershipPercentage,
         })),
         perCompany: results,
         consolidated,
+        nci: nciTotal !== 0 ? Math.round(nciTotal * 100) / 100 : null,
       });
     }
 
     if (report === "balance") {
       const asOf = new Date(to);
       const results = await Promise.all(
-        orgCompanies.map(async (co) => {
-          const balance = await generateBalance(getScopedDb(co.id), asOf);
-          return { company: co, report: balance };
-        })
+        orgCompanies
+          .filter((co) => co.consolidationMethod !== "NOT_CONSOLIDATED")
+          .map(async (co) => {
+            const balance = await generateBalance(getScopedDb(co.id), asOf);
+            return { company: co, report: balance };
+          })
       );
 
       return NextResponse.json({
         type: "consolidated_balance",
         organizationId: company.organizationId,
         asOf: to,
-        companies: results.map((r) => ({
-          id: r.company.id,
-          name: r.company.shortName ?? r.company.name,
+        companies: orgCompanies.map((co) => ({
+          id: co.id,
+          name: co.shortName ?? co.name,
+          method: co.consolidationMethod,
+          ownership: co.ownershipPercentage,
         })),
         perCompany: results,
       });
