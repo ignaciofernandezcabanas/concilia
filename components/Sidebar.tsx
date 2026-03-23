@@ -26,6 +26,7 @@ import {
   Settings,
   LogOut,
   Mail,
+  Receipt,
   type LucideIcon,
 } from "lucide-react";
 
@@ -68,6 +69,7 @@ const sections: NavSection[] = [
       { label: "Cashflow", icon: TrendingUp, href: "/cashflow" },
       { label: "Tesorería", icon: Wallet, href: "/tesoreria" },
       { label: "Cuentas a cobrar", icon: Clock, href: "/cuentas-cobrar" },
+      { label: "Fiscal", icon: Receipt, href: "/ajustes?tab=fiscal" },
     ],
   },
   {

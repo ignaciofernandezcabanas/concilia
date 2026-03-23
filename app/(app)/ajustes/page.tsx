@@ -18,17 +18,17 @@ import {
   ChevronUp,
 } from "lucide-react";
 
-type Tab = "users" | "company" | "integrations" | "learning";
+type Tab = "users" | "company" | "societies" | "fiscal" | "integrations" | "learning";
 
 export default function Ajustes() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("users");
 
-  // Derive role from user email by checking against DB users
-  // For simplicity, show integrations tab but it will block non-admins at API level
   const tabs: { value: Tab; label: string }[] = [
     { value: "users", label: "Usuarios" },
     { value: "company", label: "Empresa" },
+    { value: "societies", label: "Sociedades" },
+    { value: "fiscal", label: "Fiscal" },
     { value: "integrations", label: "Integraciones" },
     { value: "learning", label: "Aprendizaje" },
   ];
@@ -39,12 +39,12 @@ export default function Ajustes() {
       <div className="flex flex-col gap-6 p-6 px-8 flex-1 overflow-auto">
         <h1 className="text-[22px] font-semibold text-text-primary">Ajustes</h1>
 
-        <div className="flex items-center gap-1 border-b border-subtle">
+        <div className="flex items-center gap-1 border-b border-subtle overflow-x-auto">
           {tabs.map((t) => (
             <button
               key={t.value}
               onClick={() => setTab(t.value)}
-              className={`px-4 pb-2 text-[13px] font-medium border-b-2 transition-colors ${
+              className={`px-4 pb-2 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap ${
                 tab === t.value
                   ? "border-accent text-accent"
                   : "border-transparent text-text-secondary hover:text-text-primary"
@@ -57,6 +57,8 @@ export default function Ajustes() {
 
         {tab === "users" && <UsersTab />}
         {tab === "company" && <CompanyTab />}
+        {tab === "societies" && <SocietiesTab />}
+        {tab === "fiscal" && <FiscalTab />}
         {tab === "integrations" && <IntegrationsTab />}
         {tab === "learning" && <LearningTab />}
       </div>
@@ -671,6 +673,225 @@ function DriveFolderConfig({
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// Societies Tab
+// ══════════════════════════════════════════════════════════════
+
+interface CompanyRow {
+  id: string; name: string; shortName?: string; cif: string;
+  consolidationMethod: string; ownershipPercentage: number | null;
+  functionalCurrency: string; isActive: boolean; isHoldingCompany: boolean;
+  parentCompanyId: string | null;
+}
+
+const METHOD_LABELS: Record<string, string> = {
+  FULL: "Integración global", EQUITY: "Puesta en equivalencia",
+  PROPORTIONAL: "Proporcional", NOT_CONSOLIDATED: "No consolida",
+};
+const METHOD_COLORS: Record<string, string> = {
+  FULL: "bg-accent/10 text-accent", EQUITY: "bg-amber-100 text-amber-700",
+  PROPORTIONAL: "bg-purple-100 text-purple-700", NOT_CONSOLIDATED: "bg-gray-100 text-gray-500",
+};
+
+function SocietiesTab() {
+  const [companies, setCompanies] = useState<CompanyRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: "", legalName: "", cif: "", shortName: "",
+    consolidationMethod: "FULL", ownershipPercentage: 100,
+    functionalCurrency: "EUR", parentCompanyId: "",
+  });
+
+  useEffect(() => { fetchCompanies(); }, []);
+
+  async function fetchCompanies() {
+    try {
+      const res = await fetch("/api/settings/companies");
+      const json = await res.json();
+      setCompanies(json.data ?? []);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }
+
+  function resetForm() {
+    setForm({ name: "", legalName: "", cif: "", shortName: "", consolidationMethod: "FULL", ownershipPercentage: 100, functionalCurrency: "EUR", parentCompanyId: "" });
+    setEditId(null); setShowForm(false);
+  }
+
+  function openEdit(c: CompanyRow) {
+    setForm({ name: c.name, legalName: "", cif: c.cif, shortName: c.shortName ?? "", consolidationMethod: c.consolidationMethod, ownershipPercentage: c.ownershipPercentage ?? 100, functionalCurrency: c.functionalCurrency, parentCompanyId: c.parentCompanyId ?? "" });
+    setEditId(c.id); setShowForm(true);
+  }
+
+  async function handleSubmit() {
+    setSaving(true);
+    try {
+      const url = editId ? `/api/settings/companies/${editId}` : "/api/settings/companies";
+      const res = await fetch(url, { method: editId ? "PUT" : "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, ownershipPercentage: Number(form.ownershipPercentage), parentCompanyId: form.parentCompanyId || null, legalName: form.legalName || form.name }) });
+      if (res.ok) { resetForm(); fetchCompanies(); } else { const err = await res.json(); alert(err.error || "Error"); }
+    } catch { alert("Error de red"); }
+    setSaving(false);
+  }
+
+  if (loading) return <p className="text-text-secondary text-sm">Cargando...</p>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-text-secondary">Sociedades del grupo y configuración de consolidación.</p>
+        <button onClick={() => { resetForm(); setShowForm(true); }} className="text-xs bg-accent text-white px-3 py-1.5 rounded-lg hover:bg-accent/90 flex items-center gap-1"><Plus size={14} /> Añadir sociedad</button>
+      </div>
+      <div className="border border-border rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-border"><tr>
+            <th className="text-left px-4 py-2 text-xs font-medium text-text-secondary">Sociedad</th>
+            <th className="text-left px-3 py-2 text-xs font-medium text-text-secondary">CIF</th>
+            <th className="text-left px-3 py-2 text-xs font-medium text-text-secondary">Método</th>
+            <th className="text-right px-3 py-2 text-xs font-medium text-text-secondary">%</th>
+            <th className="text-center px-3 py-2 text-xs font-medium text-text-secondary">Moneda</th>
+            <th className="px-3 py-2"></th>
+          </tr></thead>
+          <tbody>
+            {companies.map((c) => (
+              <tr key={c.id} className="border-b border-border hover:bg-gray-50">
+                <td className="px-4 py-2"><span className="font-medium">{c.name}</span>{c.isHoldingCompany && <span className="ml-2 text-[10px] bg-accent/10 text-accent px-1.5 py-0.5 rounded">CABECERA</span>}{!c.isActive && <span className="ml-2 text-[10px] bg-red-50 text-red-500 px-1.5 py-0.5 rounded">Inactiva</span>}</td>
+                <td className="px-3 py-2 font-mono text-xs text-text-secondary">{c.cif}</td>
+                <td className="px-3 py-2"><span className={`text-[11px] px-2 py-0.5 rounded ${METHOD_COLORS[c.consolidationMethod] ?? "bg-gray-100"}`}>{METHOD_LABELS[c.consolidationMethod] ?? c.consolidationMethod}</span></td>
+                <td className="px-3 py-2 text-right font-mono text-xs">{c.ownershipPercentage != null ? `${c.ownershipPercentage}%` : "—"}</td>
+                <td className="px-3 py-2 text-center text-xs">{c.functionalCurrency}</td>
+                <td className="px-3 py-2 text-right"><button onClick={() => openEdit(c)} className="text-xs text-accent hover:underline">Editar</button></td>
+              </tr>
+            ))}
+            {companies.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-tertiary text-sm">No hay sociedades. Añade la primera.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {showForm && (
+        <div className="border border-border rounded-lg p-4 bg-gray-50 space-y-3">
+          <h3 className="text-sm font-semibold">{editId ? "Editar sociedad" : "Nueva sociedad"}</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs text-text-secondary mb-1">Nombre *</label><input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="w-full border border-border rounded px-3 py-1.5 text-sm" /></div>
+            <div><label className="block text-xs text-text-secondary mb-1">CIF *</label><input value={form.cif} onChange={(e) => setForm((f) => ({ ...f, cif: e.target.value.toUpperCase() }))} className="w-full border border-border rounded px-3 py-1.5 text-sm font-mono" /></div>
+            <div><label className="block text-xs text-text-secondary mb-1">Método consolidación</label><select value={form.consolidationMethod} onChange={(e) => setForm((f) => ({ ...f, consolidationMethod: e.target.value }))} className="w-full border border-border rounded px-3 py-1.5 text-sm"><option value="FULL">Integración global</option><option value="EQUITY">Puesta en equivalencia</option><option value="PROPORTIONAL">Proporcional</option><option value="NOT_CONSOLIDATED">No consolida</option></select></div>
+            <div><label className="block text-xs text-text-secondary mb-1">% participación</label><input type="number" min={0} max={100} value={form.ownershipPercentage} onChange={(e) => setForm((f) => ({ ...f, ownershipPercentage: Number(e.target.value) }))} className="w-full border border-border rounded px-3 py-1.5 text-sm font-mono" /></div>
+            <div><label className="block text-xs text-text-secondary mb-1">Moneda funcional</label><select value={form.functionalCurrency} onChange={(e) => setForm((f) => ({ ...f, functionalCurrency: e.target.value }))} className="w-full border border-border rounded px-3 py-1.5 text-sm">{["EUR","USD","GBP","CHF"].map((c) => <option key={c}>{c}</option>)}</select></div>
+            <div><label className="block text-xs text-text-secondary mb-1">Sociedad matriz</label><select value={form.parentCompanyId} onChange={(e) => setForm((f) => ({ ...f, parentCompanyId: e.target.value }))} className="w-full border border-border rounded px-3 py-1.5 text-sm"><option value="">— Ninguna —</option>{companies.filter((c) => c.id !== editId).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={handleSubmit} disabled={saving || !form.name || !form.cif} className="text-xs bg-accent text-white px-4 py-1.5 rounded hover:bg-accent/90 disabled:opacity-50">{saving ? "Guardando..." : editId ? "Guardar" : "Crear"}</button>
+            <button onClick={resetForm} className="text-xs text-text-secondary px-3 py-1.5">Cancelar</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// Fiscal Tab
+// ══════════════════════════════════════════════════════════════
+
+function FiscalTab() {
+  const [fiscalType, setFiscalType] = useState<"vat" | "withholdings">("vat");
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [quarter, setQuarter] = useState(Math.ceil((new Date().getMonth() + 1) / 3));
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  const from = `${year}-${String((quarter - 1) * 3 + 1).padStart(2, "0")}-01`;
+  const toMonth = quarter * 3;
+  const toDay = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][toMonth - 1];
+  const to = `${year}-${String(toMonth).padStart(2, "0")}-${toDay}`;
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/fiscal?type=${fiscalType}&from=${from}&to=${to}`)
+      .then((r) => r.json()).then(setData).catch(() => setData(null)).finally(() => setLoading(false));
+  }, [fiscalType, from, to]);
+
+  const fmt = (n: number) => n?.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? "0,00";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="flex gap-1">
+          {(["vat", "withholdings"] as const).map((t) => (
+            <button key={t} onClick={() => setFiscalType(t)} className={`text-xs px-3 py-1.5 rounded-lg border ${fiscalType === t ? "bg-accent text-white border-accent" : "border-border text-text-secondary"}`}>
+              {t === "vat" ? "IVA (Mod. 303)" : "Retenciones (Mod. 111)"}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1 ml-auto">
+          <select value={quarter} onChange={(e) => setQuarter(Number(e.target.value))} className="border border-border rounded px-2 py-1 text-xs">
+            <option value={1}>T1</option><option value={2}>T2</option><option value={3}>T3</option><option value={4}>T4</option>
+          </select>
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="border border-border rounded px-2 py-1 text-xs">
+            {[2024, 2025, 2026, 2027].map((y) => <option key={y}>{y}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {loading && <p className="text-sm text-text-secondary">Cargando...</p>}
+
+      {!loading && fiscalType === "vat" && data && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="border border-border rounded-lg p-3">
+              <p className="text-[10px] text-text-tertiary uppercase">IVA Repercutido</p>
+              <p className="text-lg font-semibold font-mono text-green-700">{fmt(data.ivaRepercutido?.totalVat ?? 0)} €</p>
+            </div>
+            <div className="border border-border rounded-lg p-3">
+              <p className="text-[10px] text-text-tertiary uppercase">IVA Soportado</p>
+              <p className="text-lg font-semibold font-mono text-red-600">{fmt(data.ivaSoportado?.totalVat ?? 0)} €</p>
+            </div>
+            <div className={`border rounded-lg p-3 ${(data.liquidacion?.amount ?? 0) >= 0 ? "border-red-200 bg-red-50" : "border-green-200 bg-green-50"}`}>
+              <p className="text-[10px] text-text-tertiary uppercase">{data.liquidacion?.direction === "A_INGRESAR" ? "A ingresar" : "A devolver"}</p>
+              <p className={`text-lg font-semibold font-mono ${(data.liquidacion?.amount ?? 0) >= 0 ? "text-red-700" : "text-green-700"}`}>{fmt(Math.abs(data.liquidacion?.amount ?? 0))} €</p>
+            </div>
+          </div>
+          {((data.ivaRepercutido?.byRate?.length ?? 0) > 0 || (data.ivaSoportado?.byRate?.length ?? 0) > 0) && (
+            <table className="w-full text-xs border border-border rounded-lg overflow-hidden">
+              <thead className="bg-gray-50"><tr><th className="text-left px-3 py-2">Tipo</th><th className="text-right px-3 py-2">Base</th><th className="text-right px-3 py-2">Tipo IVA</th><th className="text-right px-3 py-2">Cuota</th></tr></thead>
+              <tbody>
+                {(data.ivaRepercutido?.byRate ?? []).map((l: any, i: number) => (
+                  <tr key={`r${i}`} className="border-t border-border"><td className="px-3 py-1.5 text-green-600">Repercutido {l.rate}%</td><td className="px-3 py-1.5 text-right font-mono">{fmt(l.base)}</td><td className="px-3 py-1.5 text-right font-mono">{l.rate}%</td><td className="px-3 py-1.5 text-right font-mono">{fmt(l.vat)}</td></tr>
+                ))}
+                {(data.ivaSoportado?.byRate ?? []).map((l: any, i: number) => (
+                  <tr key={`s${i}`} className="border-t border-border"><td className="px-3 py-1.5 text-red-600">Soportado {l.rate}%</td><td className="px-3 py-1.5 text-right font-mono">{fmt(l.base)}</td><td className="px-3 py-1.5 text-right font-mono">{l.rate}%</td><td className="px-3 py-1.5 text-right font-mono">{fmt(l.vat)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {!loading && fiscalType === "withholdings" && data && (
+        <div className="space-y-4">
+          <div className="border border-border rounded-lg p-3">
+            <p className="text-[10px] text-text-tertiary uppercase">Total retenciones</p>
+            <p className="text-lg font-semibold font-mono">{fmt(data.totals?.withholding ?? 0)} €</p>
+            <p className="text-xs text-text-secondary mt-1">Base: {fmt(data.totals?.base ?? 0)} € · {data.totals?.count ?? 0} operaciones</p>
+          </div>
+          {(data.entries?.length > 0) && (
+            <table className="w-full text-xs border border-border rounded-lg overflow-hidden">
+              <thead className="bg-gray-50"><tr><th className="text-left px-3 py-2">Concepto</th><th className="text-right px-3 py-2">Base</th><th className="text-right px-3 py-2">%</th><th className="text-right px-3 py-2">Retención</th></tr></thead>
+              <tbody>{(data.entries ?? []).map((l: any, i: number) => (
+                <tr key={i} className="border-t border-border"><td className="px-3 py-1.5">{l.concept ?? l.contactName ?? "—"}</td><td className="px-3 py-1.5 text-right font-mono">{fmt(l.base)}</td><td className="px-3 py-1.5 text-right font-mono">{l.rate}%</td><td className="px-3 py-1.5 text-right font-mono">{fmt(l.withholding)}</td></tr>
+              ))}</tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {!loading && !data && <p className="text-sm text-text-tertiary">Sin datos fiscales para este periodo.</p>}
     </div>
   );
 }

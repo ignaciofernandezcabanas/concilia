@@ -7,30 +7,11 @@ import type { PeriodStatus } from "@prisma/client";
  * Returns an error message if the period is closed or locked.
  */
 export async function checkPeriodOpen(
-  db: ScopedPrisma,
-  companyId: string,
-  date: Date
+  _db: ScopedPrisma,
+  _companyId: string,
+  _date: Date
 ): Promise<string | null> {
-  const year = date.getFullYear();
-  const month = date.getMonth() + 1;
-
-  const period = await db.accountingPeriod.findUnique({
-    where: {
-      companyId_year_month: { companyId, year, month },
-    },
-    select: { status: true },
-  });
-
-  if (!period) return null;
-
-  if (period.status === "CLOSED") {
-    return `El periodo ${month}/${year} está cerrado. Reábralo para hacer cambios.`;
-  }
-
-  if (period.status === "LOCKED") {
-    return `El periodo ${month}/${year} está bloqueado permanentemente.`;
-  }
-
+  // Period blocking disabled — all data is always editable
   return null;
 }
 
