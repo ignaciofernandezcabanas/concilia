@@ -65,6 +65,17 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 - **Error sanitization**: producción nunca expone detalles internos
 - **AES-256-GCM encryption**: para credenciales almacenadas
 
+### Frontend (19 páginas)
+- **Dashboard**: briefing diario + 6 KPIs + 3 acciones rápidas
+- **Bandeja**: conciliación con batch actions y barra de confianza
+- **Asientos**: journal entries con expansión de líneas, modal de creación, aprobación AI
+- **Plan de cuentas**: árbol PGC, libro mayor con saldo running, balance de sumas y saldos
+- **Activos fijos**: registro con barra de amortización visual, alta con cuentas PGC
+- **Tesorería**: forecast 13 semanas con gráfico SVG inline, detalle semanal expandible
+- **Cuentas a cobrar/pagar**: aging con 5 buckets, DSO/DPO, riesgo por contacto
+- **Intercompañía**: operaciones entre sociedades, confirmación/eliminación
+- **Consolidado**: PyG/Balance multi-sociedad con totales
+
 ## Quick Start
 
 ```bash
@@ -193,9 +204,11 @@ Ver [CLAUDE.md](CLAUDE.md) para detalles del motor de conciliación, 18 escenari
 
 ## Estadísticas
 
-- **~31.000 líneas** de TypeScript
+- **~32.300 líneas** de TypeScript
 - **34 modelos** Prisma
 - **59 endpoints** API
+- **19 páginas** frontend
+- **16 componentes** React
 - **308 tests** en 25 archivos
 - **16 categorías** de confianza
 - **12 acciones** de resolución

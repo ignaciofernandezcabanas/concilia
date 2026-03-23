@@ -21,13 +21,20 @@ Concilia es una plataforma de conciliación bancaria automatizada con agente AI 
 ```
 app/
   (app)/                    # Pages behind auth (AppShell layout)
-    page.tsx                # Dashboard (con briefing diario)
-    conciliacion/           # Conciliation + reconciliation report
+    page.tsx                # Dashboard (briefing + 6 KPIs + acciones rápidas)
+    conciliacion/           # Bandeja de conciliación
     facturas/               # Invoices (import PDF, view, delete)
     movimientos/            # Bank transactions (import CSV, delete)
+    asientos/               # Journal entries (crear, aprobar, revertir)
+    plan-cuentas/           # Chart of accounts + libro mayor + sumas y saldos
+    activos/                # Fixed assets (registro, amortización)
     balance/                # Balance sheet (PGC)
     pyg/                    # P&L (PGC)
     cashflow/               # Cash flow (treasury + EFE)
+    tesoreria/              # Treasury forecast (13 semanas, gráfico SVG)
+    cuentas-cobrar/         # Aging AR/AP (5 buckets, DSO/DPO, riesgo)
+    intercompania/          # Intercompany operations (confirmar/eliminar)
+    consolidado/            # Consolidated reports (PyG/Balance multi-sociedad)
     notificaciones/         # Notifications (13 tipos)
     reglas/                 # Matching rules + NL creation
     ajustes/                # Settings: users, company, integrations
@@ -71,7 +78,7 @@ lib/
   db.ts                     # Prisma client singleton
   db-scoped.ts              # getScopedDb(companyId), getGroupDb(companyIds)
 
-components/                 # React: Sidebar, ContextSwitcher, ReconciliationPanel, PgcTable...
+components/                 # 16 React components: Sidebar, ContextSwitcher, ConfidenceBar, InlineChart...
 hooks/useApi.ts             # useFetch, useInvoices, useTransactions...
 prisma/schema.prisma        # 34 modelos, 33 enums
 __tests__/                  # 25 archivos, 308 tests
