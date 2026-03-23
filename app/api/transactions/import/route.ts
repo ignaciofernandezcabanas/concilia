@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
 import { createAuditLog } from "@/lib/utils/audit";
+import { isNorma43, parseNorma43 } from "@/lib/bank/norma43-parser";
 
 /**
  * POST /api/transactions/import
@@ -34,6 +35,53 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   const text = await file.text();
   if (!text.trim()) {
     return NextResponse.json({ error: "El archivo está vacío." }, { status: 400 });
+  }
+
+  // ── Auto-detect Norma43 ──
+  if (isNorma43(text)) {
+    try {
+      const n43 = parseNorma43(text);
+      let imported = 0;
+      let skipped = 0;
+
+      for (const tx of n43.transactions) {
+        const externalId = `n43_${tx.date.toISOString().slice(0, 10)}_${tx.amount.toFixed(2)}_${tx.reference}`;
+        const exists = await db.bankTransaction.findFirst({ where: { externalId } });
+        if (exists) { skipped++; continue; }
+
+        await db.bankTransaction.create({
+          data: {
+            externalId,
+            valueDate: tx.date,
+            bookingDate: tx.date,
+            amount: tx.amount,
+            currency: n43.currency,
+            concept: tx.concept,
+            reference: tx.reference || null,
+            balanceAfter: null,
+            status: "PENDING",
+            companyId: company.id,
+          } as any,
+        });
+        imported++;
+      }
+
+      createAuditLog(db, { userId: user.id, action: "TRANSACTIONS_IMPORTED_N43", entityType: "BankTransaction", entityId: "batch", details: { imported, skipped, total: n43.transactions.length } })
+        .catch((err) => console.warn("[import] Audit failed:", err instanceof Error ? err.message : err));
+
+      return NextResponse.json({
+        success: true,
+        format: "norma43",
+        imported,
+        skipped,
+        total: n43.transactions.length,
+        initialBalance: n43.initialBalance,
+        finalBalance: n43.finalBalance,
+        currency: n43.currency,
+      });
+    } catch (err) {
+      return NextResponse.json({ error: `Error al parsear Norma43: ${err instanceof Error ? err.message : String(err)}` }, { status: 400 });
+    }
   }
 
   const separatorParam = formData.get("separator") as string | null;

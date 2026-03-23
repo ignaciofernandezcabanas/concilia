@@ -46,7 +46,7 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 
 ### Data Entry
 - **Buzón de facturas**: conecta un email dedicado (facturas@empresa.es), importa PDFs adjuntos automáticamente con OCR (Haiku)
-- **Importación CSV**: movimientos bancarios con auto-detect de formato
+- **Importación CSV/N43**: movimientos bancarios con auto-detect (CSV español + Cuaderno 43 AEB)
 - **Importación PDF**: facturas individuales o masivas con extracción AI
 - **Storage scan**: escaneo de carpeta Drive/OneDrive para PDFs
 - **Deduplicación**: por holdedId (facturas) y externalId (movimientos)
@@ -216,7 +216,7 @@ Ver [CLAUDE.md](CLAUDE.md) para detalles del motor de conciliación, 18 escenari
 - **59 endpoints** API
 - **19 páginas** frontend
 - **16 componentes** React
-- **322 tests** en 27 archivos
+- **336 tests** en 28 archivos
 - **16 categorías** de confianza
 - **12 acciones** de resolución
 - **11 steps** del agente diario
