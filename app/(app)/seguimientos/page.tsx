@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Mail, Send, Clock, CheckCircle, AlertTriangle, XCircle, RotateCw,
-  ChevronDown, ChevronRight, FileText, Eye,
+  Mail, Send, CheckCircle, AlertTriangle, XCircle, RotateCw, FileText,
 } from "lucide-react";
 
 interface Inquiry {
@@ -23,6 +22,21 @@ interface Inquiry {
   responseResolved: boolean | null;
   attachmentsReceived: number;
   nextFollowUpDate: string | null;
+  responseType: string | null;
+  responseConfidence: number | null;
+  documentValidation: {
+    matchesRequestedType?: boolean;
+    amountMatch?: string;
+    dateMatch?: string;
+    contactMatch?: boolean;
+    invoiceNumberFound?: string;
+    extractedAmount?: number;
+    extractedDate?: string;
+    issues?: string[];
+  } | null;
+  proposedAction: string | null;
+  proposedActionReason: string | null;
+  proposedFollowUpBody: string | null;
   contact: { id: string; name: string; email?: string; accountingEmail?: string } | null;
   bankTransaction: { id: string; amount: number; concept: string; valueDate: string } | null;
   invoice: { id: string; number: string; totalAmount: number } | null;
@@ -266,8 +280,95 @@ export default function SeguimientosPage() {
                 <div className="border border-border rounded-lg p-4 text-sm" dangerouslySetInnerHTML={{ __html: selected.body }} />
               </div>
 
-              {/* Response summary */}
-              {selected.responseSummary && (
+              {/* Agent evaluation */}
+              {selected.proposedAction && (
+                <div className="border border-border rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-border">
+                    <span className="text-xs font-semibold text-text-secondary flex items-center gap-1.5">
+                      <span className="w-4 h-4 bg-accent/10 rounded flex items-center justify-center text-[10px]">AI</span>
+                      Evaluación del agente
+                    </span>
+                    {selected.responseConfidence != null && (
+                      <span className="text-[10px] text-text-tertiary">
+                        Confianza: {Math.round(selected.responseConfidence * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="px-4 py-3 space-y-3">
+                    {/* Response summary */}
+                    {selected.responseSummary && (
+                      <p className="text-sm">{selected.responseSummary}</p>
+                    )}
+
+                    {/* Document validation */}
+                    {selected.documentValidation && (
+                      <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
+                        <p className="text-[10px] font-semibold text-text-tertiary uppercase">Validación del documento</p>
+                        {[
+                          { label: "Importe", value: selected.documentValidation.amountMatch, check: selected.documentValidation.amountMatch === "exact" || selected.documentValidation.amountMatch === "close" },
+                          { label: "Fecha", value: selected.documentValidation.dateMatch, check: selected.documentValidation.dateMatch === "exact" || selected.documentValidation.dateMatch === "close" },
+                          { label: "Emisor", value: selected.documentValidation.contactMatch ? "coincide" : "no coincide", check: selected.documentValidation.contactMatch },
+                        ].map((item) => (
+                          <div key={item.label} className="flex items-center gap-2 text-xs">
+                            <span className={item.check ? "text-green-600" : "text-red-500"}>{item.check ? "✅" : "❌"}</span>
+                            <span className="text-text-secondary">{item.label}:</span>
+                            <span className="font-medium">{item.value}</span>
+                          </div>
+                        ))}
+                        {selected.documentValidation.invoiceNumberFound && (
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-blue-500">📄</span>
+                            <span className="text-text-secondary">Nº factura:</span>
+                            <span className="font-mono font-medium">{selected.documentValidation.invoiceNumberFound}</span>
+                          </div>
+                        )}
+                        {(selected.documentValidation.issues?.length ?? 0) > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {selected.documentValidation.issues!.map((issue, i) => (
+                              <p key={i} className="text-xs text-red-600">- {issue}</p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Proposed action */}
+                    <div className="border-t border-border pt-3">
+                      <p className="text-xs text-text-tertiary mb-1">Propuesta</p>
+                      <p className="text-sm font-medium">{selected.proposedActionReason}</p>
+                    </div>
+
+                    {/* Proposed follow-up body preview */}
+                    {selected.proposedFollowUpBody && ["FOLLOW_UP_NEEDED", "RESPONSE_RECEIVED"].includes(selected.status) && (
+                      <div className="border border-border rounded-lg p-3">
+                        <p className="text-[10px] text-text-tertiary mb-2">Borrador de respuesta preparado</p>
+                        <div className="text-xs text-text-secondary line-clamp-4" dangerouslySetInnerHTML={{ __html: selected.proposedFollowUpBody }} />
+                      </div>
+                    )}
+
+                    {/* Escalation decision options */}
+                    {selected.status === "ESCALATED" && (
+                      <div className="bg-amber-50 rounded-lg p-3 space-y-2">
+                        <p className="text-xs font-semibold text-amber-700">Requiere tu decisión</p>
+                        <div className="space-y-1.5">
+                          <button onClick={() => { /* TODO: accept explanation */ }} className="w-full text-left text-xs px-3 py-2 rounded border border-border hover:bg-white">
+                            Aceptar la explicación y cerrar
+                          </button>
+                          <button onClick={() => { /* TODO: reply manually */ }} className="w-full text-left text-xs px-3 py-2 rounded border border-border hover:bg-white">
+                            Responder pidiendo más detalles
+                          </button>
+                          <button onClick={() => { /* TODO: classify manually */ }} className="w-full text-left text-xs px-3 py-2 rounded border border-border hover:bg-white">
+                            Clasificar el movimiento manualmente
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Simple response summary (fallback for inquiries without full evaluation) */}
+              {!selected.proposedAction && selected.responseSummary && (
                 <div className={`rounded-lg p-3 ${selected.responseResolved ? "bg-green-50" : "bg-amber-50"}`}>
                   <p className="text-xs font-medium mb-1">{selected.responseResolved ? "✅ Respuesta satisfactoria" : "⚠️ Respuesta parcial"}</p>
                   <p className="text-sm">{selected.responseSummary}</p>
