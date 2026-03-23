@@ -1,6 +1,8 @@
 import { callAIJson } from "@/lib/ai/model-router";
 import { MATCH_LLM } from "@/lib/ai/prompt-registry";
+import { getRelevantContext, formatContextForPrompt } from "@/lib/ai/context-retriever";
 import type { BankTransaction, Invoice, Contact } from "@prisma/client";
+import type { ScopedPrisma } from "@/lib/db-scoped";
 
 export interface LlmMatchResult {
   invoiceId: string;
@@ -16,7 +18,8 @@ const MAX_INVOICES_IN_PROMPT = 30;
 export async function findLlmMatch(
   tx: BankTransaction,
   pendingInvoices: InvoiceWithContact[],
-  _contacts: Contact[]
+  _contacts: Contact[],
+  db?: ScopedPrisma
 ): Promise<LlmMatchResult | null> {
   if (pendingInvoices.length === 0) return null;
 
@@ -42,26 +45,31 @@ export async function findLlmMatch(
     `Counterpart Name: ${tx.counterpartName ?? "N/A"}\n` +
     `Reference: ${tx.reference ?? "N/A"}`;
 
+  // Retrieve controller context if db available
+  let controllerContext: string | undefined;
+  if (db) {
+    const context = await getRelevantContext(tx, db, 5);
+    const formatted = formatContextForPrompt(context);
+    if (formatted) controllerContext = formatted;
+  }
+
   try {
     const parsed = await callAIJson(
       "match_llm",
       MATCH_LLM.system,
-      MATCH_LLM.buildUser({ txSummary, invoiceSummary }),
+      MATCH_LLM.buildUser({ txSummary, invoiceSummary, controllerContext }),
       MATCH_LLM.schema
     );
 
     if (!parsed || !parsed.matchedInvoiceId) return null;
 
-    // Log CoT reasoning
     if (parsed.steps) {
       console.info(`[llm-match] CoT for tx ${tx.id}:`, JSON.stringify(parsed.steps).slice(0, 500));
     }
 
-    // Validate invoice ID exists in the list
     const matchedInvoice = invoiceList.find((inv) => inv.id === parsed.matchedInvoiceId);
     if (!matchedInvoice) return null;
 
-    // Clamp confidence to 0.60-0.80 for LLM matches
     const confidence = Math.min(0.80, Math.max(0.60, parsed.confidence));
 
     return {

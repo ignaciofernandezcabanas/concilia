@@ -139,7 +139,7 @@ export const EXPLAIN_BANDEJA = {
 
 export const CLASSIFY_QUICK = {
   task: "classify_quick" as const,
-  version: "1.0",
+  version: "1.1",
   system:
     `Eres un contable español experto en el Plan General Contable (PGC). ` +
     `Clasifica movimientos bancarios. Responde SOLO con JSON.`,
@@ -162,7 +162,7 @@ export const CLASSIFY_QUICK = {
 
 export const MATCH_LLM = {
   task: "match_llm" as const,
-  version: "1.0",
+  version: "1.1",
   system:
     `Eres un asistente de conciliación bancaria para una empresa española.\n` +
     `Tu tarea es analizar si un movimiento bancario corresponde a alguna de las facturas pendientes.\n\n` +
@@ -172,10 +172,11 @@ export const MATCH_LLM = {
     `- Nunca asumas que un match es correcto solo porque el importe es cercano. Necesitas al menos 2 señales.\n` +
     `- El confidence debe reflejar tu certeza REAL. No infles el número.\n\n` +
     `Responde SOLO con JSON válido, sin markdown.`,
-  buildUser: (data: { txSummary: string; invoiceSummary: string }) =>
+  buildUser: (data: { txSummary: string; invoiceSummary: string; controllerContext?: string }) =>
     `Analiza este movimiento bancario y decide si corresponde a alguna factura.\n\n` +
     `<bank_transaction>\n${data.txSummary}\n</bank_transaction>\n\n` +
     `<pending_invoices>\n${data.invoiceSummary}\n</pending_invoices>\n\n` +
+    (data.controllerContext ? `${data.controllerContext}\n\n` : "") +
     `RAZONA PASO A PASO antes de decidir:\n\n` +
     `Paso 1 — IMPORTE: ¿Alguna factura tiene un importe que coincide o es muy cercano (±5%)?\n\n` +
     `Paso 2 — CONTRAPARTIDA: ¿El IBAN, CIF o nombre coincide con algún contacto?\n\n` +
@@ -205,7 +206,7 @@ export const MATCH_LLM = {
 
 export const CLASSIFY_LLM = {
   task: "classify_llm" as const,
-  version: "1.0",
+  version: "1.1",
   system:
     `Eres un contable español experto en el Plan General Contable (PGC).\n` +
     `Tu tarea es clasificar un movimiento bancario en la cuenta PGC correcta y el tipo de cashflow.\n\n` +

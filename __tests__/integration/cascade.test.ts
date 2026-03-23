@@ -23,10 +23,18 @@ vi.mock("@/lib/ai/confidence-engine", async () => {
   };
 });
 
+// Mock context retriever
+vi.mock("@/lib/ai/context-retriever", () => ({
+  getRelevantContext: vi.fn().mockResolvedValue({ sameCounterpart: [], similarConcept: [], activePatterns: [], totalFound: 0 }),
+  formatContextForPrompt: vi.fn().mockReturnValue(""),
+}));
+
 // Mock prisma for ScopedPrisma
 const mockDb = {
   bankTransaction: { findMany: vi.fn() },
   account: { findFirst: vi.fn() },
+  controllerDecision: { findMany: vi.fn() },
+  learnedPattern: { findMany: vi.fn() },
 };
 
 import { classifyWithCascade } from "@/lib/ai/cascade";

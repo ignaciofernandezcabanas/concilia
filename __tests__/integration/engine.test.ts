@@ -40,6 +40,7 @@ vi.mock('@/lib/reconciliation/matchers/fuzzy-match', () => ({ findFuzzyMatch: mo
 vi.mock('@/lib/reconciliation/matchers/llm-match', () => ({ findLlmMatch: mockFindLlm }));
 vi.mock('@/lib/reconciliation/classifiers/rule-classifier', () => ({ classifyByRules: mockClassifyRules }));
 vi.mock('@/lib/reconciliation/classifiers/llm-classifier', () => ({ classifyByLlm: mockClassifyLlm }));
+vi.mock('@/lib/db-scoped', () => ({ getScopedDb: () => mockPrisma }));
 
 import { runReconciliation } from '@/lib/reconciliation/engine';
 

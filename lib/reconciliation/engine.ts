@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getScopedDb } from "@/lib/db-scoped";
 import type {
   BankTransaction,
   DetectedType,
@@ -500,7 +501,7 @@ async function processTransaction(
 
   // 2d. LLM match (only if no other match found)
   if (!matchOutcome) {
-    const llmResult = await findLlmMatch(tx, pendingInvoices, contacts);
+    const llmResult = await findLlmMatch(tx, pendingInvoices, contacts, getScopedDb(companyId));
     if (llmResult) {
       matchOutcome = {
         type: "EXACT_MATCH",

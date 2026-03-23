@@ -12,6 +12,7 @@
 import { classifyByRules } from "@/lib/reconciliation/classifiers/rule-classifier";
 import { callAIJson } from "@/lib/ai/model-router";
 import { CLASSIFY_QUICK, CLASSIFY_LLM } from "@/lib/ai/prompt-registry";
+import { getRelevantContext, formatContextForPrompt } from "@/lib/ai/context-retriever";
 import {
   calculateConfidence,
   runSystemChecks,
@@ -59,31 +60,27 @@ export async function classifyWithCascade(
   // ── Build summaries for LLM calls ──
   const txSummary = buildTxSummary(tx);
 
-  // Get historical classifications for context
-  const historicalTxs = await db.bankTransaction.findMany({
-    where: {
-      status: "CLASSIFIED",
-      classification: { isNot: null },
-    },
-    include: {
-      classification: {
-        include: { account: { select: { code: true, name: true } } },
-      },
-    },
-    orderBy: { valueDate: "desc" },
-    take: 10,
-  });
+  // Intelligent context retrieval
+  const context = await getRelevantContext(tx, db, 10);
+  const controllerContext = formatContextForPrompt(context);
 
-  const historySummary =
-    historicalTxs.length > 0
-      ? historicalTxs
-          .map(
-            (h) =>
-              `- "${h.concept ?? ""}" | ${h.amount.toFixed(2)} EUR | ` +
-              `${h.classification?.account.code ?? ""} (${h.classification?.account.name ?? ""})`
-          )
-          .join("\n")
-      : "No hay datos históricos.";
+  // Generic history as fallback (reduced to 5)
+  const genericHistory = await db.bankTransaction.findMany({
+    where: { status: "CLASSIFIED", classification: { isNot: null } },
+    include: { classification: { include: { account: { select: { code: true, name: true } } } } },
+    orderBy: { valueDate: "desc" },
+    take: 5,
+  });
+  const genericSummary = genericHistory
+    .map((h) =>
+      `- "${h.concept ?? ""}" | ${h.amount.toFixed(2)} EUR | ` +
+      `${h.classification?.account.code ?? ""} (${h.classification?.account.name ?? ""})`
+    )
+    .join("\n") || "No hay datos históricos.";
+
+  const historySummary = controllerContext
+    ? `${controllerContext}\n\n<generic_history>\nÚltimas clasificaciones:\n${genericSummary}\n</generic_history>`
+    : genericSummary;
 
   // ── Level 2: Haiku (quick, no CoT) ──
   const haikuResult = await callAIJson(
