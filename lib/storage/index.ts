@@ -126,6 +126,39 @@ function createGmailEmailProvider(accessToken: string): EmailProvider {
         body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
       });
     },
+    async sendMessage(params) {
+      // Build MIME message
+      const boundary = `boundary_${Date.now()}`;
+      const replyHeaders = params.replyToMessageId
+        ? `In-Reply-To: ${params.replyToMessageId}\r\nReferences: ${params.replyToMessageId}\r\n`
+        : "";
+      const raw = [
+        `To: ${params.to}`,
+        `Subject: ${params.subject}`,
+        `${replyHeaders}MIME-Version: 1.0`,
+        `Content-Type: multipart/alternative; boundary="${boundary}"`,
+        "",
+        `--${boundary}`,
+        "Content-Type: text/plain; charset=utf-8",
+        "",
+        params.plainBody,
+        `--${boundary}`,
+        "Content-Type: text/html; charset=utf-8",
+        "",
+        params.htmlBody,
+        `--${boundary}--`,
+      ].join("\r\n");
+      const encoded = Buffer.from(raw).toString("base64url");
+      const body: Record<string, string> = { raw: encoded };
+      if (params.threadId) body.threadId = params.threadId;
+      const res = await fetch(`${BASE}/messages/send`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      return { messageId: data.id ?? "", threadId: data.threadId ?? "" };
+    },
   };
 }
 
@@ -175,6 +208,39 @@ function createOutlookEmailProvider(accessToken: string): EmailProvider {
         method: "PATCH", headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ isRead: true }),
       });
+    },
+    async sendMessage(params) {
+      if (params.replyToMessageId) {
+        // Reply to existing message
+        const res = await fetch(`${BASE}/messages/${params.replyToMessageId}/reply`, {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: { toRecipients: [{ emailAddress: { address: params.to } }] },
+            comment: params.htmlBody,
+          }),
+        });
+        const data = await res.json();
+        return { messageId: data.id ?? "", threadId: data.conversationId ?? "" };
+      }
+      // New message
+      const res = await fetch(`${BASE}/sendMail`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: {
+            subject: params.subject,
+            body: { contentType: "HTML", content: params.htmlBody },
+            toRecipients: [{ emailAddress: { address: params.to } }],
+          },
+        }),
+      });
+      // sendMail returns 202 with no body, get sent message from sentItems
+      if (res.status === 202) {
+        return { messageId: `outlook_${Date.now()}`, threadId: "" };
+      }
+      const data = await res.json();
+      return { messageId: data.id ?? "", threadId: data.conversationId ?? "" };
     },
   };
 }

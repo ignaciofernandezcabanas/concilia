@@ -25,6 +25,7 @@ import {
   Bell,
   Settings,
   LogOut,
+  Mail,
   type LucideIcon,
 } from "lucide-react";
 
@@ -46,6 +47,7 @@ const sections: NavSection[] = [
     items: [
       { label: "Resumen", icon: LayoutDashboard, href: "/" },
       { label: "Bandeja", icon: GitCompare, href: "/conciliacion" },
+      { label: "Seguimientos", icon: Mail, href: "/seguimientos" },
       { label: "Movimientos", icon: Landmark, href: "/movimientos" },
       { label: "Facturas", icon: FileText, href: "/facturas" },
     ],

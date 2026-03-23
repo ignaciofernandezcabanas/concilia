@@ -140,6 +140,7 @@ model Company {
   journalEntries        JournalEntry[]
   fixedAssets            FixedAsset[]
   budgets                Budget[]
+  inquiries              Inquiry[]
 
   // === Consolidation fields ===
   legalName              String?
@@ -481,15 +482,23 @@ model Contact {
   name            String
   cif             String?
   iban            String?
+  email           String?
   type            ContactType
   avgPaymentDays  Float?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
+  // Inquiry-related fields
+  accountingEmail    String?
+  accountingContact  String?
+  preferredLanguage  String?     @default("es")
+  paymentTermsDays   Int?
+
   companyId       String
   company         Company     @relation(fields: [companyId], references: [id])
 
   invoices        Invoice[]
+  inquiries       Inquiry[]
 
   @@unique([holdedId, companyId])
 }
@@ -544,6 +553,7 @@ model Invoice {
   lines             InvoiceLine[]
   reconciliations   Reconciliation[]
   payments          Payment[]
+  inquiries         Inquiry[]
 
   @@unique([holdedId, companyId])
   @@index([companyId, status])
@@ -643,6 +653,7 @@ model BankTransaction {
   company         Company               @relation(fields: [companyId], references: [id])
 
   reconciliations Reconciliation[]
+  inquiries       Inquiry[]
   duplicateGroupId String?
   duplicateGroup   DuplicateGroup?      @relation(fields: [duplicateGroupId], references: [id])
 
@@ -750,6 +761,8 @@ model Reconciliation {
   updatedAt           DateTime             @updatedAt
 
   @@index([companyId, status])
+  inquiries       Inquiry[]
+
   @@index([bankTransactionId])
   @@index([invoiceId])
 }
@@ -957,6 +970,10 @@ enum NotificationType {
   FISCAL_DEADLINE
   ENGINE_COMPLETE
   AUTO_EXECUTE_ERROR
+  INQUIRY_DRAFT_READY
+  INQUIRY_RESPONSE_RECEIVED
+  INQUIRY_FOLLOWUP_READY
+  INQUIRY_ESCALATED
 }
 
 // ============================================================
@@ -1158,4 +1175,104 @@ model AuditLog {
 
   @@index([entityType, entityId])
   @@index([userId, createdAt])
+}
+
+// ============================================================
+// INQUIRIES (Email follow-up agent)
+// ============================================================
+
+model Inquiry {
+  id                   String          @id @default(cuid())
+
+  // Trigger
+  triggerType           InquiryTrigger
+  bankTransactionId     String?
+  bankTransaction       BankTransaction? @relation(fields: [bankTransactionId], references: [id])
+  reconciliationId      String?
+  reconciliation        Reconciliation?  @relation(fields: [reconciliationId], references: [id])
+  invoiceId             String?
+  invoice               Invoice?         @relation(fields: [invoiceId], references: [id])
+
+  // Recipient
+  contactId             String
+  contact               Contact          @relation(fields: [contactId], references: [id])
+  recipientEmail        String
+  recipientName         String
+
+  // Content
+  subject               String
+  body                  String
+  bodyPlain             String
+  language              String          @default("es")
+  tone                  InquiryTone     @default(PROFESSIONAL)
+
+  // Status
+  status                InquiryStatus   @default(DRAFT)
+
+  // Tracking
+  sentAt                DateTime?
+  sentMessageId         String?
+  sentThreadId          String?
+
+  // Response
+  responseReceivedAt    DateTime?
+  responseMessageId     String?
+  responseSummary       String?
+  responseResolved      Boolean?
+  attachmentsReceived   Int             @default(0)
+
+  // Follow-up chain
+  parentInquiryId       String?
+  parentInquiry         Inquiry?        @relation("FollowUpChain", fields: [parentInquiryId], references: [id])
+  followUps             Inquiry[]       @relation("FollowUpChain")
+  followUpNumber        Int             @default(0)
+  maxFollowUps          Int             @default(3)
+  nextFollowUpDate      DateTime?
+  followUpIntervalDays  Int             @default(3)
+
+  // Approval
+  approvedById          String?
+  approvedAt            DateTime?
+  rejectedAt            DateTime?
+  rejectionReason       String?
+  editedByController    Boolean         @default(false)
+
+  // Metadata
+  companyId             String
+  company               Company         @relation(fields: [companyId], references: [id])
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  @@index([companyId, status])
+  @@index([companyId, contactId])
+  @@index([status, nextFollowUpDate])
+  @@index([sentThreadId])
+}
+
+enum InquiryTrigger {
+  MISSING_INVOICE
+  MISSING_DOCUMENTATION
+  EXPENSE_CLARIFICATION
+  IC_CONFIRMATION
+}
+
+enum InquiryStatus {
+  DRAFT
+  APPROVED
+  SENDING
+  SENT
+  RESPONSE_RECEIVED
+  RESOLVED
+  FOLLOW_UP_NEEDED
+  FOLLOW_UP_DRAFT
+  ESCALATED
+  CANCELLED
+  EXPIRED
+}
+
+enum InquiryTone {
+  PROFESSIONAL
+  FRIENDLY
+  FORMAL
+  URGENT
 }

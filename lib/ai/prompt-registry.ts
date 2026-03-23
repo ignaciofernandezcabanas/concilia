@@ -503,3 +503,77 @@ export const VARIANCE_CONSOLIDATED = {
     `</variance_data>\n\n` +
     `Descompón la variación consolidada.`,
 };
+
+// ════════════════════════════════════════════════════════════
+// DRAFT INQUIRY (Sonnet) — email drafting for documentation requests
+// ════════════════════════════════════════════════════════════
+
+export const DRAFT_INQUIRY = {
+  task: "draft_inquiry" as const,
+  version: "1.0",
+  system:
+    `Eres el asistente del controller financiero. Redactas emails profesionales solicitando documentación financiera.\n\n` +
+    `REGLAS:\n` +
+    `1. Sé conciso y claro. El destinatario no es contable — usa lenguaje simple.\n` +
+    `2. Indica EXACTAMENTE qué documento necesitas (factura nº, fecha, importe, concepto).\n` +
+    `3. Da un plazo razonable (5 días laborables para primera solicitud).\n` +
+    `4. En follow-ups, haz referencia al email anterior y sé más directo.\n` +
+    `5. NUNCA amenaces. Sé firme pero profesional.\n` +
+    `6. SIEMPRE incluye los datos concretos para que el destinatario localice el documento.\n` +
+    `7. Firma como el departamento de administración.\n` +
+    `8. Si es follow-up 2+, menciona que es urgente por cierre de periodo.\n\n` +
+    `Responde SOLO con JSON: { subject, htmlBody, plainBody }`,
+  buildUser: (data: {
+    trigger: string; companyName: string; contactName: string; accountingContact?: string;
+    amount?: number; date?: string; concept?: string; invoiceNumber?: string;
+    followUpNumber: number; previousSubject?: string; tone: string;
+  }) => {
+    let context = `<inquiry_context>\n`;
+    context += `Empresa: ${data.companyName}\n`;
+    context += `Destinatario: ${data.contactName}${data.accountingContact ? ` (att: ${data.accountingContact})` : ""}\n`;
+    context += `Tipo de solicitud: ${data.trigger}\n`;
+    context += `Tono: ${data.tone}\n`;
+    context += `Follow-up nº: ${data.followUpNumber} (0 = primera solicitud)\n`;
+    if (data.amount) context += `Importe: ${data.amount.toFixed(2)} EUR\n`;
+    if (data.date) context += `Fecha: ${data.date}\n`;
+    if (data.concept) context += `Concepto: ${data.concept}\n`;
+    if (data.invoiceNumber) context += `Factura: ${data.invoiceNumber}\n`;
+    if (data.previousSubject) context += `Asunto del email anterior: ${data.previousSubject}\n`;
+    context += `</inquiry_context>\n\n`;
+    context += `Redacta el email. JSON: { subject (string), htmlBody (HTML string), plainBody (text string) }`;
+    return context;
+  },
+  schema: z.object({
+    subject: z.string(),
+    htmlBody: z.string(),
+    plainBody: z.string(),
+  }),
+};
+
+// ════════════════════════════════════════════════════════════
+// ANALYZE INQUIRY RESPONSE (Haiku) — parse response to an inquiry
+// ════════════════════════════════════════════════════════════
+
+export const ANALYZE_INQUIRY_RESPONSE = {
+  task: "analyze_inquiry_response" as const,
+  version: "1.0",
+  system:
+    `Analiza la respuesta a una solicitud de documentación financiera.\n` +
+    `Determina si la respuesta resuelve la consulta original.\n` +
+    `Responde SOLO con JSON.`,
+  buildUser: (data: { originalSubject: string; originalTrigger: string; responseText: string; hasAttachments: boolean; attachmentNames: string[] }) =>
+    `<inquiry_response>\n` +
+    `Solicitud original: ${data.originalSubject}\n` +
+    `Tipo: ${data.originalTrigger}\n` +
+    `Texto de la respuesta: ${data.responseText}\n` +
+    `Adjuntos: ${data.hasAttachments ? data.attachmentNames.join(", ") : "Ninguno"}\n` +
+    `</inquiry_response>\n\n` +
+    `JSON: { resolved (boolean), summary (string, 1-2 frases), hasRelevantAttachment (boolean), needsFollowUp (boolean), followUpReason (string|null) }`,
+  schema: z.object({
+    resolved: z.boolean(),
+    summary: z.string(),
+    hasRelevantAttachment: z.boolean(),
+    needsFollowUp: z.boolean(),
+    followUpReason: z.string().nullable(),
+  }),
+};

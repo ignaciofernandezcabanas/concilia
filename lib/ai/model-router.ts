@@ -27,11 +27,17 @@ export type AITask =
   | "detect_periodification"
   | "explain_anomaly"
   | "treasury_advice"
+  | "draft_inquiry"
+  | "analyze_inquiry_response"
+  | "ic_elimination_explain"
+  | "explain_group_anomaly"
+  | "variance_consolidated"
   // Opus — síntesis compleja
   | "daily_briefing"
   | "weekly_briefing"
   | "close_proposal"
-  | "risk_analysis";
+  | "risk_analysis"
+  | "consolidation_review";
 
 interface TaskConfig {
   model: string;
@@ -54,11 +60,17 @@ const TASK_CONFIG: Record<AITask, TaskConfig> = {
   detect_periodification: { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.1 },
   explain_anomaly:      { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.2 },
   treasury_advice:      { model: "claude-sonnet-4-20250514", maxTokens: 600, temperature: 0.2 },
+  draft_inquiry:        { model: "claude-sonnet-4-20250514", maxTokens: 1000, temperature: 0.3 },
+  analyze_inquiry_response: { model: "claude-haiku-4-5-20251001", maxTokens: 300, temperature: 0.0 },
+  ic_elimination_explain: { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.2 },
+  explain_group_anomaly:  { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.2 },
+  variance_consolidated:  { model: "claude-sonnet-4-20250514", maxTokens: 600, temperature: 0.2 },
   // Opus
   daily_briefing:       { model: "claude-opus-4-6", maxTokens: 1500, temperature: 0.3 },
   weekly_briefing:      { model: "claude-opus-4-6", maxTokens: 2000, temperature: 0.3 },
   close_proposal:       { model: "claude-opus-4-6", maxTokens: 1200, temperature: 0.2 },
   risk_analysis:        { model: "claude-opus-4-6", maxTokens: 800, temperature: 0.2 },
+  consolidation_review: { model: "claude-opus-4-6", maxTokens: 1200, temperature: 0.2 },
 };
 
 // ── In-memory call log ──

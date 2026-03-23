@@ -78,6 +78,20 @@ export interface EmailAttachment {
   size: number;
 }
 
+export interface SendMessageParams {
+  to: string;
+  subject: string;
+  htmlBody: string;
+  plainBody: string;
+  replyToMessageId?: string;
+  threadId?: string;
+}
+
+export interface SendMessageResult {
+  messageId: string;
+  threadId: string;
+}
+
 export interface EmailProvider {
   readonly name: "gmail" | "outlook";
 
@@ -92,4 +106,7 @@ export interface EmailProvider {
 
   /** Mark a message as read */
   markAsRead(messageId: string): Promise<void>;
+
+  /** Send an email (requires send scope) */
+  sendMessage(params: SendMessageParams): Promise<SendMessageResult>;
 }

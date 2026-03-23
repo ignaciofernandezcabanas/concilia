@@ -20,7 +20,7 @@ const SCOPED_MODELS = new Set([
   "integration", "syncLog", "archiveLog", "notification", "auditLog",
   "accountingPeriod", "journalEntry", "fixedAsset",
   "budget", "confidenceAdjustment", "controllerDecision", "learnedPattern",
-  "thresholdCalibration",
+  "thresholdCalibration", "inquiry",
   // NOT scoped (no companyId): InvoiceLine, BudgetLine, JournalEntryLine,
   //   BankTransactionClassification, DuplicateGroup, Payment, CompanyScope
   // NOT scoped (organizationId instead): IntercompanyLink, AgentRun
