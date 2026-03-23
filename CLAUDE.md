@@ -1,75 +1,80 @@
 # Concilia — Technical Reference
 
-Concilia es una plataforma de conciliación bancaria automatizada para controllers financieros de PYMEs españolas. Conecta un ERP (Holded) con movimientos bancarios, concilia transacciones automáticamente usando matching determinístico + LLM, y genera reportes financieros (Balance, PyG, EFE) adaptados al Plan General Contable español (PGC 2007).
+Concilia es una plataforma de conciliación bancaria automatizada con agente AI para controllers financieros de PYMEs españolas. Conecta un ERP (Holded) con movimientos bancarios, concilia transacciones automáticamente usando matching determinístico + LLM, y genera reportes financieros adaptados al Plan General Contable español (PGC 2007).
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 (App Router), TypeScript
+- **Framework**: Next.js 14 (App Router), TypeScript strict
 - **ORM**: Prisma 7 con `@prisma/adapter-pg`
 - **DB**: Supabase (PostgreSQL managed)
-- **Auth**: Supabase Auth (email + password)
-- **LLM**: Anthropic API (`claude-sonnet-4`) — clasificación, parsing de conceptos, NL rules
-- **Fuzzy matching**: fuse.js
+- **Auth**: Supabase Auth (email + password + OAuth Google/Microsoft)
+- **AI**: Anthropic API — Haiku (NLP simple), Sonnet (razonamiento financiero), Opus (síntesis compleja)
+- **Fuzzy matching**: Fuse.js
 - **Validation**: Zod
 - **Styling**: Tailwind CSS
 - **Cron**: Upstash QStash (o CRON_SECRET para dev)
+- **Storage**: Google Drive / OneDrive (abstracción unificada en `lib/storage/`)
+- **Encryption**: AES-256-GCM para credenciales (`lib/crypto.ts`)
 
 ## Estructura de Carpetas
 
 ```
 app/
-  (app)/              # Pages behind auth (AppShell layout)
-    page.tsx          # Dashboard
-    conciliacion/     # Conciliation + reconciliation report
-    facturas/         # Invoices (import PDF, view, delete)
-    movimientos/      # Bank transactions (import CSV, delete)
-    balance/          # Balance sheet (PGC)
-    pyg/              # P&L (PGC)
-    cashflow/         # Cash flow (treasury + EFE)
-    notificaciones/
-    ajustes/          # Settings: users, company, integrations, learning
-  login/              # Login page (outside AppShell)
-  api/
-    invoices/         # CRUD, import (local + Drive), PDF serving
-    transactions/     # CRUD, CSV import, batch delete
-    reconciliation/   # Run engine, resolve items
-    reports/          # PyG, cashflow, reconciliation report, balance
-    sync/             # Holded sync
-    integrations/     # Holded, Drive, Gmail config
-    settings/         # Company, users, rules, learning, thresholds
-    cron/             # daily-sync, overdue-check, calibrate-thresholds
-    search/           # Global search
+  (app)/                    # Pages behind auth (AppShell layout)
+    page.tsx                # Dashboard (con briefing diario)
+    conciliacion/           # Conciliation + reconciliation report
+    facturas/               # Invoices (import PDF, view, delete)
+    movimientos/            # Bank transactions (import CSV, delete)
+    balance/                # Balance sheet (PGC)
+    pyg/                    # P&L (PGC)
+    cashflow/               # Cash flow (treasury + EFE)
+    notificaciones/         # Notifications (13 tipos)
+    reglas/                 # Matching rules + NL creation
+    ajustes/                # Settings: users, company, integrations
+      automatizacion/       # AI agent config + learning metrics
+    onboarding/             # Onboarding v3 (individual vs grupo)
+  login/                    # Login page (email + OAuth)
+  auth/callback/            # OAuth callback handler
+  api/                      # 59 endpoints (ver tabla abajo)
 
 lib/
+  ai/                       # AI orchestration
+    model-router.ts         # callAI(), callAIJson(), callAIWithDocument()
+    prompt-registry.ts      # Todos los prompts centralizados con XML tags
+    confidence-engine.ts    # 16 categorías, scoring puro (sin side effects)
+    confidence-calibrator.ts # Ajustes persistidos en DB (ConfidenceAdjustment)
+    cascade.ts              # Classification cascade: rules → Haiku → Sonnet → unresolved
+    context-retriever.ts    # Fetch decisiones previas relevantes por IBAN/concepto/patrón
+    daily-agent.ts          # Orquestador diario: 11 steps por organización
+    anomaly-detector.ts     # Detección de anomalías por z-score (>2σ)
+    briefing.ts             # Briefing diario (Opus)
+    close-proposal.ts       # Propuesta de cierre mensual (Opus)
+    rate-limiter.ts         # Max 5 concurrent LLM calls + circuit breaker
+    client.ts               # Anthropic SDK singleton
   reconciliation/
-    engine.ts         # Main reconciliation pipeline (4 phases)
-    resolver.ts       # Unified resolver ($transaction, 11 actions)
-    invoice-payments.ts # Unified payment status updater
-    decision-tracker.ts # Feedback loop: tracks controller decisions
-    constants.ts
-    detectors/        # Internal, duplicate, return, financial
-    matchers/         # Exact, grouped, fuzzy, LLM
-    classifiers/      # Rule-based, LLM-based
-    prioritizer.ts
-  reports/            # PyG, cashflow, balance, reconciliation report generators
-  holded/             # Holded API client + sync modules
-  bank/               # GoCardless client, sync, concept parser
-  drive/              # Google Drive client, quarterly archiver
-  gmail/              # Gmail client (read-only, invoice detection)
-  invoices/           # PDF extractor (Claude), Drive uploader
-  ai/                 # Anthropic client singleton, rate limiter, prompts
-  auth/               # withAuth middleware, permissions, cron-guard
-  utils/              # Validation (Zod), pagination, formatting, audit
-  types/              # Shared API response types
-  pgc-structure.ts    # Full PGC chart (PyG, EFE, Balance structures)
-  format.ts           # Client-side formatting (amounts, dates)
-  api-client.ts       # Browser-side fetch wrapper with Supabase JWT
-  db.ts               # Prisma client singleton
-  supabase.ts         # Supabase server client
+    engine.ts               # Pipeline de conciliación (4 fases), recibe db: ScopedPrisma
+    resolver.ts             # Resolver unificado (12 acciones) en $transaction
+    invoice-payments.ts     # Actualizador de status de pago
+    decision-tracker.ts     # Feedback loop: registra decisiones del controller
+    detectors/              # Internal, duplicate, return, financial, intercompany
+    matchers/               # Exact, grouped, fuzzy, LLM
+    classifiers/            # Rule-based, LLM-based
+    prioritizer.ts          # URGENT / DECISION / CONFIRMATION / ROUTINE
+    explainer.ts            # Explicaciones para la bandeja (Haiku)
+  reports/                  # Generadores (todos reciben db: ScopedPrisma)
+  accounting/               # depreciation.ts
+  holded/                   # Holded API client + sync modules
+  bank/                     # Concept parser (Haiku)
+  storage/                  # Google Drive + OneDrive abstraction
+  auth/                     # withAuth, permissions, cron-guard, rate-limit
+  utils/                    # audit, errorResponse, period-guard, pagination, validation
+  db.ts                     # Prisma client singleton
+  db-scoped.ts              # getScopedDb(companyId), getGroupDb(companyIds)
 
-components/           # React components (Sidebar, TopBar, PgcTable, etc.)
-hooks/                # useApi.ts (typed data-fetching hooks)
-prisma/               # schema.prisma
+components/                 # React: Sidebar, ContextSwitcher, ReconciliationPanel, PgcTable...
+hooks/useApi.ts             # useFetch, useInvoices, useTransactions...
+prisma/schema.prisma        # 34 modelos, 33 enums
+__tests__/                  # 25 archivos, 308 tests
 ```
 
 ## Setup Local
@@ -77,22 +82,134 @@ prisma/               # schema.prisma
 ```bash
 cp .env.example .env   # Fill in Supabase, Anthropic keys
 npm install
-npx prisma db push     # Create tables (use port 5432 for Supabase)
-npx prisma db seed     # Load PGC accounts
+npx prisma db push
+npx prisma db seed     # PGC accounts + datos demo
 npm run dev
 ```
 
+## Convenciones y Patrones
+
+### Scoped DB (CRÍTICO)
+
+Todos los endpoints con `withAuth` usan `ctx.db` (ScopedPrisma), que auto-inyecta `companyId` en todas las queries.
+
+```typescript
+// ✅ CORRECTO
+export const GET = withAuth(async (req, ctx) => {
+  const db = ctx.db;
+  const invoices = await db.invoice.findMany({ where: { status: "PENDING" } });
+});
+
+// ❌ INCORRECTO — nunca importar prisma en endpoints
+import { prisma } from "@/lib/db"; // PROHIBIDO excepto GLOBAL-PRISMA
+```
+
+**SCOPED_MODELS** (22 modelos auto-filtrados por companyId):
+`company, user, account, ownBankAccount, contact, invoice, bankTransaction, reconciliation, matchingRule, categoryThreshold, integration, syncLog, archiveLog, notification, auditLog, accountingPeriod, journalEntry, fixedAsset, budget, confidenceAdjustment, controllerDecision, learnedPattern, thresholdCalibration`
+
+**NO scoped** (sin companyId): InvoiceLine, BudgetLine, JournalEntryLine, BankTransactionClassification, DuplicateGroup, Payment, CompanyScope.
+
+**NO scoped** (organizationId): IntercompanyLink, AgentRun.
+
+### Error Handling
+
+- Todos los POST/PUT/DELETE validan input con **Zod** (`schema.safeParse(body)`)
+- Todos los catch usan **errorResponse()** (`import { errorResponse } from "@/lib/utils/error-response"`)
+- Producción nunca expone `err.message`
+
+### AI Calls
+
+```typescript
+// ✅ Siempre via model-router
+import { callAI, callAIJson } from "@/lib/ai/model-router";
+const result = await callAIJson("classify_quick", PROMPT.system, PROMPT.buildUser(data), PROMPT.schema);
+
+// ❌ Nunca SDK directamente (solo en model-router.ts y client.ts)
+```
+
+### Prompts — XML Tags (seguridad)
+
+Datos financieros del usuario van SIEMPRE entre XML tags:
+```
+<bank_transaction>...</bank_transaction>
+<pending_invoices>...</pending_invoices>
+<company_data>...</company_data>
+<controller_decisions>...</controller_decisions>
+```
+
+### GLOBAL-PRISMA (11 excepciones)
+
+Archivos que usan `prisma` global con `// GLOBAL-PRISMA: <razón>`:
+- `lib/auth/middleware.ts` — user lookup before company scoping
+- `lib/reconciliation/resolver.ts` — $transaction requires raw Prisma
+- `lib/reconciliation/detectors/intercompany-detector.ts` — cross-company lookup
+- `lib/ai/daily-agent.ts` — orchestrator creates scoped dbs
+- `app/api/auth/context/route.ts` — no company context yet
+- `app/api/onboarding/route.ts`, `add-company/route.ts` — creates new Org/Company
+- `app/api/cron/*` (4 archivos), `app/api/sync/holded/route.ts` — cron
+
+## AI Architecture
+
+### Model Router (`lib/ai/model-router.ts`)
+
+| Modelo | Tareas | Max tokens |
+|--------|--------|-----------|
+| Haiku | parse_concept, extract_invoice_pdf, explain_bandeja, classify_quick | 150-300 |
+| Sonnet | match_llm, classify_llm, parse_rule_nl, draft_reminder, explain_anomaly, treasury_advice | 500-1200 |
+| Opus | daily_briefing, weekly_briefing, close_proposal, risk_analysis | 800-2000 |
+
+### Classification Cascade (`lib/ai/cascade.ts`)
+
+1. **Determinístico** (reglas) → gratis, instantáneo
+2. **Haiku** (classify_quick) → barato, sin CoT
+3. **Sonnet** (classify_llm) → caro, CoT 5 pasos
+4. **Unresolved** → bandeja
+
+Short-circuit: si un nivel resuelve, no se ejecutan los siguientes.
+
+### Confidence Engine (`lib/ai/confidence-engine.ts`)
+
+16 categorías. Score = `(base + historical) × systemChecks + materiality + persistedAdjustment`. Clamped 0-1.
+
+**NUNCA auto-ejecutan**: `periodification`, `manual_journal`.
+
+System checks para LLM outputs: `account_exists`, `group_coherent`, `amount_in_range`, `concept_similar`. Multiplicador: 0 fallos → 1.0, 1 → 0.85, 2 → 0.70, 3+ → 0.50.
+
+### Context Retriever (`lib/ai/context-retriever.ts`)
+
+Inyecta decisiones previas del controller en los prompts LLM:
+1. Mismo IBAN → ControllerDecision
+2. Concepto similar → Fuse.js threshold 0.5
+3. Patrones activos → LearnedPattern (ACTIVE_SUPERVISED/PROMOTED)
+
+### Feedback Loop (cerrado)
+
+```
+Controller action → trackControllerDecision → calibrateFromDecision
+→ ConfidenceAdjustment persisted → calculateConfidence reads it
+→ Afecta futuras decisiones de auto-ejecución
+```
+
+## Daily Agent (`lib/ai/daily-agent.ts`)
+
+11 steps por organización (cada uno en try/catch):
+
+**Per-company:** sync, engine, auto_entries (amortización), intercompany, provisions, reminders.
+
+**Group-level:** treasury (forecast + alertas), anomalies (z-score >2σ), fiscal (calendario español), close_proposal (días 1-3), briefing (Opus).
+
+**Rate limits:** max 1 run/org/día, 20 LLM calls/company, 20 notificaciones/run.
+
 ## Motor de Conciliación (4 fases)
 
-Cada movimiento bancario PENDING pasa por:
-
-1. **Detectors** — internal transfer, duplicate, return, financial operation
+1. **Detectors** — internal transfer, intercompany, duplicate, return, financial, credit note
 2. **Matchers** — exact → partial → grouped → learned patterns → fuzzy → LLM
-3. **Classifiers** — rule-based → LLM (for items without invoice match)
+3. **Classifiers** — rule-based → cascade (Haiku → Sonnet) → unresolved
 4. **Priority** — URGENT / DECISION / CONFIRMATION / ROUTINE
 
-Auto-approval: `confidence >= categoryThreshold AND amount <= materialityThreshold`
-Small differences: `|diff| <= materialityMinor AND confidence >= 0.70` → auto-adjust
+Auto-aprobación: `confidence >= categoryThreshold AND amount <= materialityThreshold`
+
+12 acciones del resolver: approve, reject, investigate, manual_match, classify, mark_internal, mark_intercompany, mark_duplicate, mark_legitimate, mark_return, ignore, split_financial.
 
 ## 18 Escenarios de Conciliación
 
@@ -113,36 +230,95 @@ Small differences: `|diff| <= materialityMinor AND confidence >= 0.70` → auto-
 17. Nota de crédito
 18. Factura sin match (ALWAYS bandeja)
 
-## Sistema de Reglas
+## Learning System
 
-- **Explícitas** (MatchingRule): created by controller, 100% confidence, always prevail. Origin: MANUAL, INLINE, PROMOTED.
-- **Implícitas** (LearnedPattern): inferred from decisions. Lifecycle: SUGGESTED → ACTIVE_SUPERVISED → PROMOTED/REJECTED.
-- **NL creation**: controller types rule in natural language → Claude parses → structured card → confirm.
-- **Feedback loop**: every resolve tracks context → learns patterns → calibrates thresholds monthly.
+- **Reglas explícitas** (MatchingRule): controller crea, 100% confianza. Origin: MANUAL, INLINE, PROMOTED.
+- **Patrones implícitos** (LearnedPattern): inferidos de decisiones. SUGGESTED → ACTIVE_SUPERVISED → PROMOTED/REJECTED.
+- **NL creation**: controller escribe en español → Sonnet parsea (CoT 7 pasos) → confirmar.
+- **Calibración**: ConfidenceAdjustment en DB. Error auto-execute → -0.10. Aprobado sin cambio → +0.01.
+
+## Multi-tenant
+
+```
+Organization → Company → User (con Membership + CompanyScope)
+```
+
+ContextSwitcher en sidebar. Vista consolidada (read-only) para OWNER/ADMIN. Detección intercompañía automática.
+
+## Contabilidad
+
+- **Asientos** (JournalEntry): DRAFT → POSTED → REVERSED. Balance validado.
+- **Activos fijos** (FixedAsset): depreciación lineal automática, 3 cuentas PGC.
+- **Presupuestos** (Budget): por cuenta y mes, DRAFT → APPROVED → CLOSED.
+- **Periodos** (AccountingPeriod): OPEN → CLOSED → LOCKED. Guard bloquea escrituras.
+
+## Seguridad
+
+- **Scoped DB**: 22 modelos auto-filtrados. Imposible acceder a datos de otra empresa.
+- **HTTP rate limiting**: read 100/min, write 30/min, auth 5/min, engine 3/min.
+- **LLM rate limiting**: max 5 concurrent, circuit breaker 3 errores → 60s.
+- **Prompt injection**: datos en XML tags + Zod schemas + system checks.
+- **AES-256-GCM**: credenciales encriptadas. Backward compatible.
+- **Security headers**: CSP, HSTS, X-Frame-Options, X-Content-Type-Options.
 
 ## Decisiones de Diseño
 
-- **Doble umbral**: materialityThreshold (major) prevents auto-approval of large amounts. materialityMinor auto-resolves tiny differences. Conservative by default.
-- **LLM como último recurso**: deterministic matchers → rules → LLM. Minimizes cost and latency.
-- **Per-category thresholds**: exact matches can have 75% threshold, new classifications 95%+.
-- **Circuit breaker**: 3 consecutive LLM errors → pause 60s → UNIDENTIFIED (goes to bandeja).
-- **Single resolver**: ALL resolve logic in `lib/reconciliation/resolver.ts` inside `$transaction`. Route handler is thin delegation only.
-- **Learning with logging**: no more `.catch(() => {})`. All learning operations use try/catch with console.warn.
+- **Scoped DB over manual filters**: `ctx.db` inyecta companyId automáticamente.
+- **LLM como último recurso**: deterministic → rules → Haiku → Sonnet.
+- **Doble umbral**: materialityThreshold + materialityMinor. Conservador.
+- **Single resolver**: TODA la lógica en `resolver.ts` dentro de `$transaction`.
+- **Feedback loop cerrado**: cada decisión calibra la confianza futura.
+- **GLOBAL-PRISMA documentado**: 11 excepciones comentadas.
+- **Cascade**: clasificar con lo más barato, escalar si necesario.
+- **AI nunca auto-aprueba**: periodificaciones, asientos manuales, cierre, intercompañía nueva.
 
-## Endpoints Principales
+## Endpoints (59 total)
 
+### Core
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | /api/invoices | List invoices (filtered, paginated) |
-| POST | /api/invoices/import | Import PDFs (Claude extracts data) |
-| GET | /api/transactions | List bank transactions |
-| POST | /api/transactions/import | Import CSV |
-| POST | /api/reconciliation/run | Run reconciliation engine |
-| POST | /api/reconciliation/[id]/resolve | Resolve item (11 actions) |
-| GET | /api/reports/pyg | P&L report (PGC) |
-| GET | /api/reports/cashflow | Cash flow (direct/indirect) |
-| GET | /api/reports/balance | Balance sheet |
-| GET | /api/reports/reconciliation-report | Monthly reconciliation |
-| POST | /api/settings/rules/parse | Parse NL rule → structured |
-| GET | /api/settings/learning | Learning stats + patterns + rules |
-| GET | /api/settings/thresholds | Per-category thresholds |
+| GET/POST | /api/invoices | CRUD facturas |
+| POST | /api/invoices/import | Importar PDFs |
+| GET/POST | /api/transactions | CRUD movimientos |
+| POST | /api/transactions/import | Importar CSV |
+| POST | /api/transactions/[id]/action | Acción sobre tx |
+| POST | /api/reconciliation/run | Motor de conciliación |
+| POST | /api/reconciliation/[id]/resolve | Resolver (12 acciones) |
+| POST | /api/reconciliation/batch-resolve | Resolver múltiples |
+
+### Reportes
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/reports/pyg | PyG |
+| GET | /api/reports/balance | Balance |
+| GET | /api/reports/cashflow | EFE / Tesorería |
+| GET | /api/reports/forecast | Previsión tesorería |
+| GET | /api/reports/aging | Antigüedad AR/AP |
+| GET | /api/reports/ledger | Libro Mayor |
+| GET | /api/reports/trial-balance | Sumas y Saldos |
+| GET | /api/reports/consolidated | Consolidado |
+| GET | /api/fiscal | IVA + Retenciones |
+
+### Contabilidad
+| Method | Path | Description |
+|--------|------|-------------|
+| GET/POST | /api/journal-entries | Asientos |
+| POST/DELETE | /api/journal-entries/[id] | Post/reverse/delete |
+| GET/POST | /api/fixed-assets | Activos fijos |
+| GET/POST/PUT | /api/budgets | Presupuestos |
+
+### AI Agent
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /api/cron/daily-agent | Agente diario (cron) |
+| GET | /api/agent-runs | Historial runs |
+| GET/PUT | /api/settings/automation | Config automatización |
+| GET | /api/settings/automation/learning | Métricas aprendizaje |
+
+### Settings
+| Method | Path | Description |
+|--------|------|-------------|
+| GET/POST/PUT | /api/settings/accounts | Cuentas PGC |
+| GET/PUT | /api/settings/periods | Periodos contables |
+| POST | /api/settings/rules/parse | NL rule → structured |
+| GET/PUT | /api/auth/context | Context switching |
