@@ -19,8 +19,11 @@ const SCOPED_MODELS = new Set([
   "bankTransaction", "reconciliation", "matchingRule", "categoryThreshold",
   "integration", "syncLog", "archiveLog", "notification", "auditLog",
   "accountingPeriod", "journalEntry", "fixedAsset",
-  // Note: InvoiceLine, Payment, BankTransactionClassification, DuplicateGroup
-  // don't have companyId directly — they're accessed via parent relations
+  "budget", "confidenceAdjustment", "controllerDecision", "learnedPattern",
+  "thresholdCalibration",
+  // NOT scoped (no companyId): InvoiceLine, BudgetLine, JournalEntryLine,
+  //   BankTransactionClassification, DuplicateGroup, Payment, CompanyScope
+  // NOT scoped (organizationId instead): IntercompanyLink, AgentRun
 ]);
 
 export type ScopedPrisma = typeof prisma;

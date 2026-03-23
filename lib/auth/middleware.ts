@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { prisma } from "@/lib/db"; // GLOBAL-PRISMA: user lookup before company scoping
 import { getScopedDb, type ScopedPrisma } from "@/lib/db-scoped";
 import { createServerClient } from "@/lib/supabase";
 import {
   hasPermission,
   type Permission,
 } from "@/lib/auth/permissions";
+import { checkRateLimit, type RateLimitTier } from "@/lib/auth/rate-limit";
 import type { User, Company, Role } from "@prisma/client";
 
 export interface AuthContext {
@@ -35,6 +36,17 @@ export function withAuth(
     routeCtx?: { params?: Record<string, string> }
   ): Promise<NextResponse> => {
     try {
+      // Rate limiting
+      const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+      const tier: RateLimitTier = req.method === "GET" ? "read" : "write";
+      const rateCheck = checkRateLimit(`${ip}:${tier}`, tier);
+      if (!rateCheck.allowed) {
+        return NextResponse.json(
+          { error: "Rate limit exceeded. Retry later." },
+          { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter ?? 60) } }
+        );
+      }
+
       // Extract Bearer token
       const authHeader = req.headers.get("authorization");
       if (!authHeader?.startsWith("Bearer ")) {

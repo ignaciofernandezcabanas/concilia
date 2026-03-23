@@ -132,7 +132,7 @@ export const POST = withAuth(
         // Step 4: Exact match — same amount, matching IBAN
         const exactMatch = findExactMatch(tx, unpaidInvoices);
         if (exactMatch) {
-          const confidence = calculateConfidence(tx, exactMatch, "exact");
+          const confidence = calculateMatchScore(tx, exactMatch, "exact");
           const shouldAutoApprove = confidence >= autoApproveThreshold;
 
           const reconciliation = await prisma.reconciliation.create({
@@ -191,7 +191,7 @@ export const POST = withAuth(
         if (diffMatch) {
           const diff =
             Math.abs(tx.amount) - diffMatch.invoice.totalAmount;
-          const confidence = calculateConfidence(
+          const confidence = calculateMatchScore(
             tx,
             diffMatch.invoice,
             "difference"
@@ -385,7 +385,7 @@ function findMatchingRule(
   return null;
 }
 
-function calculateConfidence(
+function calculateMatchScore(
   tx: { amount: number; counterpartIban: string | null; concept: string | null },
   inv: InvoiceWithContact,
   matchType: "exact" | "difference"
