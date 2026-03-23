@@ -72,7 +72,8 @@ lib/
   accounting/               # depreciation.ts
   holded/                   # Holded API client + sync modules
   bank/                     # Concept parser (Haiku)
-  storage/                  # Google Drive + OneDrive abstraction
+  invoices/                 # PDF extractor (Haiku), mailbox import, Drive uploader
+  storage/                  # Google Drive + OneDrive + Gmail + Outlook abstraction
   auth/                     # withAuth, permissions, cron-guard, rate-limit
   utils/                    # audit, errorResponse, period-guard, pagination, validation
   db.ts                     # Prisma client singleton
@@ -81,7 +82,7 @@ lib/
 components/                 # 16 React components: Sidebar, ContextSwitcher, ConfidenceBar, InlineChart...
 hooks/useApi.ts             # useFetch, useInvoices, useTransactions...
 prisma/schema.prisma        # 34 modelos, 33 enums
-__tests__/                  # 25 archivos, 308 tests
+__tests__/                  # 26 archivos, 316 tests
 ```
 
 ## Setup Local

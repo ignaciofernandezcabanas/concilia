@@ -44,6 +44,13 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 - **Presupuestos**: por cuenta PGC y mes, con lifecycle DRAFT → APPROVED → CLOSED
 - **Periodos contables**: OPEN → CLOSED → LOCKED con guard en operaciones
 
+### Data Entry
+- **Buzón de facturas**: conecta un email dedicado (facturas@empresa.es), importa PDFs adjuntos automáticamente con OCR (Haiku)
+- **Importación CSV**: movimientos bancarios con auto-detect de formato
+- **Importación PDF**: facturas individuales o masivas con extracción AI
+- **Storage scan**: escaneo de carpeta Drive/OneDrive para PDFs
+- **Deduplicación**: por holdedId (facturas) y externalId (movimientos)
+
 ### Sistema de aprendizaje
 - **Reglas explícitas** (MatchingRule): creadas por controller, 100% confianza
 - **Patrones implícitos** (LearnedPattern): inferidos de decisiones, lifecycle SUGGESTED → ACTIVE → PROMOTED
@@ -209,7 +216,7 @@ Ver [CLAUDE.md](CLAUDE.md) para detalles del motor de conciliación, 18 escenari
 - **59 endpoints** API
 - **19 páginas** frontend
 - **16 componentes** React
-- **308 tests** en 25 archivos
+- **316 tests** en 26 archivos
 - **16 categorías** de confianza
 - **12 acciones** de resolución
 - **11 steps** del agente diario

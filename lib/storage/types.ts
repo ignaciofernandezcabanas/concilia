@@ -89,4 +89,7 @@ export interface EmailProvider {
 
   /** Download an attachment */
   downloadAttachment(messageId: string, attachmentId: string): Promise<Buffer>;
+
+  /** Mark a message as read */
+  markAsRead(messageId: string): Promise<void>;
 }
