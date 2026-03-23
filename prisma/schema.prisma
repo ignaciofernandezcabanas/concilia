@@ -952,6 +952,25 @@ enum AgentRunStatus {
 }
 
 // ============================================================
+// CONFIDENCE ADJUSTMENTS (persistidos)
+// ============================================================
+
+model ConfidenceAdjustment {
+  id            String    @id @default(cuid())
+  category      String
+  patternKey    String
+  adjustment    Float     @default(0)
+  errors30d     Int       @default(0)
+  lastErrorAt   DateTime?
+  pausedUntil   DateTime?
+  companyId     String
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([category, patternKey, companyId])
+  @@index([companyId])
+}
+
+// ============================================================
 // DECISIONES DEL CONTROLLER (feedback loop)
 // ============================================================
 

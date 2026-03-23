@@ -75,6 +75,10 @@ export interface ConfidenceContext {
   // History
   isFirstTime?: boolean;
   historicalMatchCount?: number;
+  // Persisted calibration
+  patternKey?: string;
+  persistedAdjustment?: number;
+  categoryPaused?: boolean;
 }
 
 // ── Base scores per category ──
@@ -243,12 +247,18 @@ export function calculateConfidence(ctx: ConfidenceContext): ConfidenceResult {
     }
   }
 
+  // Persisted calibration adjustment
+  if (ctx.persistedAdjustment != null && ctx.persistedAdjustment !== 0) {
+    historical += ctx.persistedAdjustment;
+    reasons.push(`${ctx.persistedAdjustment > 0 ? "+" : ""}${ctx.persistedAdjustment.toFixed(2)}: calibración persistida`);
+  }
+
   // Final score
   const raw = (base + historical) * systemChecks + materiality;
   const final = Math.max(0, Math.min(1, Math.round(raw * 100) / 100));
 
-  // Auto-execute decision
-  const autoExecute = !NEVER_AUTO.has(category) && final >= threshold;
+  // Auto-execute decision — also blocked if category is paused
+  const autoExecute = !NEVER_AUTO.has(category) && !ctx.categoryPaused && final >= threshold;
 
   // Build reasoning
   const reasoningParts = [`${category}: base=${base.toFixed(2)}`];
