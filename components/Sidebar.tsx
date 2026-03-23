@@ -5,43 +5,104 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { useCompany } from "@/hooks/useApi";
 import ContextSwitcher from "@/components/ContextSwitcher";
+import { useFetch } from "@/hooks/useApi";
 import {
   LayoutDashboard,
   GitCompare,
   FileText,
   Landmark,
+  BookOpen,
+  List,
+  Package,
   BarChart3,
   TrendingUp,
   Scale,
-
+  Wallet,
+  Clock,
+  ArrowLeftRight,
+  Layers,
   ListFilter,
   Bell,
   Settings,
   LogOut,
+  type LucideIcon,
 } from "lucide-react";
 
-const mainNav = [
-  { label: "Resumen", icon: LayoutDashboard, href: "/" },
-  { label: "Conciliación", icon: GitCompare, href: "/conciliacion" },
-  { label: "Facturas", icon: FileText, href: "/facturas" },
-  { label: "Movimientos", icon: Landmark, href: "/movimientos" },
-  { label: "Balance", icon: Scale, href: "/balance" },
-  { label: "PyG", icon: BarChart3, href: "/pyg" },
-  { label: "Cashflow", icon: TrendingUp, href: "/cashflow" },
+interface NavItem {
+  label: string;
+  icon: LucideIcon;
+  href: string;
+}
+
+interface NavSection {
+  title: string;
+  items: NavItem[];
+  groupOnly?: boolean;
+}
+
+const sections: NavSection[] = [
+  {
+    title: "DIARIO",
+    items: [
+      { label: "Resumen", icon: LayoutDashboard, href: "/" },
+      { label: "Bandeja", icon: GitCompare, href: "/conciliacion" },
+      { label: "Movimientos", icon: Landmark, href: "/movimientos" },
+      { label: "Facturas", icon: FileText, href: "/facturas" },
+    ],
+  },
+  {
+    title: "CONTABILIDAD",
+    items: [
+      { label: "Asientos", icon: BookOpen, href: "/asientos" },
+      { label: "Plan de cuentas", icon: List, href: "/plan-cuentas" },
+      { label: "Activos", icon: Package, href: "/activos" },
+    ],
+  },
+  {
+    title: "REPORTING",
+    items: [
+      { label: "PyG", icon: BarChart3, href: "/pyg" },
+      { label: "Balance", icon: Scale, href: "/balance" },
+      { label: "Cashflow", icon: TrendingUp, href: "/cashflow" },
+      { label: "Tesorería", icon: Wallet, href: "/tesoreria" },
+      { label: "Cuentas a cobrar", icon: Clock, href: "/cuentas-cobrar" },
+    ],
+  },
+  {
+    title: "GRUPO",
+    groupOnly: true,
+    items: [
+      { label: "Intercompañía", icon: ArrowLeftRight, href: "/intercompania" },
+      { label: "Consolidado", icon: Layers, href: "/consolidado" },
+    ],
+  },
+  {
+    title: "SISTEMA",
+    items: [
+      { label: "Reglas", icon: ListFilter, href: "/reglas" },
+      { label: "Notificaciones", icon: Bell, href: "/notificaciones" },
+      { label: "Ajustes", icon: Settings, href: "/ajustes" },
+    ],
+  },
 ];
 
-const secondaryNav = [
-  { label: "Reglas", icon: ListFilter, href: "/reglas" },
-  { label: "Notificaciones", icon: Bell, href: "/notificaciones" },
-  { label: "Ajustes", icon: Settings, href: "/ajustes" },
-];
+interface ContextResponse {
+  memberships: Array<{ companies: Array<{ id: string }> }>;
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
   const { data: companyData } = useCompany();
+  const { data: ctxData } = useFetch<ContextResponse>("/api/auth/context");
 
   const company = companyData?.company;
+
+  // Detect multi-company org for GRUPO section
+  const totalCompanies = ctxData?.memberships?.reduce(
+    (sum, m) => sum + m.companies.length, 0
+  ) ?? 0;
+  const isGroup = totalCompanies > 1;
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -53,56 +114,47 @@ export default function Sidebar() {
     : "?";
 
   return (
-    <aside className="w-[220px] min-w-[220px] h-screen bg-white border-r border-subtle flex flex-col pt-5 sticky top-0">
+    <aside className="w-[220px] min-w-[220px] h-screen bg-white border-r border-subtle flex flex-col pt-5 sticky top-0 overflow-y-auto">
       <div className="flex items-center gap-2 h-10 px-4 mb-2">
         <span className="text-lg font-bold text-text-primary">Concilia</span>
       </div>
 
       <ContextSwitcher />
 
-      <nav className="flex flex-col gap-0.5 px-2.5 pt-1">
-        {mainNav.map((item) => {
-          const active = isActive(item.href);
+      <div className="flex flex-col gap-0.5 flex-1">
+        {sections.map((section) => {
+          if (section.groupOnly && !isGroup) return null;
+
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-2.5 h-9 px-3 rounded-md text-[13px] font-medium transition-colors ${
-                active
-                  ? "bg-accent-light text-accent font-semibold"
-                  : "text-text-secondary hover:bg-hover"
-              }`}
-            >
-              <item.icon size={18} />
-              {item.label}
-            </Link>
+            <div key={section.title}>
+              <div className="px-5 pt-4 pb-1">
+                <span className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">
+                  {section.title}
+                </span>
+              </div>
+              <nav className="flex flex-col gap-0.5 px-2.5">
+                {section.items.map((item) => {
+                  const active = isActive(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`flex items-center gap-2.5 h-8 px-3 rounded-md text-[13px] font-medium transition-colors ${
+                        active
+                          ? "bg-accent-light text-accent font-semibold"
+                          : "text-text-secondary hover:bg-hover"
+                      }`}
+                    >
+                      <item.icon size={16} />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
           );
         })}
-      </nav>
-
-      <div className="h-px bg-subtle mx-0 my-0" />
-
-      <nav className="flex flex-col gap-0.5 px-2.5 py-2">
-        {secondaryNav.map((item) => {
-          const active = isActive(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-2.5 h-9 px-3 rounded-md text-[13px] font-medium transition-colors ${
-                active
-                  ? "bg-accent-light text-accent font-semibold"
-                  : "text-text-secondary hover:bg-hover"
-              }`}
-            >
-              <item.icon size={18} />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="flex-1" />
+      </div>
 
       <div className="border-t border-subtle px-4 py-3 flex flex-col gap-1.5">
         <div className="flex items-center gap-2.5">
