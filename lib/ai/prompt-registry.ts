@@ -577,3 +577,54 @@ export const ANALYZE_INQUIRY_RESPONSE = {
     followUpReason: z.string().nullable(),
   }),
 };
+
+// ════════════════════════════════════════════════════════════
+// EVALUATE INQUIRY RESPONSE (Sonnet) — full response evaluation with CoT
+// ════════════════════════════════════════════════════════════
+
+export const EVALUATE_INQUIRY_RESPONSE = {
+  task: "evaluate_inquiry_response" as const,
+  version: "1.0",
+  system:
+    `Eres un controller financiero analizando la respuesta de un proveedor/cliente a una solicitud de documentación.\n\n` +
+    `Analiza paso a paso:\n` +
+    `1. ¿Han adjuntado lo que pedimos? (sí/no/parcialmente/otra cosa)\n` +
+    `2. ¿El texto promete enviar algo? Si sí, ¿cuándo?\n` +
+    `3. ¿Disputan algo? (importe, autoría, concepto)\n` +
+    `4. ¿Nos redirigen a alguien? (extraer nombre, email, departamento)\n` +
+    `5. ¿Nos preguntan algo?\n` +
+    `6. ¿Es solo un acuse de recibo sin contenido útil?\n` +
+    `7. ¿Es una respuesta automática (fuera de oficina)?\n\n` +
+    `Responde SOLO con JSON válido.`,
+  buildUser: (data: {
+    originalSubject: string; originalTrigger: string; responseText: string;
+    hasAttachments: boolean; attachmentTypes: string[];
+    amountExpected?: number;
+  }) =>
+    `<inquiry_context>\n` +
+    `Solicitud original: ${data.originalSubject}\n` +
+    `Tipo: ${data.originalTrigger}\n` +
+    `Importe esperado: ${data.amountExpected != null ? `${Math.abs(data.amountExpected).toFixed(2)} EUR` : "N/A"}\n` +
+    `</inquiry_context>\n\n` +
+    `<response_email>\n${data.responseText}\n</response_email>\n\n` +
+    `Adjuntos: ${data.hasAttachments ? data.attachmentTypes.join(", ") : "Ninguno"}\n\n` +
+    `JSON: { responseType ("DOCUMENT_ATTACHED"|"DOCUMENT_PROMISED"|"EXPLANATION_GIVEN"|"PARTIAL_RESPONSE"|` +
+    `"DISPUTE"|"REDIRECT"|"QUESTION_BACK"|"OUT_OF_OFFICE"|"ACKNOWLEDGMENT_ONLY"|"UNRELATED"|"UNCLEAR"), ` +
+    `sentiment ("cooperative"|"neutral"|"reluctant"|"hostile"), ` +
+    `promisedDeliveryDate (YYYY-MM-DD|null), ` +
+    `redirectContact ({ name, email, department }|null), ` +
+    `questionAsked (string|null), disputeReason (string|null), summary (1-2 frases) }`,
+  schema: z.object({
+    responseType: z.string(),
+    sentiment: z.enum(["cooperative", "neutral", "reluctant", "hostile"]),
+    promisedDeliveryDate: z.string().nullable(),
+    redirectContact: z.object({
+      name: z.string().nullable(),
+      email: z.string().nullable(),
+      department: z.string().nullable(),
+    }).nullable(),
+    questionAsked: z.string().nullable(),
+    disputeReason: z.string().nullable(),
+    summary: z.string(),
+  }),
+};

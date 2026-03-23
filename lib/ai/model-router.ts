@@ -29,6 +29,7 @@ export type AITask =
   | "treasury_advice"
   | "draft_inquiry"
   | "analyze_inquiry_response"
+  | "evaluate_inquiry_response"
   | "ic_elimination_explain"
   | "explain_group_anomaly"
   | "variance_consolidated"
@@ -62,6 +63,7 @@ const TASK_CONFIG: Record<AITask, TaskConfig> = {
   treasury_advice:      { model: "claude-sonnet-4-20250514", maxTokens: 600, temperature: 0.2 },
   draft_inquiry:        { model: "claude-sonnet-4-20250514", maxTokens: 1000, temperature: 0.3 },
   analyze_inquiry_response: { model: "claude-haiku-4-5-20251001", maxTokens: 300, temperature: 0.0 },
+  evaluate_inquiry_response: { model: "claude-sonnet-4-20250514", maxTokens: 800, temperature: 0.1 },
   ic_elimination_explain: { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.2 },
   explain_group_anomaly:  { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.2 },
   variance_consolidated:  { model: "claude-sonnet-4-20250514", maxTokens: 600, temperature: 0.2 },

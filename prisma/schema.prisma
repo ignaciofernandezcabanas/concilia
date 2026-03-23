@@ -974,6 +974,8 @@ enum NotificationType {
   INQUIRY_RESPONSE_RECEIVED
   INQUIRY_FOLLOWUP_READY
   INQUIRY_ESCALATED
+  INQUIRY_RESOLVED_AUTO
+  INQUIRY_DOCUMENT_MISMATCH
 }
 
 // ============================================================
@@ -1221,6 +1223,15 @@ model Inquiry {
   responseResolved      Boolean?
   attachmentsReceived   Int             @default(0)
 
+  // Response evaluation (filled by AI evaluator)
+  responseType          ResponseType?
+  responseConfidence    Float?
+  documentValidation    Json?
+  proposedAction        ProposedAction?
+  proposedActionReason  String?
+  proposedFollowUpBody  String?
+  resolvedDocumentId    String?
+
   // Follow-up chain
   parentInquiryId       String?
   parentInquiry         Inquiry?        @relation("FollowUpChain", fields: [parentInquiryId], references: [id])
@@ -1275,4 +1286,31 @@ enum InquiryTone {
   FRIENDLY
   FORMAL
   URGENT
+}
+
+enum ResponseType {
+  DOCUMENT_ATTACHED
+  DOCUMENT_PROMISED
+  EXPLANATION_GIVEN
+  PARTIAL_RESPONSE
+  DISPUTE
+  REDIRECT
+  QUESTION_BACK
+  OUT_OF_OFFICE
+  ACKNOWLEDGMENT_ONLY
+  UNRELATED
+  UNCLEAR
+}
+
+enum ProposedAction {
+  CLOSE_RESOLVED
+  CLOSE_WITH_NOTE
+  REPLY_REQUEST_DOCUMENT
+  REPLY_REQUEST_CORRECT
+  REPLY_CLARIFY
+  REPLY_REDIRECT
+  WAIT_PROMISED
+  FOLLOW_UP_STANDARD
+  ESCALATE_CONTROLLER
+  ESCALATE_DISPUTE
 }
