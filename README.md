@@ -216,7 +216,7 @@ Ver [CLAUDE.md](CLAUDE.md) para detalles del motor de conciliación, 18 escenari
 - **59 endpoints** API
 - **19 páginas** frontend
 - **16 componentes** React
-- **316 tests** en 26 archivos
+- **322 tests** en 27 archivos
 - **16 categorías** de confianza
 - **12 acciones** de resolución
 - **11 steps** del agente diario
