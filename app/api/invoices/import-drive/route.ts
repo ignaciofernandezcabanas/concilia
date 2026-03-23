@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createAuditLog } from "@/lib/utils/audit";
 import { extractInvoiceFromPdf } from "@/lib/invoices/pdf-extractor";
 import { uploadInvoiceToDrive } from "@/lib/invoices/upload-to-drive";
@@ -20,6 +19,7 @@ const bodySchema = z.object({
  * Body: { folderId: "..." }
  */
 export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const { company, user } = ctx;
 
   let body: unknown;
@@ -35,7 +35,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   }
 
   // Get Google Drive integration config
-  const integration = await prisma.integration.findUnique({
+  const integration = await db.integration.findUnique({
     where: { type_companyId: { type: "GOOGLE_DRIVE", companyId: company.id } },
   });
 
@@ -105,7 +105,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
 
       // Check duplicate
       if (extracted.number) {
-        const existing = await prisma.invoice.findFirst({
+        const existing = await db.invoice.findFirst({
           where: { companyId: company.id, number: extracted.number },
         });
         if (existing) {
@@ -118,7 +118,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       // Find or create contact
       let contactId: string | null = null;
       if (extracted.supplierName) {
-        const existingContact = await prisma.contact.findFirst({
+        const existingContact = await db.contact.findFirst({
           where: {
             companyId: company.id,
             OR: [
@@ -130,7 +130,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         if (existingContact) {
           contactId = existingContact.id;
         } else {
-          const newContact = await prisma.contact.create({
+          const newContact = await db.contact.create({
             data: {
               name: extracted.supplierName,
               cif: extracted.supplierCif,
@@ -156,7 +156,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         extracted.type
       );
 
-      await prisma.invoice.create({
+      await db.invoice.create({
         data: {
           number: extracted.number || `DRV-${Date.now()}`,
           type: extracted.type,
@@ -192,7 +192,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     }
   }
 
-  createAuditLog({
+  createAuditLog(db, {
     userId: user.id,
     action: "INVOICES_IMPORT_DRIVE",
     entityType: "Invoice",

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { readFile } from "fs/promises";
 import { join } from "path";
 
@@ -11,12 +10,13 @@ import { join } from "path";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext & { params?: Record<string, string> }) => {
+    const db = ctx.db;
     const invoiceId = ctx.params?.id;
     if (!invoiceId) {
       return NextResponse.json({ error: "Invoice ID required." }, { status: 400 });
     }
 
-    const invoice = await prisma.invoice.findFirst({
+    const invoice = await db.invoice.findFirst({
       where: { id: invoiceId, companyId: ctx.company.id },
     });
 

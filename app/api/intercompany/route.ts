@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 
 /**
  * GET /api/intercompany?status=DETECTED&page=1&limit=20
@@ -9,6 +8,7 @@ import { prisma } from "@/lib/db";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const { company } = ctx;
 
     if (!company.organizationId) {
@@ -27,13 +27,13 @@ export const GET = withAuth(
     };
 
     const [data, total] = await Promise.all([
-      prisma.intercompanyLink.findMany({
+      db.intercompanyLink.findMany({
         where,
         orderBy: { date: "desc" },
         skip,
         take: limit,
       }),
-      prisma.intercompanyLink.count({ where }),
+      db.intercompanyLink.count({ where }),
     ]);
 
     // Enrich with company names
@@ -43,7 +43,7 @@ export const GET = withAuth(
       companyIds.add(d.companyBId);
     });
 
-    const companies = await prisma.company.findMany({
+    const companies = await db.company.findMany({
       where: { id: { in: Array.from(companyIds) } },
       select: { id: true, name: true, shortName: true },
     });

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createAuditLog } from "@/lib/utils/audit";
 
 /**
@@ -9,6 +8,7 @@ import { createAuditLog } from "@/lib/utils/audit";
  * Creates a MatchingRule from a confirmed structured proposal.
  */
 export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const { company, user } = ctx;
   const body = await req.json();
 
@@ -18,7 +18,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     return NextResponse.json({ error: "type y action son requeridos." }, { status: 400 });
   }
 
-  const rule = await prisma.matchingRule.create({
+  const rule = await db.matchingRule.create({
     data: {
       type: type as import("@prisma/client").RuleType,
       isActive: true,
@@ -35,7 +35,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     },
   });
 
-  createAuditLog({
+  createAuditLog(db, {
     userId: user.id,
     action: "RULE_CREATED_NL",
     entityType: "MatchingRule",

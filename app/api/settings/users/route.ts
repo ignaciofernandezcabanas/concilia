@@ -1,7 +1,6 @@
 import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createServerClient } from "@/lib/supabase";
 import { userInviteSchema } from "@/lib/utils/validation";
 import { createAuditLog } from "@/lib/utils/audit";
@@ -14,13 +13,14 @@ import { parsePagination, paginatedResponse } from "@/lib/utils/pagination";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const { company } = ctx;
     const { page, pageSize, skip, take } = parsePagination(
       req.nextUrl.searchParams
     );
 
     const [data, total] = await Promise.all([
-      prisma.user.findMany({
+      db.user.findMany({
         where: { companyId: company.id },
         select: {
           id: true,
@@ -35,7 +35,7 @@ export const GET = withAuth(
         skip,
         take,
       }),
-      prisma.user.count({ where: { companyId: company.id } }),
+      db.user.count({ where: { companyId: company.id } }),
     ]);
 
     return NextResponse.json(paginatedResponse(data, total, page, pageSize));
@@ -52,6 +52,7 @@ export const GET = withAuth(
  */
 export const POST = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const { user, company } = ctx;
 
     let body: unknown;
@@ -75,7 +76,7 @@ export const POST = withAuth(
     const { email, name, role } = parsed.data;
 
     // Check if user already exists in this company
-    const existing = await prisma.user.findFirst({
+    const existing = await db.user.findFirst({
       where: { email, companyId: company.id },
     });
 
@@ -111,7 +112,7 @@ export const POST = withAuth(
       }
 
       // Create user in our database
-      const newUser = await prisma.user.create({
+      const newUser = await db.user.create({
         data: {
           email,
           name: name ?? null,
@@ -130,7 +131,7 @@ export const POST = withAuth(
       });
 
       // Create notification for the invited user (will be visible after they accept)
-      await prisma.notification.create({
+      await db.notification.create({
         data: {
           type: "SYSTEM",
           title: "Bienvenido a Concilia",
@@ -140,7 +141,7 @@ export const POST = withAuth(
         },
       });
 
-      createAuditLog({
+      createAuditLog(db, {
         userId: user.id,
         action: "USER_INVITED",
         entityType: "User",

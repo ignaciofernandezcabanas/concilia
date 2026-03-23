@@ -45,7 +45,7 @@ export const GET = withAuth(
 
     try {
       const report = await generatePyG(
-        company.id,
+        ctx.db,
         from,
         to,
         namedLevel,

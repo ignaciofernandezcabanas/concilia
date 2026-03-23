@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createAuditLog } from "@/lib/utils/audit";
 import { extractInvoiceFromPdf } from "@/lib/invoices/pdf-extractor";
 import { uploadInvoiceToDrive } from "@/lib/invoices/upload-to-drive";
@@ -17,6 +16,7 @@ import { join } from "path";
  * Also stores the PDF locally for visualization.
  */
 export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const { company, user } = ctx;
 
   let formData: FormData;
@@ -67,7 +67,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
 
       // Check for duplicate by number
       if (extracted.number) {
-        const existing = await prisma.invoice.findFirst({
+        const existing = await db.invoice.findFirst({
           where: { companyId: company.id, number: extracted.number },
         });
         if (existing) {
@@ -80,7 +80,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       // Find or create contact
       let contactId: string | null = null;
       if (extracted.supplierName) {
-        const existingContact = await prisma.contact.findFirst({
+        const existingContact = await db.contact.findFirst({
           where: {
             companyId: company.id,
             OR: [
@@ -93,7 +93,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         if (existingContact) {
           contactId = existingContact.id;
         } else {
-          const newContact = await prisma.contact.create({
+          const newContact = await db.contact.create({
             data: {
               name: extracted.supplierName,
               cif: extracted.supplierCif,
@@ -120,7 +120,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       );
 
       // Create invoice
-      const invoice = await prisma.invoice.create({
+      const invoice = await db.invoice.create({
         data: {
           number: extracted.number || `IMP-${Date.now()}`,
           type: extracted.type,
@@ -157,7 +157,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     }
   }
 
-  createAuditLog({
+  createAuditLog(db, {
     userId: user.id,
     action: "INVOICES_IMPORT",
     entityType: "Invoice",

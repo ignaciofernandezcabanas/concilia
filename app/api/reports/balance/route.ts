@@ -25,7 +25,7 @@ export const GET = withAuth(
     }
 
     try {
-      const report = await generateBalance(ctx.company.id, asOf);
+      const report = await generateBalance(ctx.db, asOf);
       return NextResponse.json(report);
     } catch (err) {
       console.error("[reports/balance] Error:", err);

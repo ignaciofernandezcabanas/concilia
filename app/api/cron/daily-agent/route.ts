@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCronAuth } from "@/lib/auth/cron-guard";
-import { prisma } from "@/lib/db";
+import { prisma } from "@/lib/db"; // GLOBAL-PRISMA: cron creates scoped db per company
 import { runDailyAgent } from "@/lib/ai/daily-agent";
 
 /**

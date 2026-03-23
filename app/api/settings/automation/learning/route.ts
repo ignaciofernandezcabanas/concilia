@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 
 /**
  * GET /api/settings/automation/learning
@@ -9,16 +8,17 @@ import { prisma } from "@/lib/db";
  */
 export const GET = withAuth(
   async (_req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const companyId = ctx.company.id;
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     // Total decisions
-    const totalDecisions = await prisma.controllerDecision.count({
+    const totalDecisions = await db.controllerDecision.count({
       where: { companyId },
     });
 
     // Last 30 days
-    const recent = await prisma.controllerDecision.findMany({
+    const recent = await db.controllerDecision.findMany({
       where: { companyId, createdAt: { gte: thirtyDaysAgo } },
       select: { wasModified: true, controllerAction: true },
     });
@@ -28,7 +28,7 @@ export const GET = withAuth(
     const approvalRate = recent.length > 0 ? Math.round((approvedUnchanged / recent.length) * 100) : 0;
 
     // Top positive adjustments (patterns that are performing well)
-    const topPatterns = await prisma.confidenceAdjustment.findMany({
+    const topPatterns = await db.confidenceAdjustment.findMany({
       where: { companyId, adjustment: { gt: 0 } },
       orderBy: { adjustment: "desc" },
       take: 10,
@@ -36,7 +36,7 @@ export const GET = withAuth(
     });
 
     // Recent errors (negative adjustments)
-    const recentErrors = await prisma.confidenceAdjustment.findMany({
+    const recentErrors = await db.confidenceAdjustment.findMany({
       where: { companyId, errors30d: { gt: 0 } },
       orderBy: { lastErrorAt: "desc" },
       take: 10,
@@ -44,7 +44,7 @@ export const GET = withAuth(
     });
 
     // Paused categories
-    const pausedCategories = await prisma.confidenceAdjustment.findMany({
+    const pausedCategories = await db.confidenceAdjustment.findMany({
       where: { companyId, pausedUntil: { gt: new Date() } },
       select: { category: true, patternKey: true, pausedUntil: true },
     });

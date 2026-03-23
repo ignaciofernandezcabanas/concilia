@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { prisma } from "@/lib/db"; // GLOBAL-PRISMA: no company context yet
 import { createServerClient } from "@/lib/supabase";
 
 /**

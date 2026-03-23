@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 
 /**
  * GET /api/agent-runs/[id]
  */
 export const GET = withAuth(
   async (_req: NextRequest, ctx: AuthContext & { params?: Record<string, string> }) => {
+    const db = ctx.db;
     const id = ctx.params?.id;
     if (!id) return NextResponse.json({ error: "ID required." }, { status: 400 });
 
-    const company = await prisma.company.findUnique({
+    const company = await db.company.findUnique({
       where: { id: ctx.company.id },
       select: { organizationId: true },
     });
 
-    const run = await prisma.agentRun.findFirst({
+    const run = await db.agentRun.findFirst({
       where: { id, organizationId: company?.organizationId ?? "" },
     });
 

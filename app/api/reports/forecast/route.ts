@@ -14,7 +14,7 @@ export const GET = withAuth(
     const weeks = Math.min(52, Math.max(4, parseInt(weeksParam || "12")));
 
     try {
-      const report = await generateForecast(ctx.company.id, weeks);
+      const report = await generateForecast(ctx.db, weeks);
       return NextResponse.json(report);
     } catch (err) {
       console.error("[reports/forecast] Error:", err);

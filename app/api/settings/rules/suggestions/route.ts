@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 
 /**
  * GET /api/settings/rules/suggestions
@@ -9,10 +8,11 @@ import { prisma } from "@/lib/db";
  * Triggers when the controller has resolved 3+ similar transactions the same way.
  */
 export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const { company } = ctx;
 
   // Find patterns in definitive decisions: same counterpartIban + same action, 3+ times
-  const patterns = await prisma.controllerDecision.groupBy({
+  const patterns = await db.controllerDecision.groupBy({
     by: ["counterpartIban", "controllerAction", "transactionType"],
     where: {
       companyId: company.id,
@@ -42,7 +42,7 @@ export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
     if (!pattern.counterpartIban) continue;
 
     // Check if rule already exists for this IBAN
-    const existingRule = await prisma.matchingRule.findFirst({
+    const existingRule = await db.matchingRule.findFirst({
       where: {
         companyId: company.id,
         counterpartIban: pattern.counterpartIban,
@@ -53,7 +53,7 @@ export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
     if (existingRule) continue; // Already has a rule
 
     // Get the counterpart name from a recent decision
-    const sample = await prisma.controllerDecision.findFirst({
+    const sample = await db.controllerDecision.findFirst({
       where: {
         companyId: company.id,
         counterpartIban: pattern.counterpartIban,

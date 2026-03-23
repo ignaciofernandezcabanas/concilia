@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createAuditLog } from "@/lib/utils/audit";
 import { z } from "zod";
 
@@ -13,6 +12,7 @@ import { z } from "zod";
  * - all=true: return all accounts (no limit)
  */
 export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const url = req.nextUrl;
   const search = url.searchParams.get("search") ?? "";
   const group = url.searchParams.get("group");
@@ -36,7 +36,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   };
 
   const [accounts, total] = await Promise.all([
-    prisma.account.findMany({
+    db.account.findMany({
       where,
       select: {
         id: true,
@@ -52,7 +52,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       skip,
       take: limit,
     }),
-    prisma.account.count({ where }),
+    db.account.count({ where }),
   ]);
 
   return NextResponse.json({
@@ -76,6 +76,7 @@ const createSchema = z.object({
  * Creates a new PGC account.
  */
 export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const body = await req.json();
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
@@ -88,7 +89,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   const { code, name, group, parentCode, pygLine, cashflowType } = parsed.data;
 
   // Check for duplicate
-  const existing = await prisma.account.findUnique({
+  const existing = await db.account.findUnique({
     where: { code_companyId: { code, companyId: ctx.company.id } },
   });
   if (existing) {
@@ -98,7 +99,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     );
   }
 
-  const account = await prisma.account.create({
+  const account = await db.account.create({
     data: {
       code,
       name,
@@ -110,7 +111,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     },
   });
 
-  createAuditLog({
+  createAuditLog(db, {
     userId: ctx.user.id,
     action: "ACCOUNT_CREATED",
     entityType: "Account",
@@ -137,6 +138,7 @@ const updateSchema = z.object({
  * Updates an existing account. Identified by code.
  */
 export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const body = await req.json();
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
@@ -148,7 +150,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
 
   const { code, ...updates } = parsed.data;
 
-  const account = await prisma.account.findUnique({
+  const account = await db.account.findUnique({
     where: { code_companyId: { code, companyId: ctx.company.id } },
   });
   if (!account) {
@@ -163,12 +165,12 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     return NextResponse.json({ error: "Sin cambios." }, { status: 400 });
   }
 
-  const updated = await prisma.account.update({
+  const updated = await db.account.update({
     where: { id: account.id },
     data: cleanUpdates,
   });
 
-  createAuditLog({
+  createAuditLog(db, {
     userId: ctx.user.id,
     action: "ACCOUNT_UPDATED",
     entityType: "Account",

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createAuditLog } from "@/lib/utils/audit";
 import { z } from "zod";
 
@@ -12,11 +11,12 @@ import { z } from "zod";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const yearParam = req.nextUrl.searchParams.get("year");
     const year = yearParam ? parseInt(yearParam) : new Date().getFullYear();
 
     // Ensure all 12 months exist for this year
-    const existing = await prisma.accountingPeriod.findMany({
+    const existing = await db.accountingPeriod.findMany({
       where: { companyId: ctx.company.id, year },
       orderBy: { month: "asc" },
     });
@@ -28,7 +28,7 @@ export const GET = withAuth(
       );
 
       if (missing.length > 0) {
-        await prisma.accountingPeriod.createMany({
+        await db.accountingPeriod.createMany({
           data: missing.map((month) => ({
             year,
             month,
@@ -39,7 +39,7 @@ export const GET = withAuth(
         });
       }
 
-      const all = await prisma.accountingPeriod.findMany({
+      const all = await db.accountingPeriod.findMany({
         where: { companyId: ctx.company.id, year },
         orderBy: { month: "asc" },
       });
@@ -68,6 +68,7 @@ const updateSchema = z.object({
  */
 export const PUT = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) {
@@ -79,7 +80,7 @@ export const PUT = withAuth(
 
     const { year, month, action, notes } = parsed.data;
 
-    const period = await prisma.accountingPeriod.findUnique({
+    const period = await db.accountingPeriod.findUnique({
       where: {
         companyId_year_month: { companyId: ctx.company.id, year, month },
       },
@@ -111,7 +112,7 @@ export const PUT = withAuth(
 
     const newStatus = action === "close" ? "CLOSED" : action === "lock" ? "LOCKED" : "OPEN";
 
-    const updated = await prisma.accountingPeriod.update({
+    const updated = await db.accountingPeriod.update({
       where: { id: period.id },
       data: {
         status: newStatus,
@@ -121,7 +122,7 @@ export const PUT = withAuth(
       },
     });
 
-    createAuditLog({
+    createAuditLog(db, {
       userId: ctx.user.id,
       action: `PERIOD_${action.toUpperCase()}`,
       entityType: "AccountingPeriod",

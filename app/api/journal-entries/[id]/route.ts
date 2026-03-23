@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createAuditLog } from "@/lib/utils/audit";
 
 /**
@@ -9,13 +8,14 @@ import { createAuditLog } from "@/lib/utils/audit";
  */
 export const POST = withAuth(
   async (req: NextRequest, ctx: AuthContext & { params?: Record<string, string> }) => {
+    const db = ctx.db;
     const id = ctx.params?.id;
     if (!id) return NextResponse.json({ error: "ID requerido." }, { status: 400 });
 
     const body = await req.json();
     const action = body.action as string;
 
-    const entry = await prisma.journalEntry.findFirst({
+    const entry = await db.journalEntry.findFirst({
       where: { id, companyId: ctx.company.id },
     });
 
@@ -31,12 +31,12 @@ export const POST = withAuth(
         );
       }
 
-      await prisma.journalEntry.update({
+      await db.journalEntry.update({
         where: { id },
         data: { status: "POSTED", postedAt: new Date(), postedById: ctx.user.id },
       });
 
-      createAuditLog({
+      createAuditLog(db, {
         userId: ctx.user.id,
         action: "JOURNAL_ENTRY_POSTED",
         entityType: "JournalEntry",
@@ -58,23 +58,23 @@ export const POST = withAuth(
       }
 
       // Create reversal entry with swapped debit/credit
-      const originalLines = await prisma.journalEntryLine.findMany({
+      const originalLines = await db.journalEntryLine.findMany({
         where: { journalEntryId: id },
       });
 
-      const lastEntry = await prisma.journalEntry.findFirst({
+      const lastEntry = await db.journalEntry.findFirst({
         where: { companyId: ctx.company.id },
         orderBy: { number: "desc" },
         select: { number: true },
       });
       const nextNumber = (lastEntry?.number ?? 0) + 1;
 
-      await prisma.$transaction([
-        prisma.journalEntry.update({
+      await db.$transaction([
+        db.journalEntry.update({
           where: { id },
           data: { status: "REVERSED" },
         }),
-        prisma.journalEntry.create({
+        db.journalEntry.create({
           data: {
             number: nextNumber,
             date: new Date(),
@@ -98,7 +98,7 @@ export const POST = withAuth(
         }),
       ]);
 
-      createAuditLog({
+      createAuditLog(db, {
         userId: ctx.user.id,
         action: "JOURNAL_ENTRY_REVERSED",
         entityType: "JournalEntry",
@@ -121,10 +121,11 @@ export const POST = withAuth(
  */
 export const DELETE = withAuth(
   async (_req: NextRequest, ctx: AuthContext & { params?: Record<string, string> }) => {
+    const db = ctx.db;
     const id = ctx.params?.id;
     if (!id) return NextResponse.json({ error: "ID requerido." }, { status: 400 });
 
-    const entry = await prisma.journalEntry.findFirst({
+    const entry = await db.journalEntry.findFirst({
       where: { id, companyId: ctx.company.id },
     });
 
@@ -139,7 +140,7 @@ export const DELETE = withAuth(
       );
     }
 
-    await prisma.journalEntry.delete({ where: { id } });
+    await db.journalEntry.delete({ where: { id } });
 
     return NextResponse.json({ success: true });
   },

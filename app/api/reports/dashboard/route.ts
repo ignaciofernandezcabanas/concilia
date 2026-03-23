@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 
 /**
  * GET /api/reports/dashboard?from=2026-03-01&to=2026-03-31
@@ -8,6 +7,7 @@ import { prisma } from "@/lib/db";
  * Returns pre-aggregated KPIs for the dashboard. All sums are done in the DB.
  */
 export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const { company } = ctx;
   const { searchParams } = req.nextUrl;
 
@@ -22,32 +22,32 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   const to = new Date(toParam);
 
   const [incomeAgg, expenseAgg, cashflowAgg, pendingCount, reconciledAgg, pendingMatchAgg, unclassifiedAgg] = await Promise.all([
-    prisma.invoice.aggregate({
+    db.invoice.aggregate({
       where: { companyId: company.id, issueDate: { gte: from, lte: to }, type: { in: ["ISSUED", "CREDIT_RECEIVED"] }, status: { not: "CANCELLED" } },
       _sum: { totalAmount: true },
     }),
-    prisma.invoice.aggregate({
+    db.invoice.aggregate({
       where: { companyId: company.id, issueDate: { gte: from, lte: to }, type: { in: ["RECEIVED", "CREDIT_ISSUED"] }, status: { not: "CANCELLED" } },
       _sum: { totalAmount: true },
     }),
-    prisma.bankTransaction.aggregate({
+    db.bankTransaction.aggregate({
       where: { companyId: company.id, valueDate: { gte: from, lte: to }, status: { notIn: ["DUPLICATE", "IGNORED"] } },
       _sum: { amount: true },
     }),
-    prisma.bankTransaction.count({
+    db.bankTransaction.count({
       where: { companyId: company.id, status: "PENDING" },
     }),
-    prisma.bankTransaction.aggregate({
+    db.bankTransaction.aggregate({
       where: { companyId: company.id, valueDate: { gte: from, lte: to }, status: "RECONCILED" },
       _sum: { amount: true },
       _count: true,
     }),
-    prisma.bankTransaction.aggregate({
+    db.bankTransaction.aggregate({
       where: { companyId: company.id, valueDate: { gte: from, lte: to }, status: "PENDING" },
       _sum: { amount: true },
       _count: true,
     }),
-    prisma.bankTransaction.aggregate({
+    db.bankTransaction.aggregate({
       where: { companyId: company.id, valueDate: { gte: from, lte: to }, status: { notIn: ["RECONCILED", "CLASSIFIED", "PENDING", "DUPLICATE", "IGNORED", "INTERNAL"] } },
       _sum: { amount: true },
       _count: true,

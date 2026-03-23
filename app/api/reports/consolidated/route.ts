@@ -1,6 +1,6 @@
+import { getScopedDb } from "@/lib/db-scoped";
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { generatePyG } from "@/lib/reports/pyg-generator";
 import { generateBalance } from "@/lib/reports/balance-generator";
 
@@ -12,6 +12,7 @@ import { generateBalance } from "@/lib/reports/balance-generator";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const url = req.nextUrl;
     const report = url.searchParams.get("report") ?? "pyg";
     const from = url.searchParams.get("from");
@@ -25,7 +26,7 @@ export const GET = withAuth(
     }
 
     // Get organization
-    const company = await prisma.company.findUnique({
+    const company = await db.company.findUnique({
       where: { id: ctx.company.id },
       select: { organizationId: true },
     });
@@ -38,7 +39,7 @@ export const GET = withAuth(
     }
 
     // Get all companies in the org
-    const orgCompanies = await prisma.company.findMany({
+    const orgCompanies = await db.company.findMany({
       where: { organizationId: company.organizationId },
       select: { id: true, name: true, shortName: true },
     });
@@ -46,7 +47,7 @@ export const GET = withAuth(
     if (report === "pyg") {
       const results = await Promise.all(
         orgCompanies.map(async (co) => {
-          const pyg = await generatePyG(co.id, new Date(from), new Date(to));
+          const pyg = await generatePyG(getScopedDb(co.id), new Date(from), new Date(to));
           return { company: co, report: pyg };
         })
       );
@@ -79,7 +80,7 @@ export const GET = withAuth(
       const asOf = new Date(to);
       const results = await Promise.all(
         orgCompanies.map(async (co) => {
-          const balance = await generateBalance(co.id, asOf);
+          const balance = await generateBalance(getScopedDb(co.id), asOf);
           return { company: co, report: balance };
         })
       );

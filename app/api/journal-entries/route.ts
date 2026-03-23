@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createAuditLog } from "@/lib/utils/audit";
 import { checkPeriodOpen } from "@/lib/utils/period-guard";
 import { z } from "zod";
@@ -10,6 +9,7 @@ import { z } from "zod";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const url = req.nextUrl;
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
@@ -32,7 +32,7 @@ export const GET = withAuth(
     };
 
     const [data, total] = await Promise.all([
-      prisma.journalEntry.findMany({
+      db.journalEntry.findMany({
         where,
         include: {
           lines: {
@@ -43,7 +43,7 @@ export const GET = withAuth(
         skip,
         take: limit,
       }),
-      prisma.journalEntry.count({ where }),
+      db.journalEntry.count({ where }),
     ]);
 
     return NextResponse.json({
@@ -76,6 +76,7 @@ const createSchema = z.object({
  */
 export const POST = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
@@ -88,7 +89,7 @@ export const POST = withAuth(
     const { date, description, reference, lines } = parsed.data;
 
     // Check period is open
-    const periodError = await checkPeriodOpen(ctx.company.id, date);
+    const periodError = await checkPeriodOpen(db, ctx.company.id, date);
     if (periodError) {
       return NextResponse.json({ error: periodError }, { status: 400 });
     }
@@ -121,7 +122,7 @@ export const POST = withAuth(
 
     // Resolve account codes to IDs
     const accountCodes = Array.from(new Set(lines.map((l) => l.accountCode)));
-    const accounts = await prisma.account.findMany({
+    const accounts = await db.account.findMany({
       where: { code: { in: accountCodes }, companyId: ctx.company.id },
       select: { id: true, code: true },
     });
@@ -137,14 +138,14 @@ export const POST = withAuth(
     }
 
     // Get next number
-    const lastEntry = await prisma.journalEntry.findFirst({
+    const lastEntry = await db.journalEntry.findFirst({
       where: { companyId: ctx.company.id },
       orderBy: { number: "desc" },
       select: { number: true },
     });
     const nextNumber = (lastEntry?.number ?? 0) + 1;
 
-    const entry = await prisma.journalEntry.create({
+    const entry = await db.journalEntry.create({
       data: {
         number: nextNumber,
         date,
@@ -170,7 +171,7 @@ export const POST = withAuth(
       },
     });
 
-    createAuditLog({
+    createAuditLog(db, {
       userId: ctx.user.id,
       action: "JOURNAL_ENTRY_CREATED",
       entityType: "JournalEntry",

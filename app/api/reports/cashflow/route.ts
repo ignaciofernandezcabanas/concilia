@@ -34,7 +34,7 @@ export const GET = withAuth(
 
     try {
       const report = await generateCashflow(
-        company.id,
+        ctx.db,
         from,
         to,
         mode as CashflowMode

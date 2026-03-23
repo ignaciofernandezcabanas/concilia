@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createAuditLog } from "@/lib/utils/audit";
 import { z } from "zod";
 
@@ -9,6 +8,7 @@ import { z } from "zod";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const url = req.nextUrl;
     const status = url.searchParams.get("status");
     const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"));
@@ -21,7 +21,7 @@ export const GET = withAuth(
     };
 
     const [data, total] = await Promise.all([
-      prisma.fixedAsset.findMany({
+      db.fixedAsset.findMany({
         where,
         include: {
           assetAccount: { select: { code: true, name: true } },
@@ -32,11 +32,11 @@ export const GET = withAuth(
         skip,
         take: limit,
       }),
-      prisma.fixedAsset.count({ where }),
+      db.fixedAsset.count({ where }),
     ]);
 
     // Summary stats
-    const summary = await prisma.fixedAsset.aggregate({
+    const summary = await db.fixedAsset.aggregate({
       where: { companyId: ctx.company.id, status: "ACTIVE" },
       _sum: { acquisitionCost: true, accumulatedDepreciation: true, netBookValue: true },
       _count: true,
@@ -75,6 +75,7 @@ const createSchema = z.object({
  */
 export const POST = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
@@ -88,7 +89,7 @@ export const POST = withAuth(
 
     // Resolve account codes
     const codes = [d.assetAccountCode, d.depreciationAccountCode, d.accumDepAccountCode];
-    const accounts = await prisma.account.findMany({
+    const accounts = await db.account.findMany({
       where: { code: { in: codes }, companyId: ctx.company.id },
       select: { id: true, code: true },
     });
@@ -104,7 +105,7 @@ export const POST = withAuth(
     const depreciableAmount = d.acquisitionCost - d.residualValue;
     const monthlyDep = Math.round((depreciableAmount / d.usefulLifeMonths) * 100) / 100;
 
-    const asset = await prisma.fixedAsset.create({
+    const asset = await db.fixedAsset.create({
       data: {
         name: d.name,
         description: d.description,
@@ -128,7 +129,7 @@ export const POST = withAuth(
       },
     });
 
-    createAuditLog({
+    createAuditLog(db, {
       userId: ctx.user.id,
       action: "FIXED_ASSET_CREATED",
       entityType: "FixedAsset",

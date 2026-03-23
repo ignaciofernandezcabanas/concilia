@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createAuditLog } from "@/lib/utils/audit";
 import { z } from "zod";
 
@@ -14,7 +13,8 @@ const updateSchema = z.object({
  * Returns Holded integration config for the company.
  */
 export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
-  const integration = await prisma.integration.findUnique({
+    const db = ctx.db;
+  const integration = await db.integration.findUnique({
     where: {
       type_companyId: { type: "HOLDED", companyId: ctx.company.id },
     },
@@ -39,6 +39,7 @@ export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
  * Connect or update Holded integration.
  */
 export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const body = await req.json();
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
@@ -68,7 +69,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     );
   }
 
-  const integration = await prisma.integration.upsert({
+  const integration = await db.integration.upsert({
     where: {
       type_companyId: { type: "HOLDED", companyId: ctx.company.id },
     },
@@ -87,7 +88,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     },
   });
 
-  createAuditLog({
+  createAuditLog(db, {
     userId: ctx.user.id,
     action: "INTEGRATION_HOLDED_CONNECTED",
     entityType: "Integration",
@@ -103,7 +104,8 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
  * Disconnect Holded integration.
  */
 export const DELETE = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
-  await prisma.integration.updateMany({
+    const db = ctx.db;
+  await db.integration.updateMany({
     where: { type: "HOLDED", companyId: ctx.company.id },
     data: { status: "DISCONNECTED", config: {}, error: null },
   });

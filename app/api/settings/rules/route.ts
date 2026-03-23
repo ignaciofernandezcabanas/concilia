@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createAuditLog } from "@/lib/utils/audit";
 import { parsePagination, paginatedResponse } from "@/lib/utils/pagination";
 import { z } from "zod";
@@ -40,6 +39,7 @@ const deleteRuleSchema = z.object({
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const { company } = ctx;
     const { page, pageSize, skip, take } = parsePagination(
       req.nextUrl.searchParams
@@ -54,13 +54,13 @@ export const GET = withAuth(
     if (isActive === "false") where.isActive = false;
 
     const [data, total] = await Promise.all([
-      prisma.matchingRule.findMany({
+      db.matchingRule.findMany({
         where,
         orderBy: [{ timesApplied: "desc" }, { createdAt: "desc" }],
         skip,
         take,
       }),
-      prisma.matchingRule.count({ where }),
+      db.matchingRule.count({ where }),
     ]);
 
     return NextResponse.json(paginatedResponse(data, total, page, pageSize));
@@ -75,6 +75,7 @@ export const GET = withAuth(
  */
 export const POST = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const { user, company } = ctx;
 
     let body: unknown;
@@ -99,7 +100,7 @@ export const POST = withAuth(
 
     // Validate referenced account if provided
     if (input.accountCode) {
-      const account = await prisma.account.findFirst({
+      const account = await db.account.findFirst({
         where: { code: input.accountCode, companyId: company.id },
       });
       if (!account) {
@@ -112,7 +113,7 @@ export const POST = withAuth(
 
     // Validate referenced contact if provided
     if (input.contactId) {
-      const contact = await prisma.contact.findFirst({
+      const contact = await db.contact.findFirst({
         where: { id: input.contactId, companyId: company.id },
       });
       if (!contact) {
@@ -135,7 +136,7 @@ export const POST = withAuth(
       }
     }
 
-    const rule = await prisma.matchingRule.create({
+    const rule = await db.matchingRule.create({
       data: {
         companyId: company.id,
         type: input.type as any,
@@ -151,7 +152,7 @@ export const POST = withAuth(
       },
     });
 
-    createAuditLog({
+    createAuditLog(db, {
       userId: user.id,
       action: "RULE_CREATED",
       entityType: "MatchingRule",
@@ -171,6 +172,7 @@ export const POST = withAuth(
  */
 export const DELETE = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const { user, company } = ctx;
 
     let body: unknown;
@@ -194,7 +196,7 @@ export const DELETE = withAuth(
     const { id } = parsed.data;
 
     // Verify the rule belongs to this company
-    const rule = await prisma.matchingRule.findFirst({
+    const rule = await db.matchingRule.findFirst({
       where: { id, companyId: company.id },
     });
 
@@ -205,9 +207,9 @@ export const DELETE = withAuth(
       );
     }
 
-    await prisma.matchingRule.delete({ where: { id } });
+    await db.matchingRule.delete({ where: { id } });
 
-    createAuditLog({
+    createAuditLog(db, {
       userId: user.id,
       action: "RULE_DELETED",
       entityType: "MatchingRule",

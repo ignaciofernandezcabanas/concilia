@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { z } from "zod";
 
 /**
@@ -10,7 +9,8 @@ import { z } from "zod";
  */
 export const GET = withAuth(
   async (_req: NextRequest, ctx: AuthContext) => {
-    const company = await prisma.company.findUnique({
+    const db = ctx.db;
+    const company = await db.company.findUnique({
       where: { id: ctx.company.id },
       select: { organizationId: true },
     });
@@ -19,7 +19,7 @@ export const GET = withAuth(
       return NextResponse.json({ error: "No organization." }, { status: 400 });
     }
 
-    const org = await prisma.organization.findUnique({
+    const org = await db.organization.findUnique({
       where: { id: company.organizationId },
       select: { id: true, autoExecuteThreshold: true },
     });
@@ -27,7 +27,7 @@ export const GET = withAuth(
     // Stats from last 30 days
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    const runs = await prisma.agentRun.findMany({
+    const runs = await db.agentRun.findMany({
       where: {
         organizationId: company.organizationId,
         startedAt: { gte: thirtyDaysAgo },
@@ -79,7 +79,8 @@ const updateSchema = z.object({
  */
 export const PUT = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
-    const company = await prisma.company.findUnique({
+    const db = ctx.db;
+    const company = await db.company.findUnique({
       where: { id: ctx.company.id },
       select: { organizationId: true },
     });
@@ -95,7 +96,7 @@ export const PUT = withAuth(
     }
 
     if (parsed.data.autoExecuteThreshold != null) {
-      await prisma.organization.update({
+      await db.organization.update({
         where: { id: company.organizationId },
         data: { autoExecuteThreshold: parsed.data.autoExecuteThreshold },
       });

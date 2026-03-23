@@ -1,7 +1,6 @@
 import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { z } from "zod";
 
 const schema = z.object({
@@ -24,6 +23,7 @@ const schema = z.object({
  * Level 2: account → individual transactions
  */
 export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const { company } = ctx;
   const parsed = schema.safeParse(Object.fromEntries(req.nextUrl.searchParams.entries()));
   if (!parsed.success) {
@@ -44,12 +44,12 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         const acctCode = parseInt(account);
         // 43x = Clientes (receivable) → pending ISSUED invoices
         if (acctCode >= 430 && acctCode < 440) {
-          const invoices = await prisma.invoice.findMany({
+          const invoices = await db.invoice.findMany({
             where: { companyId: cid, type: { in: ["ISSUED", "CREDIT_RECEIVED"] }, status: { in: ["PENDING", "PARTIAL", "OVERDUE"] }, issueDate: { lte: periodTo } },
             include: { contact: { select: { name: true } } },
             take: 100, orderBy: { issueDate: "asc" },
           });
-          const acc = await prisma.account.findFirst({ where: { code: account, companyId: cid }, select: { name: true } });
+          const acc = await db.account.findFirst({ where: { code: account, companyId: cid }, select: { name: true } });
           return NextResponse.json({
             level: "transactions", accountCode: account, accountName: acc?.name ?? account,
             totalAmount: invoices.reduce((s, i) => s + (i.amountPending ?? i.totalAmount - i.amountPaid), 0),
@@ -62,12 +62,12 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         }
         // 40x, 41x = Proveedores (payable) → pending RECEIVED invoices
         if ((acctCode >= 400 && acctCode < 420) || (acctCode >= 465 && acctCode < 478)) {
-          const invoices = await prisma.invoice.findMany({
+          const invoices = await db.invoice.findMany({
             where: { companyId: cid, type: { in: ["RECEIVED", "CREDIT_ISSUED"] }, status: { in: ["PENDING", "PARTIAL", "OVERDUE"] }, issueDate: { lte: periodTo } },
             include: { contact: { select: { name: true } } },
             take: 100, orderBy: { issueDate: "asc" },
           });
-          const acc = await prisma.account.findFirst({ where: { code: account, companyId: cid }, select: { name: true } });
+          const acc = await db.account.findFirst({ where: { code: account, companyId: cid }, select: { name: true } });
           return NextResponse.json({
             level: "transactions", accountCode: account, accountName: acc?.name ?? account,
             totalAmount: invoices.reduce((s, i) => s + (i.amountPending ?? i.totalAmount - i.amountPaid), 0),
@@ -80,11 +80,11 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         }
         // 57x = Cash → last bank transaction with balance
         if (acctCode >= 570 && acctCode < 580) {
-          const lastTx = await prisma.bankTransaction.findFirst({
+          const lastTx = await db.bankTransaction.findFirst({
             where: { companyId: cid, valueDate: { lte: periodTo }, balanceAfter: { not: null } },
             orderBy: { valueDate: "desc" }, select: { id: true, valueDate: true, concept: true, balanceAfter: true },
           });
-          const acc = await prisma.account.findFirst({ where: { code: account, companyId: cid }, select: { name: true } });
+          const acc = await db.account.findFirst({ where: { code: account, companyId: cid }, select: { name: true } });
           return NextResponse.json({
             level: "transactions", accountCode: account, accountName: acc?.name ?? account,
             totalAmount: lastTx?.balanceAfter ?? 0,
@@ -94,7 +94,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       }
 
       // Default: invoice lines + classified txs (for PyG / Cashflow)
-      const invoiceLines = await prisma.invoiceLine.findMany({
+      const invoiceLines = await db.invoiceLine.findMany({
         where: {
           account: { code: account, companyId: cid },
           invoice: { issueDate: { gte: periodFrom, lte: periodTo }, status: { not: "CANCELLED" } },
@@ -106,7 +106,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         orderBy: { invoice: { issueDate: "asc" } },
       });
 
-      const classifiedTx = await prisma.bankTransaction.findMany({
+      const classifiedTx = await db.bankTransaction.findMany({
         where: {
           companyId: cid,
           valueDate: { gte: periodFrom, lte: periodTo },
@@ -138,7 +138,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         })),
       ].sort((a, b) => a.date.localeCompare(b.date));
 
-      const acc = await prisma.account.findFirst({ where: { code: account, companyId: cid }, select: { name: true } });
+      const acc = await db.account.findFirst({ where: { code: account, companyId: cid }, select: { name: true } });
 
       return NextResponse.json({
         level: "transactions",
@@ -157,7 +157,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       const periodTo = to ?? new Date("2099-12-31");
 
       // Aggregate from invoice lines
-      const invoiceLines = await prisma.invoiceLine.findMany({
+      const invoiceLines = await db.invoiceLine.findMany({
         where: {
           account: { pygLine: code, companyId: cid },
           invoice: { issueDate: { gte: periodFrom, lte: periodTo }, status: { not: "CANCELLED" } },
@@ -169,7 +169,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       });
 
       // Aggregate from classified txs
-      const classifiedTx = await prisma.bankTransaction.findMany({
+      const classifiedTx = await db.bankTransaction.findMany({
         where: {
           companyId: cid,
           valueDate: { gte: periodFrom, lte: periodTo },
@@ -234,7 +234,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
           default: where.amount = { lt: 0 }; break;
         }
 
-        const txs = await prisma.bankTransaction.findMany({
+        const txs = await db.bankTransaction.findMany({
           where: where as never,
           select: { id: true, valueDate: true, concept: true, amount: true, counterpartName: true, status: true },
           take: 100,
@@ -256,7 +256,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       }
 
       // cashflowType drill-down
-      const txs = await prisma.bankTransaction.findMany({
+      const txs = await db.bankTransaction.findMany({
         where: {
           companyId: cid,
           valueDate: { gte: periodFrom, lte: periodTo },
@@ -286,7 +286,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
 
     if (report === "balance" && group != null) {
       const asOfDate = asOf ?? new Date();
-      const accounts = await prisma.account.findMany({
+      const accounts = await db.account.findMany({
         where: { companyId: cid, group, isActive: true },
         select: { code: true, name: true },
       });

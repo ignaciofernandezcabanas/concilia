@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createAuditLog } from "@/lib/utils/audit";
 
 /**
@@ -17,6 +16,7 @@ import { createAuditLog } from "@/lib/utils/audit";
  * Auto-detects column mapping by header names (Spanish bank formats).
  */
 export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const { company, user } = ctx;
 
   let formData: FormData;
@@ -109,7 +109,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
 
   // Phase 2: Check existing in one query
   const externalIds = parsed.map((p) => p.externalId);
-  const existingTxs = await prisma.bankTransaction.findMany({
+  const existingTxs = await db.bankTransaction.findMany({
     where: { companyId: company.id, externalId: { in: externalIds } },
     select: { externalId: true },
   });
@@ -120,7 +120,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   const skipped = parsed.length - toCreate.length;
 
   if (toCreate.length > 0) {
-    await prisma.bankTransaction.createMany({
+    await db.bankTransaction.createMany({
       data: toCreate.map((row) => ({
         externalId: row.externalId,
         valueDate: row.valueDate,
@@ -142,7 +142,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   const created = toCreate.length;
 
   // Log
-  await prisma.syncLog.create({
+  await db.syncLog.create({
     data: {
       source: "csv_import",
       action: "import_transactions",
@@ -156,7 +156,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     },
   });
 
-  createAuditLog({
+  createAuditLog(db, {
     userId: user.id,
     action: "TRANSACTIONS_CSV_IMPORT",
     entityType: "BankTransaction",

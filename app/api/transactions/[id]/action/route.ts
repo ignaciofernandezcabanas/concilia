@@ -2,7 +2,6 @@ import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
 import { resolveItem, type ResolvePayload } from "@/lib/reconciliation/resolver";
-import { prisma } from "@/lib/db";
 
 /**
  * POST /api/transactions/[id]/action
@@ -12,6 +11,7 @@ import { prisma } from "@/lib/db";
  */
 export const POST = withAuth(
   async (req: NextRequest, ctx: AuthContext & { params?: Record<string, string> }) => {
+    const db = ctx.db;
     const txId = ctx.params?.id;
     if (!txId) {
       return NextResponse.json({ error: "Transaction ID required." }, { status: 400 });
@@ -32,7 +32,7 @@ export const POST = withAuth(
     // For intercompany actions, resolve the link ID from the transaction
     let intercompanyLinkId = body.intercompanyLinkId as string | undefined;
     if (action === "mark_intercompany" && !intercompanyLinkId) {
-      const link = await prisma.intercompanyLink.findFirst({
+      const link = await db.intercompanyLink.findFirst({
         where: { transactionAId: txId, status: "DETECTED" },
         select: { id: true },
       });

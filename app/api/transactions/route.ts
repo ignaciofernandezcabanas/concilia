@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { transactionFiltersSchema } from "@/lib/utils/validation";
 import { paginatedResponse } from "@/lib/utils/pagination";
 import type { Prisma } from "@prisma/client";
@@ -12,6 +11,7 @@ import type { Prisma } from "@prisma/client";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const { company } = ctx;
     const searchParams = req.nextUrl.searchParams;
 
@@ -74,7 +74,7 @@ export const GET = withAuth(
     }
 
     const [data, total] = await Promise.all([
-      prisma.bankTransaction.findMany({
+      db.bankTransaction.findMany({
         where,
         include: {
           classification: {
@@ -115,7 +115,7 @@ export const GET = withAuth(
         skip: (filters.page - 1) * filters.pageSize,
         take: filters.pageSize,
       }),
-      prisma.bankTransaction.count({ where }),
+      db.bankTransaction.count({ where }),
     ]);
 
     // Flatten reconciliations[0] → reconciliation for the frontend

@@ -13,6 +13,7 @@ import { generateReconciliationReport } from "@/lib/reports/reconciliation-repor
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const { company } = ctx;
     const month = req.nextUrl.searchParams.get("month");
 
@@ -36,7 +37,7 @@ export const GET = withAuth(
     }
 
     try {
-      const report = await generateReconciliationReport(company.id, month);
+      const report = await generateReconciliationReport(db, month);
       return NextResponse.json(report);
     } catch (err) {
       console.error("[reports/reconciliation-report] Error:", err);

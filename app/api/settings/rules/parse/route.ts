@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { callAIJson } from "@/lib/ai/model-router";
 import { PARSE_RULE_NL } from "@/lib/ai/prompt-registry";
 
@@ -13,6 +12,7 @@ import { PARSE_RULE_NL } from "@/lib/ai/prompt-registry";
  * Body: { text: string }
  */
 export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const { company } = ctx;
   const body = await req.json();
   const text = body.text as string;
@@ -23,15 +23,15 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
 
   // ── Load context for enrichment ──
   const [contacts, accounts, recentTx] = await Promise.all([
-    prisma.contact.findMany({
+    db.contact.findMany({
       where: { companyId: company.id },
       select: { id: true, name: true, cif: true, iban: true, type: true },
     }),
-    prisma.account.findMany({
+    db.account.findMany({
       where: { companyId: company.id, isActive: true },
       select: { code: true, name: true, group: true },
     }),
-    prisma.bankTransaction.findMany({
+    db.bankTransaction.findMany({
       where: { companyId: company.id },
       orderBy: { valueDate: "desc" },
       take: 200,

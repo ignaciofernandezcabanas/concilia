@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 
 /**
  * GET /api/search
@@ -13,6 +12,7 @@ import { prisma } from "@/lib/db";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const { company } = ctx;
     const query = req.nextUrl.searchParams.get("q")?.trim();
     const limit = Math.min(
@@ -30,7 +30,7 @@ export const GET = withAuth(
     // Run all searches in parallel
     const [invoices, transactions, contacts] = await Promise.all([
       // Search invoices by number, description, or contact name
-      prisma.invoice.findMany({
+      db.invoice.findMany({
         where: {
           companyId: company.id,
           OR: [
@@ -58,7 +58,7 @@ export const GET = withAuth(
       }),
 
       // Search bank transactions by concept, counterpart name, or reference
-      prisma.bankTransaction.findMany({
+      db.bankTransaction.findMany({
         where: {
           companyId: company.id,
           status: { notIn: ["DUPLICATE", "IGNORED"] },
@@ -81,7 +81,7 @@ export const GET = withAuth(
       }),
 
       // Search contacts by name or CIF
-      prisma.contact.findMany({
+      db.contact.findMany({
         where: {
           companyId: company.id,
           OR: [

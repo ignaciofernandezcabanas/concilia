@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 
 /**
  * GET /api/fiscal?type=vat|withholdings&from=2026-01-01&to=2026-03-31
@@ -11,6 +10,7 @@ import { prisma } from "@/lib/db";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const url = req.nextUrl;
     const type = url.searchParams.get("type") ?? "vat";
     const from = url.searchParams.get("from");
@@ -27,11 +27,11 @@ export const GET = withAuth(
     const dateTo = new Date(to);
 
     if (type === "vat") {
-      return NextResponse.json(await generateVatReport(ctx.company.id, dateFrom, dateTo));
+      return NextResponse.json(await generateVatReport(db, ctx.company.id, dateFrom, dateTo));
     }
 
     if (type === "withholdings") {
-      return NextResponse.json(await generateWithholdingsReport(ctx.company.id, dateFrom, dateTo));
+      return NextResponse.json(await generateWithholdingsReport(db, ctx.company.id, dateFrom, dateTo));
     }
 
     return NextResponse.json({ error: "Type must be 'vat' or 'withholdings'." }, { status: 400 });
@@ -46,9 +46,9 @@ export const GET = withAuth(
  * IVA soportado (input VAT) from RECEIVED invoices
  * Difference = amount to pay (or claim)
  */
-async function generateVatReport(companyId: string, from: Date, to: Date) {
+async function generateVatReport(db: any, companyId: string, from: Date, to: Date) {
   // Issued invoices → IVA repercutido
-  const issuedLines = await prisma.invoiceLine.findMany({
+  const issuedLines = await db.invoiceLine.findMany({
     where: {
       invoice: {
         companyId,
@@ -63,7 +63,7 @@ async function generateVatReport(companyId: string, from: Date, to: Date) {
   });
 
   // Received invoices → IVA soportado
-  const receivedLines = await prisma.invoiceLine.findMany({
+  const receivedLines = await db.invoiceLine.findMany({
     where: {
       invoice: {
         companyId,
@@ -137,8 +137,8 @@ async function generateVatReport(companyId: string, from: Date, to: Date) {
  * Sums withholding amounts from invoice lines that have a withholding rate.
  * Common in Spain for professional services (15% IRPF) and rent (19%).
  */
-async function generateWithholdingsReport(companyId: string, from: Date, to: Date) {
-  const invoices = await prisma.invoice.findMany({
+async function generateWithholdingsReport(db: any, companyId: string, from: Date, to: Date) {
+  const invoices = await db.invoice.findMany({
     where: {
       companyId,
       type: "RECEIVED",

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createAuditLog } from "@/lib/utils/audit";
 import { z } from "zod";
 import { google } from "googleapis";
@@ -18,7 +17,8 @@ const updateSchema = z.object({
  * GET /api/integrations/drive
  */
 export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
-  const integration = await prisma.integration.findUnique({
+    const db = ctx.db;
+  const integration = await db.integration.findUnique({
     where: {
       type_companyId: { type: "GOOGLE_DRIVE", companyId: ctx.company.id },
     },
@@ -48,6 +48,7 @@ export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
  * Connect or update Google Drive integration.
  */
 export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const body = await req.json();
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
@@ -72,7 +73,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     );
   }
 
-  const integration = await prisma.integration.upsert({
+  const integration = await db.integration.upsert({
     where: {
       type_companyId: { type: "GOOGLE_DRIVE", companyId: ctx.company.id },
     },
@@ -90,7 +91,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     },
   });
 
-  createAuditLog({
+  createAuditLog(db, {
     userId: ctx.user.id,
     action: "INTEGRATION_DRIVE_CONNECTED",
     entityType: "Integration",
@@ -105,7 +106,8 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
  * DELETE /api/integrations/drive
  */
 export const DELETE = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
-  await prisma.integration.updateMany({
+    const db = ctx.db;
+  await db.integration.updateMany({
     where: { type: "GOOGLE_DRIVE", companyId: ctx.company.id },
     data: { status: "DISCONNECTED", config: {}, error: null },
   });

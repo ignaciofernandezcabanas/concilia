@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createAuditLog } from "@/lib/utils/audit";
 
 /**
@@ -8,17 +7,18 @@ import { createAuditLog } from "@/lib/utils/audit";
  */
 export const DELETE = withAuth(
   async (_req: NextRequest, ctx: AuthContext & { params?: Record<string, string> }) => {
+    const db = ctx.db;
     const id = ctx.params?.id;
     if (!id) return NextResponse.json({ error: "ID required." }, { status: 400 });
 
-    const tx = await prisma.bankTransaction.findFirst({
+    const tx = await db.bankTransaction.findFirst({
       where: { id, companyId: ctx.company.id },
     });
     if (!tx) return NextResponse.json({ error: "No encontrado." }, { status: 404 });
 
-    await prisma.bankTransaction.delete({ where: { id } });
+    await db.bankTransaction.delete({ where: { id } });
 
-    createAuditLog({
+    createAuditLog(db, {
       userId: ctx.user.id,
       action: "TRANSACTION_DELETED",
       entityType: "BankTransaction",

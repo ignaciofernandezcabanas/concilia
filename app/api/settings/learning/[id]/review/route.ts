@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { z } from "zod";
 
 const reviewSchema = z.object({
@@ -17,6 +16,7 @@ const reviewSchema = z.object({
  */
 export const POST = withAuth(
   async (req: NextRequest, ctx: AuthContext & { params?: Record<string, string> }) => {
+    const db = ctx.db;
     const { user, company } = ctx;
     const patternId = ctx.params?.id;
 
@@ -30,7 +30,7 @@ export const POST = withAuth(
       return NextResponse.json({ error: "Invalid action." }, { status: 400 });
     }
 
-    const pattern = await prisma.learnedPattern.findFirst({
+    const pattern = await db.learnedPattern.findFirst({
       where: { id: patternId, companyId: company.id },
     });
 
@@ -40,7 +40,7 @@ export const POST = withAuth(
 
     switch (parsed.data.action) {
       case "approve": {
-        await prisma.learnedPattern.update({
+        await db.learnedPattern.update({
           where: { id: patternId },
           data: {
             status: "ACTIVE_SUPERVISED",
@@ -53,7 +53,7 @@ export const POST = withAuth(
       }
 
       case "reject": {
-        await prisma.learnedPattern.update({
+        await db.learnedPattern.update({
           where: { id: patternId },
           data: {
             status: "REJECTED",
@@ -67,7 +67,7 @@ export const POST = withAuth(
 
       case "promote": {
         // Create a MatchingRule from this pattern
-        const rule = await prisma.matchingRule.create({
+        const rule = await db.matchingRule.create({
           data: {
             name: `Promovida: ${pattern.counterpartName ?? pattern.conceptPattern ?? pattern.type}`,
             type: pattern.counterpartIban ? "IBAN_CLASSIFY" : "CONCEPT_CLASSIFY",
@@ -84,7 +84,7 @@ export const POST = withAuth(
           },
         });
 
-        await prisma.learnedPattern.update({
+        await db.learnedPattern.update({
           where: { id: patternId },
           data: {
             status: "PROMOTED",

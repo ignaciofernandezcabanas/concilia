@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { detectDuplicates } from "@/lib/reconciliation/detectors/duplicate-detector";
 import { detectInternalTransfer } from "@/lib/reconciliation/detectors/internal-detector";
 
@@ -18,6 +17,7 @@ import { detectInternalTransfer } from "@/lib/reconciliation/detectors/internal-
  */
 export const POST = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const { company, user } = ctx;
     const startedAt = Date.now();
 
@@ -26,7 +26,7 @@ export const POST = withAuth(
     const materialityThreshold = company.materialityThreshold;
 
     // Fetch unreconciled bank transactions
-    const pendingTx = await prisma.bankTransaction.findMany({
+    const pendingTx = await db.bankTransaction.findMany({
       where: {
         companyId: company.id,
         status: "PENDING",
@@ -35,7 +35,7 @@ export const POST = withAuth(
     });
 
     // Fetch unpaid/partially paid invoices
-    const unpaidInvoices = await prisma.invoice.findMany({
+    const unpaidInvoices = await db.invoice.findMany({
       where: {
         companyId: company.id,
         status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
@@ -46,7 +46,7 @@ export const POST = withAuth(
     });
 
     // Fetch matching rules
-    const rules = await prisma.matchingRule.findMany({
+    const rules = await db.matchingRule.findMany({
       where: { companyId: company.id, isActive: true },
       orderBy: { timesApplied: "desc" },
     });
@@ -61,9 +61,9 @@ export const POST = withAuth(
     for (const tx of pendingTx) {
       try {
         // Step 1: Detect duplicates
-        const dupResult = await detectDuplicates(tx, company.id);
+        const dupResult = await detectDuplicates(tx, db);
         if (dupResult.isDuplicate) {
-          await prisma.bankTransaction.update({
+          await db.bankTransaction.update({
             where: { id: tx.id },
             data: {
               status: "DUPLICATE",
@@ -76,9 +76,9 @@ export const POST = withAuth(
         }
 
         // Step 2: Detect internal transfers
-        const internalResult = await detectInternalTransfer(tx, company.id);
+        const internalResult = await detectInternalTransfer(tx, db);
         if (internalResult.isInternal) {
-          await prisma.bankTransaction.update({
+          await db.bankTransaction.update({
             where: { id: tx.id },
             data: {
               status: "INTERNAL",
@@ -94,13 +94,13 @@ export const POST = withAuth(
         const ruleMatch = findMatchingRule(tx, rules);
         if (ruleMatch) {
           if (ruleMatch.action === "classify") {
-            const account = await prisma.account.findFirst({
+            const account = await db.account.findFirst({
               where: { code: ruleMatch.accountCode!, companyId: company.id },
             });
 
             if (account) {
               const classification =
-                await prisma.bankTransactionClassification.create({
+                await db.bankTransactionClassification.create({
                   data: {
                     accountId: account.id,
                     cashflowType: ruleMatch.cashflowType!,
@@ -108,7 +108,7 @@ export const POST = withAuth(
                   },
                 });
 
-              await prisma.bankTransaction.update({
+              await db.bankTransaction.update({
                 where: { id: tx.id },
                 data: {
                   status: "CLASSIFIED",
@@ -118,7 +118,7 @@ export const POST = withAuth(
                 },
               });
 
-              await prisma.matchingRule.update({
+              await db.matchingRule.update({
                 where: { id: ruleMatch.id },
                 data: { timesApplied: { increment: 1 } },
               });
@@ -135,7 +135,7 @@ export const POST = withAuth(
           const confidence = calculateMatchScore(tx, exactMatch, "exact");
           const shouldAutoApprove = confidence >= autoApproveThreshold;
 
-          const reconciliation = await prisma.reconciliation.create({
+          const reconciliation = await db.reconciliation.create({
             data: {
               companyId: company.id,
               type: "EXACT_MATCH",
@@ -151,7 +151,7 @@ export const POST = withAuth(
             },
           });
 
-          await prisma.bankTransaction.update({
+          await db.bankTransaction.update({
             where: { id: tx.id },
             data: {
               status: shouldAutoApprove ? "RECONCILED" : "PENDING",
@@ -161,7 +161,7 @@ export const POST = withAuth(
           });
 
           if (shouldAutoApprove) {
-            await prisma.invoice.update({
+            await db.invoice.update({
               where: { id: exactMatch.id },
               data: {
                 status: "PAID",
@@ -197,7 +197,7 @@ export const POST = withAuth(
             "difference"
           );
 
-          await prisma.reconciliation.create({
+          await db.reconciliation.create({
             data: {
               companyId: company.id,
               type: "DIFFERENCE_MATCH",
@@ -216,7 +216,7 @@ export const POST = withAuth(
             },
           });
 
-          await prisma.bankTransaction.update({
+          await db.bankTransaction.update({
             where: { id: tx.id },
             data: {
               detectedType: "MATCH_DIFFERENCE",
@@ -230,7 +230,7 @@ export const POST = withAuth(
 
         // Step 6: No match found — mark for investigation if significant
         if (Math.abs(tx.amount) >= materialityThreshold) {
-          await prisma.bankTransaction.update({
+          await db.bankTransaction.update({
             where: { id: tx.id },
             data: {
               detectedType: "UNIDENTIFIED",
@@ -238,7 +238,7 @@ export const POST = withAuth(
             },
           });
         } else {
-          await prisma.bankTransaction.update({
+          await db.bankTransaction.update({
             where: { id: tx.id },
             data: {
               detectedType: "UNIDENTIFIED",
@@ -256,7 +256,7 @@ export const POST = withAuth(
     const duration = Date.now() - startedAt;
 
     // Create sync log for the reconciliation run
-    await prisma.syncLog.create({
+    await db.syncLog.create({
       data: {
         companyId: company.id,
         source: "RECONCILIATION",
@@ -292,7 +292,7 @@ export const POST = withAuth(
 // ---------------------------------------------------------------------------
 
 type InvoiceWithContact = Awaited<
-  ReturnType<typeof prisma.invoice.findMany>
+  ReturnType<typeof import("@prisma/client").PrismaClient.prototype.invoice.findMany>
 >[number] & {
   contact: { id: string; iban: string | null; name: string | null } | null;
 };
@@ -353,7 +353,7 @@ function findDifferenceMatch(
 
 function findMatchingRule(
   tx: { amount: number; concept: string | null; counterpartIban: string | null },
-  rules: Awaited<ReturnType<typeof prisma.matchingRule.findMany>>
+  rules: Awaited<any[]>
 ): (typeof rules)[number] | null {
   for (const rule of rules) {
     // IBAN-based rules

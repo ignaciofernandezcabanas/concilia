@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 
 /**
  * GET /api/reports/aging?type=receivable|payable&asOf=2026-03-31
@@ -16,6 +15,7 @@ import { prisma } from "@/lib/db";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const url = req.nextUrl;
     const type = url.searchParams.get("type") ?? "receivable";
     const asOfParam = url.searchParams.get("asOf");
@@ -24,7 +24,7 @@ export const GET = withAuth(
     const isReceivable = type === "receivable";
 
     // Fetch pending invoices
-    const invoices = await prisma.invoice.findMany({
+    const invoices = await db.invoice.findMany({
       where: {
         companyId: ctx.company.id,
         status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
@@ -131,7 +131,7 @@ export const GET = withAuth(
     const twelveMonthsAgo = new Date(asOf);
     twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
 
-    const annualAmount = await prisma.invoice.aggregate({
+    const annualAmount = await db.invoice.aggregate({
       where: {
         companyId: ctx.company.id,
         type: isReceivable

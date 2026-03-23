@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { parsePagination, paginatedResponse } from "@/lib/utils/pagination";
 import type { Prisma } from "@prisma/client";
 
@@ -16,6 +15,7 @@ import type { Prisma } from "@prisma/client";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const { user, company } = ctx;
     const searchParams = req.nextUrl.searchParams;
     const { page, pageSize, skip, take } = parsePagination(searchParams);
@@ -33,13 +33,13 @@ export const GET = withAuth(
     }
 
     const [data, total] = await Promise.all([
-      prisma.notification.findMany({
+      db.notification.findMany({
         where,
         orderBy: { createdAt: "desc" },
         skip,
         take,
       }),
-      prisma.notification.count({ where }),
+      db.notification.count({ where }),
     ]);
 
     return NextResponse.json(paginatedResponse(data, total, page, pageSize));
@@ -58,6 +58,7 @@ export const GET = withAuth(
  */
 export const POST = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const { user, company } = ctx;
 
     let body: { ids?: string[]; markAllRead?: boolean };
@@ -71,7 +72,7 @@ export const POST = withAuth(
     }
 
     if (body.markAllRead) {
-      const result = await prisma.notification.updateMany({
+      const result = await db.notification.updateMany({
         where: {
           userId: user.id,
           companyId: company.id,
@@ -87,7 +88,7 @@ export const POST = withAuth(
     }
 
     if (body.ids && Array.isArray(body.ids) && body.ids.length > 0) {
-      const result = await prisma.notification.updateMany({
+      const result = await db.notification.updateMany({
         where: {
           id: { in: body.ids },
           userId: user.id,

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { z } from "zod";
 
 /**
@@ -8,9 +7,10 @@ import { z } from "zod";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const year = parseInt(req.nextUrl.searchParams.get("year") || String(new Date().getFullYear()));
 
-    const budget = await prisma.budget.findFirst({
+    const budget = await db.budget.findFirst({
       where: { companyId: ctx.company.id, year },
       include: { lines: { orderBy: [{ accountCode: "asc" }, { month: "asc" }] } },
     });
@@ -68,6 +68,7 @@ const createSchema = z.object({
  */
 export const POST = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
@@ -77,7 +78,7 @@ export const POST = withAuth(
     const { year, name, lines } = parsed.data;
 
     // Upsert budget
-    const budget = await prisma.budget.upsert({
+    const budget = await db.budget.upsert({
       where: { companyId_year_name: { companyId: ctx.company.id, year, name } },
       create: { year, name, companyId: ctx.company.id },
       update: { updatedAt: new Date() },
@@ -85,7 +86,7 @@ export const POST = withAuth(
 
     // Upsert lines
     for (const line of lines) {
-      await prisma.budgetLine.upsert({
+      await db.budgetLine.upsert({
         where: {
           budgetId_accountCode_month: {
             budgetId: budget.id,
@@ -114,10 +115,11 @@ export const POST = withAuth(
  */
 export const PUT = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const body = await req.json();
     const { year, action } = body;
 
-    const budget = await prisma.budget.findFirst({
+    const budget = await db.budget.findFirst({
       where: { companyId: ctx.company.id, year },
     });
 
@@ -142,7 +144,7 @@ export const PUT = withAuth(
       );
     }
 
-    await prisma.budget.update({
+    await db.budget.update({
       where: { id: budget.id },
       data: { status: t.to as "DRAFT" | "APPROVED" | "CLOSED" },
     });

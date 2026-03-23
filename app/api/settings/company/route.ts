@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { companySettingsSchema } from "@/lib/utils/validation";
 import { createAuditLog } from "@/lib/utils/audit";
 
@@ -11,9 +10,10 @@ import { createAuditLog } from "@/lib/utils/audit";
  */
 export const GET = withAuth(
   async (_req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const { company } = ctx;
 
-    const full = await prisma.company.findUnique({
+    const full = await db.company.findUnique({
       where: { id: company.id },
       include: {
         integrations: {
@@ -56,6 +56,7 @@ export const GET = withAuth(
  */
 export const PUT = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const { user, company } = ctx;
 
     let body: unknown;
@@ -90,12 +91,12 @@ export const PUT = withAuth(
       );
     }
 
-    const updated = await prisma.company.update({
+    const updated = await db.company.update({
       where: { id: company.id },
       data: cleanUpdates,
     });
 
-    createAuditLog({
+    createAuditLog(db, {
       userId: user.id,
       action: "COMPANY_SETTINGS_UPDATED",
       entityType: "Company",

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { createAuditLog } from "@/lib/utils/audit";
 import { GmailClient } from "@/lib/gmail/client";
 import { z } from "zod";
@@ -19,7 +18,8 @@ const updateSchema = z.object({
  * GET /api/integrations/gmail
  */
 export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
-  const integration = await prisma.integration.findFirst({
+    const db = ctx.db;
+  const integration = await db.integration.findFirst({
     where: { companyId: ctx.company.id, type: "GOOGLE_DRIVE" },
   });
 
@@ -39,6 +39,7 @@ export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
  * Connect multiple Gmail accounts for read-only invoice scanning.
  */
 export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const body = await req.json();
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
@@ -63,12 +64,12 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     }
   }
 
-  const existing = await prisma.integration.findUnique({
+  const existing = await db.integration.findUnique({
     where: { type_companyId: { type: "GOOGLE_DRIVE", companyId: ctx.company.id } },
   });
   const existingConfig = (existing?.config as Record<string, unknown>) ?? {};
 
-  await prisma.integration.upsert({
+  await db.integration.upsert({
     where: { type_companyId: { type: "GOOGLE_DRIVE", companyId: ctx.company.id } },
     create: {
       type: "GOOGLE_DRIVE",
@@ -82,7 +83,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     },
   });
 
-  createAuditLog({
+  createAuditLog(db, {
     userId: ctx.user.id,
     action: "INTEGRATION_GMAIL_CONNECTED",
     entityType: "Integration",

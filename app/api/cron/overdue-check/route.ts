@@ -1,6 +1,6 @@
 import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { prisma } from "@/lib/db"; // GLOBAL-PRISMA: cron creates scoped db per company
 import { withCronAuth } from "@/lib/auth/cron-guard";
 
 /**

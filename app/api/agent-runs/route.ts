@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 
 /**
  * GET /api/agent-runs?page=1&limit=20
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
-    const company = await prisma.company.findUnique({
+    const db = ctx.db;
+    const company = await db.company.findUnique({
       where: { id: ctx.company.id },
       select: { organizationId: true },
     });
@@ -23,7 +23,7 @@ export const GET = withAuth(
     const where = { organizationId: company.organizationId };
 
     const [data, total] = await Promise.all([
-      prisma.agentRun.findMany({
+      db.agentRun.findMany({
         where,
         orderBy: { startedAt: "desc" },
         skip,
@@ -42,7 +42,7 @@ export const GET = withAuth(
           errorsCount: true,
         },
       }),
-      prisma.agentRun.count({ where }),
+      db.agentRun.count({ where }),
     ]);
 
     return NextResponse.json({

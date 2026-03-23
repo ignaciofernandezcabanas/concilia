@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 
 /**
  * GET /api/reports/trial-balance?from=2026-01-01&to=2026-03-31
@@ -11,6 +10,7 @@ import { prisma } from "@/lib/db";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const url = req.nextUrl;
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
@@ -23,7 +23,7 @@ export const GET = withAuth(
     }
 
     // Get all posted journal entry lines in the period
-    const lines = await prisma.journalEntryLine.findMany({
+    const lines = await db.journalEntryLine.findMany({
       where: {
         journalEntry: {
           companyId: ctx.company.id,

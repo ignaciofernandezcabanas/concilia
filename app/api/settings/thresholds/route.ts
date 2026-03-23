@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 import { z } from "zod";
 
 const CATEGORIES = ["EXACT_MATCH", "GROUPED_MATCH", "DIFFERENCE_MATCH", "PARTIAL_MATCH", "CLASSIFICATION"];
@@ -10,9 +9,10 @@ const CATEGORIES = ["EXACT_MATCH", "GROUPED_MATCH", "DIFFERENCE_MATCH", "PARTIAL
  * Returns per-category thresholds + global fallback.
  */
 export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const { company } = ctx;
 
-  const categoryThresholds = await prisma.categoryThreshold.findMany({
+  const categoryThresholds = await db.categoryThreshold.findMany({
     where: { companyId: company.id },
   });
 
@@ -37,6 +37,7 @@ export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
  * Body: { category: string, threshold: number } or { category: string, reset: true }
  */
 export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
   const { company } = ctx;
   const body = await req.json();
 
@@ -52,7 +53,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   }
 
   if (parsed.data.reset) {
-    await prisma.categoryThreshold.deleteMany({
+    await db.categoryThreshold.deleteMany({
       where: { companyId: company.id, category: parsed.data.category },
     });
     return NextResponse.json({ success: true, threshold: company.autoApproveThreshold, isCustom: false });
@@ -62,7 +63,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     return NextResponse.json({ error: "threshold or reset required." }, { status: 400 });
   }
 
-  const ct = await prisma.categoryThreshold.upsert({
+  const ct = await db.categoryThreshold.upsert({
     where: {
       companyId_category: { companyId: company.id, category: parsed.data.category },
     },

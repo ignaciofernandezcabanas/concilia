@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db";
 
 /**
  * GET /api/reports/ledger?accountCode=430&from=2026-01-01&to=2026-03-31
@@ -16,6 +15,7 @@ import { prisma } from "@/lib/db";
  */
 export const GET = withAuth(
   async (req: NextRequest, ctx: AuthContext) => {
+    const db = ctx.db;
     const url = req.nextUrl;
     const accountCode = url.searchParams.get("accountCode");
     const from = url.searchParams.get("from");
@@ -28,7 +28,7 @@ export const GET = withAuth(
       );
     }
 
-    const account = await prisma.account.findUnique({
+    const account = await db.account.findUnique({
       where: { code_companyId: { code: accountCode, companyId: ctx.company.id } },
       select: { id: true, code: true, name: true, group: true },
     });
@@ -44,7 +44,7 @@ export const GET = withAuth(
     const hasDateFilter = from || to;
 
     // 1. Journal entry lines
-    const journalLines = await prisma.journalEntryLine.findMany({
+    const journalLines = await db.journalEntryLine.findMany({
       where: {
         accountId: account.id,
         journalEntry: {
@@ -62,7 +62,7 @@ export const GET = withAuth(
     });
 
     // 2. Classified bank transactions
-    const classifiedTx = await prisma.bankTransaction.findMany({
+    const classifiedTx = await db.bankTransaction.findMany({
       where: {
         companyId: ctx.company.id,
         status: "CLASSIFIED",
@@ -76,7 +76,7 @@ export const GET = withAuth(
     });
 
     // 3. Invoice lines
-    const invoiceLines = await prisma.invoiceLine.findMany({
+    const invoiceLines = await db.invoiceLine.findMany({
       where: {
         accountId: account.id,
         invoice: {
