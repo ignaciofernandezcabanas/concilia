@@ -366,12 +366,20 @@ export const DRAFT_REMINDER = {
 
 export const DAILY_BRIEFING = {
   task: "daily_briefing" as const,
-  version: "1.0",
+  version: "2.0",
   system:
     `Eres el CFO virtual de un grupo empresarial español. Genera un briefing diario conciso para el controller.\n` +
-    `Estructura: 1. GRUPO (3 líneas), 2. ALERTAS, 3. POR SOCIEDAD, 4. ACCIÓN HOY.\n` +
+    `Estructura:\n` +
+    `1. GRUPO (3 líneas): facturación consolidada, EBITDA, tesorería del grupo.\n` +
+    `2. CONSOLIDACIÓN: NCI, eliminaciones IC pendientes, FX si aplica.\n` +
+    `3. POR SOCIEDAD: 1-2 líneas cada una con resultado y método de consolidación.\n` +
+    `4. ALERTAS: anomalías, tesorería, morosos, fiscal.\n` +
+    `5. ACCIÓN HOY: la 1 cosa más importante.\n` +
     `Responde SOLO con texto formateado, sin JSON.`,
-  buildUser: (data: { orgName: string; metricsJson: string; forecastJson: string; anomaliesJson: string; bandejaCount: number; fiscalJson: string }) =>
+  buildUser: (data: {
+    orgName: string; metricsJson: string; forecastJson: string; anomaliesJson: string;
+    bandejaCount: number; fiscalJson: string; consolidationJson?: string;
+  }) =>
     `<company_data>\n` +
     `Organización: ${data.orgName}\n\n` +
     `Métricas del run:\n${data.metricsJson}\n\n` +
@@ -380,6 +388,9 @@ export const DAILY_BRIEFING = {
     `Items en bandeja pendientes: ${data.bandejaCount}\n\n` +
     `Calendario fiscal:\n${data.fiscalJson}\n` +
     `</company_data>\n\n` +
+    (data.consolidationJson
+      ? `<consolidation_data>\n${data.consolidationJson}\n</consolidation_data>\n\n`
+      : "") +
     `Genera el briefing diario.`,
 };
 
@@ -389,16 +400,106 @@ export const DAILY_BRIEFING = {
 
 export const CLOSE_PROPOSAL = {
   task: "close_proposal" as const,
-  version: "1.0",
+  version: "2.0",
   system:
-    `Eres un controller financiero español. Genera una propuesta de cierre mensual concisa.\n` +
-    `Incluye: checklist, asientos pendientes, intercompañía, resultado estimado.\n` +
+    `Eres un controller financiero español experto en consolidación. Genera una propuesta de cierre mensual.\n` +
+    `Estructura en 2 secciones:\n` +
+    `1. POR SOCIEDAD: checklist de cada empresa (txs pendientes, asientos, periodo abierto/cerrado).\n` +
+    `2. CONSOLIDACIÓN GRUPO: eliminaciones IC, NCI, FX, equity method, asientos de consolidación.\n` +
     `Responde SOLO con texto formateado, sin JSON.`,
-  buildUser: (data: { orgName: string; month: string; checklistJson: string }) =>
+  buildUser: (data: { orgName: string; month: string; checklistJson: string; consolidationJson?: string }) =>
     `<company_data>\n` +
     `Organización: ${data.orgName}\n` +
     `Mes de cierre: ${data.month}\n\n` +
-    `Checklist:\n${data.checklistJson}\n` +
+    `Checklist por sociedad:\n${data.checklistJson}\n` +
     `</company_data>\n\n` +
+    (data.consolidationJson
+      ? `<consolidation_data>\n${data.consolidationJson}\n</consolidation_data>\n\n`
+      : "") +
     `Genera la propuesta de cierre.`,
+};
+
+// ════════════════════════════════════════════════════════════
+// CONSOLIDATION REVIEW (Opus)
+// ════════════════════════════════════════════════════════════
+
+export const CONSOLIDATION_REVIEW = {
+  task: "consolidation_review" as const,
+  version: "1.0",
+  system:
+    `Eres un auditor de consolidación contable español. Revisa las cifras consolidadas y señala inconsistencias.\n` +
+    `Para cada check, indica: OK ✅, WARN ⚠️ o ERROR ❌.\n` +
+    `Checks: 1) Eliminaciones IC completas, 2) NCI coherente con % participación,\n` +
+    `3) Equity method correcto, 4) Saldos IC cuadrados, 5) FX aplicado si hay moneda ≠ EUR.\n` +
+    `Responde SOLO con texto formateado.`,
+  buildUser: (data: { perCompanyJson: string; eliminationsJson: string; nciAmount: number; consolidatedJson: string }) =>
+    `<consolidation_data>\n` +
+    `Resultados por sociedad:\n${data.perCompanyJson}\n\n` +
+    `Eliminaciones IC propuestas:\n${data.eliminationsJson}\n\n` +
+    `NCI (intereses minoritarios): ${data.nciAmount.toFixed(2)} EUR\n\n` +
+    `Totales consolidados:\n${data.consolidatedJson}\n` +
+    `</consolidation_data>\n\n` +
+    `Revisa la consolidación y genera el informe de checks.`,
+};
+
+// ════════════════════════════════════════════════════════════
+// IC ELIMINATION EXPLAIN (Sonnet)
+// ════════════════════════════════════════════════════════════
+
+export const IC_ELIMINATION_EXPLAIN = {
+  task: "ic_elimination_explain" as const,
+  version: "1.0",
+  system:
+    `Eres un contable español experto en consolidación. Explica eliminaciones intercompañía.\n` +
+    `Indica: tipo (ingreso/gasto, deudor/acreedor, dividendo, préstamo), asiento propuesto, impacto en consolidado.\n` +
+    `Responde SOLO con texto, 3-4 frases.`,
+  buildUser: (data: { companyA: string; companyB: string; amount: number; accountA: string; accountB: string; txConcept: string }) =>
+    `<intercompany_data>\n` +
+    `Sociedad A: ${data.companyA} → cuenta ${data.accountA}\n` +
+    `Sociedad B: ${data.companyB} → cuenta ${data.accountB}\n` +
+    `Importe: ${data.amount.toFixed(2)} EUR\n` +
+    `Concepto: ${data.txConcept}\n` +
+    `</intercompany_data>\n\n` +
+    `Explica esta eliminación intercompañía.`,
+};
+
+// ════════════════════════════════════════════════════════════
+// EXPLAIN GROUP ANOMALY (Sonnet)
+// ════════════════════════════════════════════════════════════
+
+export const EXPLAIN_GROUP_ANOMALY = {
+  task: "explain_group_anomaly" as const,
+  version: "1.0",
+  system:
+    `Eres un controller de grupo español. Explica anomalías a nivel de grupo (no individuales).\n` +
+    `Tipos: desequilibrio IC, spike consolidado, drift de NCI, impacto FX.\n` +
+    `Responde con 2-3 frases. SOLO texto.`,
+  buildUser: (data: { anomalyType: string; details: string }) =>
+    `<anomaly_data>\n` +
+    `Tipo: ${data.anomalyType}\n` +
+    `Detalle:\n${data.details}\n` +
+    `</anomaly_data>\n\n` +
+    `Explica esta anomalía de grupo al controller.`,
+};
+
+// ════════════════════════════════════════════════════════════
+// VARIANCE CONSOLIDATED (Sonnet)
+// ════════════════════════════════════════════════════════════
+
+export const VARIANCE_CONSOLIDATED = {
+  task: "variance_consolidated" as const,
+  version: "1.0",
+  system:
+    `Eres un analista financiero español. Descompón la variación consolidada.\n` +
+    `Factores: volumen, precio, mix de subsidiarias, scope (nuevas/vendidas), FX, one-offs.\n` +
+    `Responde con 3-5 frases analíticas. SOLO texto.`,
+  buildUser: (data: { lineCode: string; lineName: string; actual: number; budget: number; priorYear: number; perCompanyBreakdown: string }) =>
+    `<variance_data>\n` +
+    `Línea: ${data.lineCode} - ${data.lineName}\n` +
+    `Actual: ${data.actual.toFixed(2)} EUR\n` +
+    `Presupuesto: ${data.budget.toFixed(2)} EUR\n` +
+    `Año anterior: ${data.priorYear.toFixed(2)} EUR\n\n` +
+    `Desglose por sociedad:\n${data.perCompanyBreakdown}\n` +
+    `</variance_data>\n\n` +
+    `Descompón la variación consolidada.`,
 };

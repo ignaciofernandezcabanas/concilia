@@ -2,6 +2,7 @@
  * Daily Briefing Generator.
  *
  * Uses Opus to synthesize a 1-page briefing in Spanish.
+ * v2: includes consolidation KPIs (NCI, IC eliminations, per-subsidiary results).
  */
 
 import { callAI } from "@/lib/ai/model-router";
@@ -23,13 +24,32 @@ export interface ForecastWeekSummary {
   projectedBalance: number;
 }
 
+export interface CompanyConsolidationSummary {
+  id: string;
+  name: string;
+  consolidationMethod: string;
+  ownershipPercentage: number;
+  resultado: number;
+  functionalCurrency: string;
+}
+
+export interface ConsolidationContext {
+  companies: CompanyConsolidationSummary[];
+  consolidatedResultado: number;
+  nciAmount: number;
+  pendingEliminations: number;
+  pendingEliminationsAmount: number;
+  hasFxExposure: boolean;
+}
+
 export async function generateDailyBriefing(
   orgName: string,
   runMetrics: AgentRunMetrics,
   forecast: ForecastWeekSummary[] | null,
   anomalies: Anomaly[],
   bandejaCount: number,
-  closeProposal: string | null
+  closeProposal: string | null,
+  consolidation?: ConsolidationContext | null
 ): Promise<string | null> {
   const metricsJson = JSON.stringify({
     ...runMetrics,
@@ -51,6 +71,25 @@ export async function generateDailyBriefing(
       })))
     : "Sin anomalías detectadas.";
 
+  // Build consolidation context for Opus
+  let consolidationJson: string | undefined;
+  if (consolidation && consolidation.companies.length > 1) {
+    consolidationJson = JSON.stringify({
+      perSubsidiaria: consolidation.companies.map((c) => ({
+        nombre: c.name,
+        metodo: c.consolidationMethod,
+        participacion: `${c.ownershipPercentage}%`,
+        resultado: c.resultado,
+        moneda: c.functionalCurrency,
+      })),
+      resultadoConsolidado: consolidation.consolidatedResultado,
+      interesesMinoritarios: consolidation.nciAmount,
+      eliminacionesPendientes: consolidation.pendingEliminations,
+      importeEliminaciones: consolidation.pendingEliminationsAmount,
+      exposicionFX: consolidation.hasFxExposure ? "Sí — revisar tipo de cambio" : "No",
+    });
+  }
+
   return callAI(
     "daily_briefing",
     DAILY_BRIEFING.system,
@@ -61,6 +100,7 @@ export async function generateDailyBriefing(
       anomaliesJson,
       bandejaCount,
       fiscalJson: "{}",
+      consolidationJson,
     })
   );
 }

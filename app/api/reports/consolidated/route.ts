@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
 import { generatePyG } from "@/lib/reports/pyg-generator";
 import { generateBalance } from "@/lib/reports/balance-generator";
+import { proposeEliminations } from "@/lib/ai/intercompany-eliminator";
 
 /**
  * GET /api/reports/consolidated?report=pyg|balance&from=2026-01-01&to=2026-03-31
@@ -95,6 +96,24 @@ export const GET = withAuth(
         }
       }
 
+      // Apply intercompany eliminations
+      const eliminations = await proposeEliminations(company.organizationId!);
+      const eliminationsByLine: Record<string, number> = {};
+      for (const elim of eliminations) {
+        // Eliminate revenue (line mapped from accountCodeA) and expense (line mapped from accountCodeB)
+        // Simplified: reduce both sides proportionally
+        if (elim.type === "REVENUE_EXPENSE") {
+          eliminationsByLine["1"] = (eliminationsByLine["1"] ?? 0) - elim.eliminationAmount; // reduce revenue
+          eliminationsByLine["4"] = (eliminationsByLine["4"] ?? 0) + elim.eliminationAmount; // reduce expense (add back)
+        }
+      }
+
+      // Apply eliminations to consolidated
+      const consolidatedAfterElim = { ...consolidated };
+      for (const [line, adj] of Object.entries(eliminationsByLine)) {
+        consolidatedAfterElim[line] = (consolidatedAfterElim[line] ?? 0) + adj;
+      }
+
       return NextResponse.json({
         type: "consolidated_pyg",
         organizationId: company.organizationId,
@@ -106,7 +125,9 @@ export const GET = withAuth(
           ownership: co.ownershipPercentage,
         })),
         perCompany: results,
-        consolidated,
+        consolidated: consolidatedAfterElim,
+        eliminations: eliminationsByLine,
+        eliminationDetails: eliminations,
         nci: nciTotal !== 0 ? Math.round(nciTotal * 100) / 100 : null,
       });
     }

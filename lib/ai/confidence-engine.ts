@@ -27,7 +27,8 @@ export type ActionCategory =
   | "provision"
   | "amortization"
   | "periodification"
-  | "manual_journal";
+  | "manual_journal"
+  | "consolidation_adjustment";
 
 export interface ConfidenceResult {
   score: number;
@@ -79,6 +80,9 @@ export interface ConfidenceContext {
   patternKey?: string;
   persistedAdjustment?: number;
   categoryPaused?: boolean;
+  // Consolidation context
+  consolidationMethod?: string;
+  ownershipPercentage?: number;
 }
 
 // ── Base scores per category ──
@@ -100,10 +104,11 @@ const BASE_SCORES: Record<ActionCategory, number> = {
   amortization: 1.00,
   periodification: 0.85,
   manual_journal: 0.00,
+  consolidation_adjustment: 0.70,
 };
 
 // Categories that NEVER auto-execute
-const NEVER_AUTO = new Set<ActionCategory>(["periodification", "manual_journal"]);
+const NEVER_AUTO = new Set<ActionCategory>(["periodification", "manual_journal", "consolidation_adjustment"]);
 
 // ── Main function ──
 
@@ -212,6 +217,19 @@ export function calculateConfidence(ctx: ConfidenceContext): ConfidenceResult {
     if (ctx.amountDiffPercent != null && ctx.amountDiffPercent > 1) {
       historical -= 0.10;
       reasons.push(`-0.10: diferencia importe >1%`);
+    }
+  }
+
+  // Consolidation-aware adjustments for intercompany categories
+  if (category === "intercompany_exact" || category === "intercompany_approx") {
+    if (ctx.consolidationMethod === "EQUITY") {
+      historical -= 0.15;
+      reasons.push(`-0.15: método equity — IC no se elimina automáticamente`);
+    }
+    if (ctx.ownershipPercentage != null && ctx.ownershipPercentage < 100) {
+      const penalty = (100 - ctx.ownershipPercentage) / 500; // max -0.10 at 50%
+      historical -= penalty;
+      reasons.push(`-${penalty.toFixed(2)}: participación ${ctx.ownershipPercentage}% < 100%`);
     }
   }
 
