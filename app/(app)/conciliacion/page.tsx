@@ -19,6 +19,8 @@ export default function Conciliacion() {
   const [resolving, setResolving] = useState<string | null>(null);
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchProcessing, setBatchProcessing] = useState(false);
 
   const { data, loading, refetch } = useTransactions({
     status: status || undefined,
@@ -181,75 +183,225 @@ export default function Conciliacion() {
                 <div
                   className={`bg-white rounded-lg border border-subtle overflow-hidden ${selectedTxId ? "flex-1 min-w-0" : "w-full"}`}
                 >
-                  <div className="flex items-center h-10 px-5 border-b border-subtle text-xs font-semibold text-text-secondary">
+                  <div className="flex items-center h-10 px-4 border-b border-subtle text-xs font-semibold text-text-secondary">
+                    <span className="w-8">
+                      <input
+                        type="checkbox"
+                        checked={selected.size === transactions.length && transactions.length > 0}
+                        onChange={(e) => {
+                          if (e.target.checked)
+                            setSelected(
+                              new Set(
+                                transactions.filter((t) => t.status === "PENDING").map((t) => t.id)
+                              )
+                            );
+                          else setSelected(new Set());
+                        }}
+                        className="rounded border-border"
+                      />
+                    </span>
+                    <span className="w-12">Prior.</span>
                     <span className="w-20">Tipo</span>
-                    <span className="w-24">Fecha</span>
+                    <span className="w-20">Fecha</span>
                     <span className="flex-1">Concepto</span>
-                    <span className="w-[130px] text-right">Importe</span>
-                    <span className="w-24">Estado</span>
-                    <span className="w-24 text-right">Acciones</span>
+                    <span className="w-10 text-center">Conf.</span>
+                    <span className="w-[120px] text-right">Importe</span>
+                    <span className="w-20">Estado</span>
+                    <span className="w-20 text-right">Acciones</span>
                   </div>
-                  {transactions.map((tx) => (
-                    <div
-                      key={tx.id}
-                      onClick={() => setSelectedTxId(tx.id === selectedTxId ? null : tx.id)}
-                      className={`flex items-center h-12 px-5 text-[13px] border-b border-border-light hover:bg-page transition-colors cursor-pointer ${tx.id === selectedTxId ? "bg-accent-light/30" : ""}`}
-                    >
-                      <span className="w-20">
-                        {tx.detectedType && <Badge value={tx.detectedType} />}
-                      </span>
-                      <span className="w-24 text-text-secondary">{formatDate(tx.valueDate)}</span>
-                      <span className="flex-1 text-text-primary truncate">
-                        {tx.conceptParsed || tx.concept || "—"}
-                      </span>
-                      <span
-                        className={`w-[130px] text-right font-mono font-medium ${tx.amount >= 0 ? "text-green-text" : "text-red-text"}`}
+                  {transactions.map((tx) => {
+                    const conf = tx.reconciliation?.confidenceScore;
+                    const confPct = conf != null ? Math.round(conf * 100) : null;
+                    const priority = tx.priority ?? "ROUTINE";
+                    const priorityColors: Record<string, string> = {
+                      URGENT: "bg-red-100 text-red-700",
+                      DECISION: "bg-amber-100 text-amber-700",
+                      CONFIRMATION: "bg-blue-100 text-blue-700",
+                      ROUTINE: "bg-gray-100 text-gray-500",
+                    };
+                    const econ = (tx as Record<string, unknown>).economicCategory as
+                      | string
+                      | undefined;
+                    const isCapex = econ?.startsWith("CAPEX");
+                    const isInvestment = econ?.startsWith("INVESTMENT") || econ === "LOAN_GRANTED";
+
+                    return (
+                      <div
+                        key={tx.id}
+                        onClick={() => setSelectedTxId(tx.id === selectedTxId ? null : tx.id)}
+                        className={`flex items-center h-12 px-4 text-[13px] border-b border-border-light row-hover hover:bg-page cursor-pointer ${tx.id === selectedTxId ? "bg-accent-light/30" : ""} ${priority === "URGENT" ? "border-l-2 border-l-red" : ""}`}
                       >
-                        {formatAmount(tx.amount)}
-                      </span>
-                      <span className="w-24">
-                        <Badge value={tx.status} />
-                      </span>
-                      <span className="w-24 flex justify-end gap-1">
-                        {tx.status === "PENDING" && tx.reconciliation && (
-                          <>
-                            <button
-                              disabled={!!resolving}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (tx.reconciliation?.id)
-                                  handleResolve({
-                                    action: "approve",
-                                    reconciliationId: tx.reconciliation.id,
-                                  });
-                              }}
-                              className="p-1 rounded hover:bg-green-light text-green transition-colors"
-                              title="Aprobar"
+                        <span className="w-8" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selected.has(tx.id)}
+                            onChange={(e) => {
+                              const next = new Set(selected);
+                              if (e.target.checked) next.add(tx.id);
+                              else next.delete(tx.id);
+                              setSelected(next);
+                            }}
+                            className="rounded border-border"
+                          />
+                        </span>
+                        <span className="w-12">
+                          <span
+                            className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${priorityColors[priority] ?? priorityColors.ROUTINE}`}
+                          >
+                            {priority === "URGENT"
+                              ? "URG"
+                              : priority === "DECISION"
+                                ? "DEC"
+                                : priority === "CONFIRMATION"
+                                  ? "CONF"
+                                  : "—"}
+                          </span>
+                        </span>
+                        <span className="w-20">
+                          {isCapex ? (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">
+                              CAPEX
+                            </span>
+                          ) : isInvestment ? (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">
+                              INVEST
+                            </span>
+                          ) : tx.detectedType ? (
+                            <Badge value={tx.detectedType} />
+                          ) : null}
+                        </span>
+                        <span className="w-20 text-text-secondary text-xs">
+                          {formatDate(tx.valueDate)}
+                        </span>
+                        <span
+                          className="flex-1 text-text-primary truncate"
+                          title={tx.concept ?? undefined}
+                        >
+                          {tx.conceptParsed || tx.concept || "—"}
+                        </span>
+                        <span className="w-10 text-center">
+                          {confPct != null && (
+                            <span
+                              className={`text-[10px] font-mono font-medium ${confPct >= 90 ? "text-green-600" : confPct >= 70 ? "text-amber-600" : "text-red-500"}`}
                             >
-                              <Check size={14} />
-                            </button>
-                            <button
-                              disabled={!!resolving}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (tx.reconciliation?.id)
-                                  handleResolve({
-                                    action: "reject",
-                                    reconciliationId: tx.reconciliation.id,
-                                    reason: "Rechazado por el usuario",
-                                  });
-                              }}
-                              className="p-1 rounded hover:bg-red-light text-red transition-colors"
-                              title="Rechazar"
-                            >
-                              <X size={14} />
-                            </button>
-                          </>
-                        )}
-                      </span>
-                    </div>
-                  ))}
+                              {confPct}%
+                            </span>
+                          )}
+                        </span>
+                        <span
+                          className={`w-[120px] text-right font-mono font-medium ${tx.amount >= 0 ? "text-green-text" : "text-red-text"}`}
+                        >
+                          {formatAmount(tx.amount)}
+                        </span>
+                        <span className="w-20">
+                          <Badge value={tx.status} />
+                        </span>
+                        <span className="w-20 flex justify-end gap-1">
+                          {tx.status === "PENDING" && tx.reconciliation && (
+                            <>
+                              <button
+                                disabled={!!resolving}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (tx.reconciliation?.id)
+                                    handleResolve({
+                                      action: "approve",
+                                      reconciliationId: tx.reconciliation.id,
+                                    });
+                                }}
+                                className="p-1 rounded hover:bg-green-light text-green transition-colors"
+                                title="Aprobar"
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button
+                                disabled={!!resolving}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (tx.reconciliation?.id)
+                                    handleResolve({
+                                      action: "reject",
+                                      reconciliationId: tx.reconciliation.id,
+                                      reason: "Rechazado por el usuario",
+                                    });
+                                }}
+                                className="p-1 rounded hover:bg-red-light text-red transition-colors"
+                                title="Rechazar"
+                              >
+                                <X size={14} />
+                              </button>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
+
+                {/* Batch action bar */}
+                {selected.size > 0 && (
+                  <div className="sticky bottom-0 bg-white border-t border-subtle px-5 py-3 flex items-center gap-3 shadow-lg z-10">
+                    <span className="text-sm font-medium text-text-primary">
+                      {selected.size} seleccionado{selected.size > 1 ? "s" : ""}
+                    </span>
+                    <button
+                      disabled={batchProcessing}
+                      onClick={async () => {
+                        setBatchProcessing(true);
+                        try {
+                          const items = transactions.filter(
+                            (t) => selected.has(t.id) && t.reconciliation?.id
+                          );
+                          for (const tx of items) {
+                            await api.post(`/api/reconciliation/${tx.reconciliation!.id}/resolve`, {
+                              action: "approve",
+                            });
+                          }
+                          setToast({ message: `${items.length} items aprobados`, type: "success" });
+                          setSelected(new Set());
+                          refetch();
+                        } catch {
+                          setToast({ message: "Error al procesar batch", type: "error" });
+                        }
+                        setBatchProcessing(false);
+                      }}
+                      className="text-xs bg-green text-white px-3 py-1.5 rounded hover:bg-green/90 disabled:opacity-50"
+                    >
+                      {batchProcessing ? "Procesando..." : `Aprobar ${selected.size}`}
+                    </button>
+                    <button
+                      disabled={batchProcessing}
+                      onClick={async () => {
+                        setBatchProcessing(true);
+                        try {
+                          for (const txId of Array.from(selected)) {
+                            await api.post(`/api/transactions/${txId}/action`, {
+                              action: "ignore",
+                            });
+                          }
+                          setToast({
+                            message: `${selected.size} items ignorados`,
+                            type: "success",
+                          });
+                          setSelected(new Set());
+                          refetch();
+                        } catch {
+                          setToast({ message: "Error", type: "error" });
+                        }
+                        setBatchProcessing(false);
+                      }}
+                      className="text-xs border border-border text-text-secondary px-3 py-1.5 rounded hover:bg-hover disabled:opacity-50"
+                    >
+                      Ignorar {selected.size}
+                    </button>
+                    <button
+                      onClick={() => setSelected(new Set())}
+                      className="text-xs text-text-tertiary ml-auto"
+                    >
+                      Deseleccionar
+                    </button>
+                  </div>
+                )}
 
                 {/* Panel */}
                 {selectedTxId &&

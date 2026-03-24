@@ -169,9 +169,29 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
               </div>
             )}
 
-            {/* Match reason */}
-            <p className="text-[11px] text-text-tertiary italic">
-              Match: {reco.matchReason?.split(":")[0] ?? "—"}
+            {/* Match reason — human-readable */}
+            <p className="text-[11px] text-text-secondary">
+              {(() => {
+                const r = reco.matchReason ?? "";
+                const key = r.split(":")[0];
+                const reasonMap: Record<string, string> = {
+                  exact_match: "Coincidencia exacta con factura",
+                  fuzzy_match: "Coincidencia por concepto similar",
+                  grouped_match: "Agrupación de múltiples facturas",
+                  partial_match: "Pago parcial de factura",
+                  difference_match: "Match con diferencia (comisión/descuento)",
+                  internal_transfer: "Transferencia interna entre cuentas propias",
+                  intercompany: "Operación intercompañía",
+                  duplicate_detected: "Posible duplicado detectado",
+                  return_detected: "Devolución detectada",
+                  capex_detected: "CAPEX — compra de activo fijo",
+                  investment_detected: "Inversión financiera detectada",
+                  rule_match: "Regla de clasificación aplicada",
+                  llm_classify: "Clasificación por IA",
+                  llm_match: "Match propuesto por IA",
+                };
+                return reasonMap[key] ?? r;
+              })()}
             </p>
 
             {/* LLM explanation */}
