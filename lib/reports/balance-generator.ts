@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Balance de Situación generator.
  *
@@ -14,6 +15,19 @@ export interface BalanceLineData {
   amount: number;
 }
 
+export interface PatrimonioNetoBreakdown {
+  capital: number; // 100
+  primaEmision: number; // 110
+  reservaLegal: number; // 112
+  reservasVoluntarias: number; // 113
+  otrasReservas: number; // 114, 119
+  resultadosEjAnteriores: number; // 120, 121
+  resultadoEjercicio: number; // 129
+  subvenciones: number; // 130, 131
+  total: number;
+  capitalAdequacy: { ratio: number; alert: string | null };
+}
+
 export interface BalanceReport {
   asOf: string;
   currency: string;
@@ -27,6 +41,7 @@ export interface BalanceReport {
     pasivoCorriente: number;
     totalPasivo: number;
   };
+  patrimonioNetoDetail: PatrimonioNetoBreakdown;
   generatedAt: string;
 }
 
@@ -120,6 +135,9 @@ export async function generateBalance(db: ScopedPrisma, asOf: Date): Promise<Bal
     { code: "TOTAL_PNP", amount: roundTwo(totalPasivo) }
   );
 
+  // ── Patrimonio Neto detail from journal entries ──
+  const patrimonioNetoDetail = await computePatrimonioNetoDetail(db);
+
   return {
     asOf: asOf.toISOString().slice(0, 10),
     currency: "EUR",
@@ -133,10 +151,95 @@ export async function generateBalance(db: ScopedPrisma, asOf: Date): Promise<Bal
       pasivoCorriente: roundTwo(pasivoCorriente),
       totalPasivo: roundTwo(totalPasivo),
     },
+    patrimonioNetoDetail,
     generatedAt: new Date().toISOString(),
   };
 }
 
 function roundTwo(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+// ---------------------------------------------------------------------------
+// Patrimonio Neto breakdown
+// ---------------------------------------------------------------------------
+
+async function getAccountBalanceFromJE(db: ScopedPrisma, code: string): Promise<number> {
+  const account = await db.account.findFirst({
+    where: { code },
+    select: { id: true },
+  });
+  if (!account) return 0;
+
+  const lines = await (db as any).journalEntryLine.findMany({
+    where: { accountId: account.id },
+    select: { debit: true, credit: true },
+  });
+
+  let balance = 0;
+  for (const line of lines) {
+    balance += (line.debit ?? 0) - (line.credit ?? 0);
+  }
+  return balance;
+}
+
+/**
+ * Computes a detailed breakdown of Patrimonio Neto from PGC equity accounts.
+ *
+ * Equity accounts have credit-normal balance, so in our debit-minus-credit
+ * convention a credit balance appears as negative. We negate to get the
+ * positive PN contribution for each item.
+ */
+async function computePatrimonioNetoDetail(db: ScopedPrisma): Promise<PatrimonioNetoBreakdown> {
+  // Helper: for passive/equity accounts, credit balance = negative in D-C → negate
+  const eq = async (code: string) => -(await getAccountBalanceFromJE(db, code));
+
+  const capital = await eq("100");
+  const primaEmision = await eq("110");
+  const reservaLegal = await eq("112");
+  const reservasVoluntarias = await eq("113");
+  const otrasReservas114 = await eq("114");
+  const otrasReservas119 = await eq("119");
+  const otrasReservas = otrasReservas114 + otrasReservas119;
+  // 120 = remanente (credit normal → positive); 121 = pérdidas anteriores (debit normal → negative PN)
+  const remanente120 = await eq("120");
+  const perdidas121 = await eq("121");
+  const resultadosEjAnteriores = remanente120 + perdidas121;
+  const resultadoEjercicio = await eq("129");
+  const subv130 = await eq("130");
+  const subv131 = await eq("131");
+  const subvenciones = subv130 + subv131;
+
+  const total =
+    capital +
+    primaEmision +
+    reservaLegal +
+    reservasVoluntarias +
+    otrasReservas +
+    resultadosEjAnteriores +
+    resultadoEjercicio +
+    subvenciones;
+
+  const ratio = capital > 0 ? total / capital : 0;
+  let alert: string | null = null;
+  if (capital > 0) {
+    if (ratio <= 0.5) {
+      alert = "CRITICAL";
+    } else if (ratio <= 1.0) {
+      alert = "WARNING";
+    }
+  }
+
+  return {
+    capital: roundTwo(capital),
+    primaEmision: roundTwo(primaEmision),
+    reservaLegal: roundTwo(reservaLegal),
+    reservasVoluntarias: roundTwo(reservasVoluntarias),
+    otrasReservas: roundTwo(otrasReservas),
+    resultadosEjAnteriores: roundTwo(resultadosEjAnteriores),
+    resultadoEjercicio: roundTwo(resultadoEjercicio),
+    subvenciones: roundTwo(subvenciones),
+    total: roundTwo(total),
+    capitalAdequacy: { ratio: roundTwo(ratio), alert },
+  };
 }
