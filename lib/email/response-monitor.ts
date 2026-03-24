@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 /**
  * Email Response Monitor for Inquiries.
  *
@@ -38,6 +39,76 @@ export async function checkInquiryResponses(
 
   const provider = await getEmailProvider(db);
   if (!provider) return result;
+
+  // ── Phase 0: Detect replies to clarification emails (PENDING_CLARIFICATION reconciliations) ──
+
+  try {
+    const pendingClarifications = await db.reconciliation.findMany({
+      where: { status: "PENDING_CLARIFICATION", clarificationEmailMessageId: { not: null } },
+      select: {
+        id: true,
+        clarificationEmailMessageId: true,
+        clarificationEmailTo: true,
+        clarificationEmailSubject: true,
+        bankTransactionId: true,
+        invoiceId: true,
+      },
+    });
+
+    for (const reco of pendingClarifications) {
+      try {
+        if (!reco.clarificationEmailTo) continue;
+
+        // Search for replies from the recipient
+        const replies = await provider.searchMessages(
+          `from:${reco.clarificationEmailTo} subject:"${(reco.clarificationEmailSubject ?? "").slice(0, 40)}"`,
+          3
+        );
+
+        // Filter to replies after the clarification was sent
+        const newReplies = replies.filter((msg) => {
+          // Check if this is a reply to our message (In-Reply-To or subject match)
+          return msg.from.includes(reco.clarificationEmailTo!.split("@")[0]);
+        });
+
+        if (newReplies.length === 0) continue;
+
+        const reply = newReplies[0];
+        result.responsesFound++;
+
+        // Parse the reply with Haiku
+        const { callAIJson } = await import("@/lib/ai/model-router");
+        const { PARSE_CLARIFICATION_REPLY } = await import("@/lib/ai/prompt-registry");
+
+        const parsed = await callAIJson(
+          "parse_clarification_reply",
+          PARSE_CLARIFICATION_REPLY.system,
+          PARSE_CLARIFICATION_REPLY.buildUser(reply.snippet ?? ""),
+          PARSE_CLARIFICATION_REPLY.schema
+        );
+
+        // Update the reconciliation with the clarification
+        await (db.reconciliation as any).update({
+          where: { id: reco.id },
+          data: {
+            clarificationReceivedAt: new Date(),
+            clarificationSummary: parsed?.summary ?? "Respuesta recibida",
+            clarificationDifferenceType: parsed?.suggestedDifferenceType ?? null,
+            // Don't auto-close — controller must decide based on the response
+            status: "PROPOSED",
+          },
+        });
+
+        result.resolved++;
+      } catch (err) {
+        result.errors.push(
+          `Clarification ${reco.id}: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+  } catch (err) {
+    result.errors.push(`Clarification phase: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   // ── Phase A: Process responses to SENT inquiries ──
 
