@@ -16,6 +16,7 @@
  */
 
 import type { ScopedPrisma } from "@/lib/db-scoped";
+import { generatePyG } from "./pyg-generator";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -322,84 +323,37 @@ async function generateTreasuryReport(
 // ---------------------------------------------------------------------------
 // EFE classification cascade for individual transactions
 // ---------------------------------------------------------------------------
-
-type EFEBucket =
-  | "cobrosClientes"
-  | "pagosProveedores"
-  | "nominas"
-  | "impuestos"
-  | "otrosOperativos"
-  | "investing_capex"
-  | "investing_disposal"
-  | "investing_financial"
-  | "financing_in"
-  | "financing_out"
-  | "internal"
-  | "excluded"; // NON_CASH
-
-function classifyForEFE(tx: {
-  amount: number;
-  concept: string | null;
-  economicCategory: string | null;
-  classification?: { cashflowType: string | null } | null;
-  reconciliations?: Array<{ invoice?: { type: string } | null }>;
-}): EFEBucket {
-  const concept = (tx.concept ?? "").toUpperCase();
-
-  // 1. economicCategory (highest priority — set by detectors/resolver)
-  if (tx.economicCategory) {
-    const ec = tx.economicCategory;
-    if (ec === "CAPEX_ACQUISITION") return "investing_capex";
-    if (ec === "CAPEX_DISPOSAL") return "investing_disposal";
-    if (
-      ec === "INVESTMENT_ACQUISITION" ||
-      ec === "INVESTMENT_DIVESTMENT" ||
-      ec === "INVESTMENT_RETURN" ||
-      ec === "LOAN_GRANTED" ||
-      ec === "LOAN_REPAYMENT_RECEIVED"
-    )
-      return "investing_financial";
-    if (ec === "FINANCING_IN") return "financing_in";
-    if (ec === "FINANCING_OUT") return "financing_out";
-    if (ec === "TAX_PAYMENT") return "impuestos";
-    if (ec === "INTERCOMPANY") return "internal";
-  }
-
-  // 2. classification.cashflowType (from reconciliation engine)
-  const cft = tx.classification?.cashflowType;
-  if (cft === "INVESTING") return "investing_financial";
-  if (cft === "FINANCING") return tx.amount > 0 ? "financing_in" : "financing_out";
-  if (cft === "INTERNAL") return "internal";
-  if (cft === "NON_CASH") return "excluded";
-
-  // 3. Reconciliation context — matched invoice tells us the nature
-  const reco = tx.reconciliations?.[0];
-  if (reco?.invoice) {
-    const invType = reco.invoice.type;
-    if (invType === "ISSUED" || invType === "CREDIT_RECEIVED") return "cobrosClientes";
-    if (invType === "RECEIVED" || invType === "CREDIT_ISSUED") return "pagosProveedores";
-  }
-
-  // 4. Concept heuristics
-  if (/NOMINA|NÓMINA|SALARIO|PAGO\s*EMPLEADOS|TGSS|SEGURIDAD\s*SOCIAL|SS\s*EMPRESA/.test(concept))
-    return "nominas";
-  if (/AEAT|HACIENDA|AGENCIA\s*TRIBUTARIA|MODELO\s*\d|IVA\s*\d|IRPF/.test(concept))
-    return "impuestos";
-  if (/PRESTAMO|PRÉSTAMO|CUOTA.*ICO|HIPOTECA|LEASING|AMORTIZACION\s*DEUDA/.test(concept))
-    return tx.amount > 0 ? "financing_in" : "financing_out";
-  if (/TRASPASO\s*(ENTRE\s*)?CUENTAS|TRANSFERENCIA\s*INTERNA/.test(concept)) return "internal";
-
-  // 5. Amount sign fallback
-  return tx.amount >= 0 ? "cobrosClientes" : "pagosProveedores";
-}
-
-// ---------------------------------------------------------------------------
-// EFE (direct cash-basis) mode
+// EFE (PGC indirect method) — Estado de Flujos de Efectivo
 // ---------------------------------------------------------------------------
 
 async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promise<EFEReport> {
-  // 1. Fetch ALL bank transactions in period
-  const transactions = await db.bankTransaction.findMany({
+  // ── A.1: Resultado antes de impuestos (from PyG) ──
+  const pyg = await generatePyG(db, from, to, "titles", false);
+  const A1 = pyg.results.resultadoAntesImpuestos;
+
+  // ── A.2: Ajustes del resultado (non-cash items from PyG) ──
+  const amortLine = pyg.lines.find((l) => l.code === "8");
+  const A2a = amortLine ? Math.abs(amortLine.amount) : 0; // Amortización (+)
+
+  // Financial results from PyG (need to reverse them for indirect method)
+  const financialIncomeLine = pyg.lines.find((l) => l.code === "12");
+  const financialExpenseLine = pyg.lines.find((l) => l.code === "13");
+  const A2g = financialIncomeLine ? -Math.abs(financialIncomeLine.amount) : 0; // Ingresos financieros (-)
+  const A2h = financialExpenseLine ? Math.abs(financialExpenseLine.amount) : 0; // Gastos financieros (+)
+
+  const A2total = A2a + A2g + A2h;
+
+  // ── A.3: Cambios en capital corriente ──
+  const [wcStart, wcEnd] = await Promise.all([
+    getWorkingCapitalSnapshot(db, from),
+    getWorkingCapitalSnapshot(db, to),
+  ]);
+  const A3b = -(wcEnd.deudores - wcStart.deudores); // Δ Deudores (+ if decreased)
+  const A3d = wcEnd.acreedores - wcStart.acreedores; // Δ Acreedores (+ if increased)
+  const A3total = A3b + A3d;
+
+  // ── A.4: Otros flujos de explotación (cash items from bank) ──
+  const allTxs = await db.bankTransaction.findMany({
     where: {
       valueDate: { gte: from, lte: to },
       status: { notIn: ["DUPLICATE", "IGNORED"] },
@@ -407,7 +361,6 @@ async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promis
     include: {
       classification: true,
       reconciliations: {
-        where: { status: { in: ["APPROVED", "AUTO_APPROVED"] } },
         include: { invoice: { select: { type: true, number: true } } },
         take: 1,
       },
@@ -415,53 +368,125 @@ async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promis
     orderBy: { valueDate: "asc" },
   });
 
-  // 2. Classify each transaction into EFE buckets
-  type BucketKey = Exclude<EFEBucket, "excluded">;
-  const buckets: Record<BucketKey, EFETransactionDetail[]> = {
-    cobrosClientes: [],
-    pagosProveedores: [],
-    nominas: [],
-    impuestos: [],
-    otrosOperativos: [],
-    investing_capex: [],
-    investing_disposal: [],
-    investing_financial: [],
-    financing_in: [],
-    financing_out: [],
-    internal: [],
-  };
+  const txDetail = (tx: any): EFETransactionDetail => ({
+    id: tx.id,
+    date: tx.valueDate.toISOString().slice(0, 10),
+    concept: tx.concept ?? "",
+    counterpartName: tx.counterpartName ?? null,
+    amount: tx.amount,
+    invoiceNumber: tx.reconciliations?.[0]?.invoice?.number ?? undefined,
+  });
 
-  for (const tx of transactions) {
-    const bucket = classifyForEFE(tx);
-    if (bucket === "excluded") continue;
-    buckets[bucket].push({
-      id: tx.id,
-      date: tx.valueDate.toISOString().slice(0, 10),
-      concept: tx.concept ?? "",
-      counterpartName: tx.counterpartName ?? null,
-      amount: tx.amount,
-      invoiceNumber: tx.reconciliations?.[0]?.invoice?.number ?? undefined,
-    });
+  // Classify bank transactions for A.4, B, C sections
+  const concept = (tx: any) => (tx.concept ?? "").toUpperCase();
+
+  const interestPaid: EFETransactionDetail[] = [];
+  const dividendsReceived: EFETransactionDetail[] = [];
+  const interestReceived: EFETransactionDetail[] = [];
+  const taxPaid: EFETransactionDetail[] = [];
+  const investCapex: EFETransactionDetail[] = [];
+  const investDisposal: EFETransactionDetail[] = [];
+  const investFinancial: EFETransactionDetail[] = [];
+  const financingIn: EFETransactionDetail[] = [];
+  const financingOut: EFETransactionDetail[] = [];
+  const internal: EFETransactionDetail[] = [];
+
+  for (const tx of allTxs) {
+    const c = concept(tx);
+    const ec = tx.economicCategory;
+    const cft = tx.classification?.cashflowType;
+
+    // Internal transfers — exclude from all sections
+    if (cft === "INTERNAL" || /TRASPASO\s*(ENTRE\s*)?CUENTAS|TRANSFERENCIA\s*INTERNA/.test(c)) {
+      internal.push(txDetail(tx));
+      continue;
+    }
+
+    // Investment flows (B)
+    if (ec === "CAPEX_ACQUISITION" || (cft === "INVESTING" && tx.amount < 0)) {
+      investCapex.push(txDetail(tx));
+      continue;
+    }
+    if (ec === "CAPEX_DISPOSAL" || (cft === "INVESTING" && tx.amount > 0)) {
+      investDisposal.push(txDetail(tx));
+      continue;
+    }
+    if (
+      [
+        "INVESTMENT_ACQUISITION",
+        "INVESTMENT_DIVESTMENT",
+        "INVESTMENT_RETURN",
+        "LOAN_GRANTED",
+        "LOAN_REPAYMENT_RECEIVED",
+      ].includes(ec ?? "")
+    ) {
+      investFinancial.push(txDetail(tx));
+      continue;
+    }
+
+    // Financing flows (C)
+    if (ec === "FINANCING_IN" || (cft === "FINANCING" && tx.amount > 0)) {
+      financingIn.push(txDetail(tx));
+      continue;
+    }
+    if (ec === "FINANCING_OUT" || (cft === "FINANCING" && tx.amount < 0)) {
+      financingOut.push(txDetail(tx));
+      continue;
+    }
+    if (/PRESTAMO|PRÉSTAMO|CUOTA.*ICO|HIPOTECA|AMORTIZACION\s*DEUDA/.test(c)) {
+      (tx.amount > 0 ? financingIn : financingOut).push(txDetail(tx));
+      continue;
+    }
+
+    // A.4: Operating cash items
+    if (/INTERES.*PAGA|PAGO.*INTERES|COMISION.*PREST/.test(c) || (ec === "TAX_PAYMENT" && false)) {
+      interestPaid.push(txDetail(tx));
+      continue;
+    }
+    if (/DIVIDENDO.*COBR|COBRO.*DIVIDENDO|REPARTO.*BENEFICIO/.test(c) && tx.amount > 0) {
+      dividendsReceived.push(txDetail(tx));
+      continue;
+    }
+    if (/INTERES.*COBR|COBRO.*INTERES/.test(c) && tx.amount > 0) {
+      interestReceived.push(txDetail(tx));
+      continue;
+    }
+    if (
+      /AEAT|HACIENDA|AGENCIA\s*TRIBUTARIA|MODELO\s*\d|IVA\s*\d|IRPF/.test(c) ||
+      ec === "TAX_PAYMENT"
+    ) {
+      taxPaid.push(txDetail(tx));
+      continue;
+    }
+
+    // Everything else is operating (already captured in A.1-A.3 via PyG + WC)
+    // No need to add to any bucket — the indirect method already accounts for it
   }
 
   const sum = (arr: EFETransactionDetail[]) => roundTwo(arr.reduce((s, t) => s + t.amount, 0));
 
-  // 3. Calculate section totals
-  const flujosExplotacion =
-    sum(buckets.cobrosClientes) +
-    sum(buckets.pagosProveedores) +
-    sum(buckets.nominas) +
-    sum(buckets.impuestos) +
-    sum(buckets.otrosOperativos);
+  const A4a = sum(interestPaid);
+  const A4b = sum(dividendsReceived);
+  const A4c = sum(interestReceived);
+  const A4d = sum(taxPaid);
+  const A4total = A4a + A4b + A4c + A4d;
 
-  const flujosInversion =
-    sum(buckets.investing_capex) +
-    sum(buckets.investing_disposal) +
-    sum(buckets.investing_financial);
+  const A5 = roundTwo(A1 + A2total + A3total + A4total);
 
-  const flujosFinanciacion = sum(buckets.financing_in) + sum(buckets.financing_out);
+  // ── B: Investment flows ──
+  const B6 = sum(investCapex) + sum(investFinancial.filter((t) => t.amount < 0));
+  const B7 = sum(investDisposal) + sum(investFinancial.filter((t) => t.amount > 0));
+  const B8 = roundTwo(B6 + B7);
 
-  // 4. Cash positions
+  // ── C: Financing flows ──
+  const C10a = sum(financingIn);
+  const C10c = sum(financingOut);
+  const C12 = roundTwo(C10a + C10c);
+
+  // ── D: FX effect ──
+  const D = 0;
+
+  // ── E, F1, F2: Cash positions ──
   const lastTxBefore = await db.bankTransaction.findFirst({
     where: {
       valueDate: { lt: from },
@@ -471,7 +496,7 @@ async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promis
     orderBy: { valueDate: "desc" },
     select: { balanceAfter: true },
   });
-  const efectivoInicio = lastTxBefore?.balanceAfter ?? 0;
+  const F1 = lastTxBefore?.balanceAfter ?? 0;
 
   const lastTxEnd = await db.bankTransaction.findFirst({
     where: {
@@ -482,62 +507,118 @@ async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promis
     orderBy: { valueDate: "desc" },
     select: { balanceAfter: true },
   });
-  const efectivoFinal = lastTxEnd?.balanceAfter ?? 0;
-  const aumentoDisminucion = efectivoFinal - efectivoInicio;
+  const F2 = lastTxEnd?.balanceAfter ?? 0;
+  const E = roundTwo(F2 - F1);
 
-  // 5. Build sections with drill-down transactions
-  const line = (label: string, arr: EFETransactionDetail[]): EFELine => ({
+  // Consistency check
+  const theoretical = roundTwo(A5 + B8 + C12 + D);
+  if (Math.abs(theoretical - E) > 1) {
+    console.warn(
+      `[efe] Consistency gap: theoretical=${theoretical}, actual=${E}, gap=${roundTwo(theoretical - E)}`
+    );
+  }
+
+  const line = (label: string, amount: number, txs?: EFETransactionDetail[]): EFELine => ({
     label,
-    amount: sum(arr),
-    transactions: arr.length > 0 ? arr : undefined,
+    amount: roundTwo(amount),
+    transactions: txs && txs.length > 0 ? txs : undefined,
   });
 
+  // ── Build full PGC structure ──
   const sections: EFESection[] = [
     {
       code: "A",
       label: "A) FLUJOS DE EFECTIVO DE LAS ACTIVIDADES DE EXPLOTACIÓN",
-      amount: roundTwo(flujosExplotacion),
+      amount: A5,
       children: [
-        line("Cobros de clientes", buckets.cobrosClientes),
-        line("Pagos a proveedores", buckets.pagosProveedores),
-        line("Nóminas y Seguridad Social", buckets.nominas),
-        line("Impuestos pagados", buckets.impuestos),
-        line("Otros cobros/pagos operativos", buckets.otrosOperativos),
-      ].filter((l) => l.amount !== 0),
+        line("1. Resultado del ejercicio antes de impuestos", A1),
+        line("2. Ajustes del resultado", A2total),
+        line("  a) Amortización del inmovilizado (+) (680, 681, 682)", A2a),
+        line("  b) Correcciones valorativas por deterioro (+/–) (690-699, 790-799)", 0),
+        line("  c) Variación de provisiones (+/–) (14*)", 0),
+        line("  d) Imputación de subvenciones (–) (746)", 0),
+        line(
+          "  e) Resultados por bajas y enajenaciones del inmovilizado (+/–) (670-672, 770-772)",
+          0
+        ),
+        line("  f) Resultados por bajas de instrumentos financieros (+/–) (666, 667, 766)", 0),
+        line("  g) Ingresos financieros (–) (760, 761, 762, 769)", A2g),
+        line("  h) Gastos financieros (+) (661, 662, 664, 665, 669)", A2h),
+        line("  i) Diferencias de cambio (+/–) (668, 768)", 0),
+        line("  j) Variación de valor razonable en instrumentos financieros (+/–) (663, 763)", 0),
+        line("  k) Otros ingresos y gastos (–/+)", 0),
+        line("3. Cambios en el capital corriente", A3total),
+        line("  a) Existencias (+/–) (30*-39*)", 0),
+        line("  b) Deudores y otras cuentas a cobrar (+/–) (43*, 44*)", A3b),
+        line("  c) Otros activos corrientes (+/–) (48*)", 0),
+        line("  d) Acreedores y otras cuentas a pagar (+/–) (40*, 41*)", A3d),
+        line("  e) Otros pasivos corrientes (+/–) (485, 568)", 0),
+        line("4. Otros flujos de efectivo de explotación", A4total),
+        line("  a) Pagos de intereses (–)", A4a, interestPaid),
+        line("  b) Cobros de dividendos (+)", A4b, dividendsReceived),
+        line("  c) Cobros de intereses (+)", A4c, interestReceived),
+        line("  d) Cobros (pagos) por impuesto sobre beneficios", A4d, taxPaid),
+        line("5. Flujos de efectivo de las actividades de explotación (1+2+3+4)", A5),
+      ],
     },
     {
       code: "B",
       label: "B) FLUJOS DE EFECTIVO DE LAS ACTIVIDADES DE INVERSIÓN",
-      amount: roundTwo(flujosInversion),
+      amount: B8,
       children: [
-        line("Pagos por adquisición de inmovilizado", buckets.investing_capex),
-        line("Cobros por enajenaciones de inmovilizado", buckets.investing_disposal),
-        line("Inversiones/desinversiones financieras", buckets.investing_financial),
-      ].filter((l) => l.amount !== 0),
+        line("6. Pagos por inversiones (–)", B6),
+        line(
+          "  a) Empresas del grupo y asociadas (24*)",
+          sum(investFinancial.filter((t) => t.amount < 0)),
+          investFinancial.filter((t) => t.amount < 0)
+        ),
+        line("  b) Inmovilizado intangible (20*)", 0),
+        line("  c) Inmovilizado material (21*)", sum(investCapex), investCapex),
+        line("  d) Inversiones inmobiliarias (22*)", 0),
+        line("  e) Otros activos financieros (25*)", 0),
+        line("7. Cobros por desinversiones (+)", B7),
+        line(
+          "  a) Empresas del grupo y asociadas",
+          sum(investFinancial.filter((t) => t.amount > 0)),
+          investFinancial.filter((t) => t.amount > 0)
+        ),
+        line("  b) Inmovilizado intangible", 0),
+        line("  c) Inmovilizado material", sum(investDisposal), investDisposal),
+        line("  d) Inversiones inmobiliarias", 0),
+        line("  e) Otros activos financieros", 0),
+        line("8. Flujos de efectivo de las actividades de inversión (6+7)", B8),
+      ],
     },
     {
       code: "C",
       label: "C) FLUJOS DE EFECTIVO DE LAS ACTIVIDADES DE FINANCIACIÓN",
-      amount: roundTwo(flujosFinanciacion),
+      amount: C12,
       children: [
-        line("Entradas de financiación", buckets.financing_in),
-        line("Pagos de cuotas y préstamos", buckets.financing_out),
-      ].filter((l) => l.amount !== 0),
+        line("9. Cobros y pagos por instrumentos de patrimonio", 0),
+        line("  a) Emisión de instrumentos de patrimonio (10*)", 0),
+        line("  b) Amortización de instrumentos de patrimonio", 0),
+        line("  c) Subvenciones, donaciones y legados recibidos (13*)", 0),
+        line("10. Cobros y pagos por instrumentos de pasivo financiero", roundTwo(C10a + C10c)),
+        line("  a) Emisión deudas con entidades de crédito (+) (170, 520)", C10a, financingIn),
+        line("  b) Emisión de otras deudas (+) (171, 173, 521, 523)", 0),
+        line("  c) Devolución deudas con entidades de crédito (–)", C10c, financingOut),
+        line("  d) Devolución de otras deudas (–)", 0),
+        line("11. Pagos por dividendos y remuneraciones de otros instrumentos de patrimonio", 0),
+        line("  a) Dividendos (526, 557)", 0),
+        line("12. Flujos de efectivo de las actividades de financiación (9+10+11)", C12),
+      ],
+    },
+    { code: "D", label: "D) Efecto de las variaciones de los tipos de cambio", amount: D },
+    { code: "E", label: "E) AUMENTO/DISMINUCIÓN NETA DEL EFECTIVO (A.5+B.8+C.12+D)", amount: E },
+    {
+      code: "F1",
+      label: "F) Efectivo o equivalentes al comienzo del ejercicio (57*)",
+      amount: roundTwo(F1),
     },
     {
-      code: "D",
-      label: "D) AUMENTO/DISMINUCIÓN NETA DEL EFECTIVO",
-      amount: roundTwo(aumentoDisminucion),
-    },
-    {
-      code: "E",
-      label: "E) EFECTIVO AL COMIENZO DEL EJERCICIO",
-      amount: roundTwo(efectivoInicio),
-    },
-    {
-      code: "F",
-      label: "F) EFECTIVO AL FINAL DEL EJERCICIO",
-      amount: roundTwo(efectivoFinal),
+      code: "F2",
+      label: "Efectivo o equivalentes al final del ejercicio (F1+E)",
+      amount: roundTwo(F2),
     },
   ];
 
@@ -548,12 +629,12 @@ async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promis
     currency: "EUR",
     sections,
     totals: {
-      flujosExplotacion: roundTwo(flujosExplotacion),
-      flujosInversion: roundTwo(flujosInversion),
-      flujosFinanciacion: roundTwo(flujosFinanciacion),
-      aumentoDisminucionEfectivo: roundTwo(aumentoDisminucion),
-      efectivoInicio: roundTwo(efectivoInicio),
-      efectivoFinal: roundTwo(efectivoFinal),
+      flujosExplotacion: A5,
+      flujosInversion: B8,
+      flujosFinanciacion: C12,
+      aumentoDisminucionEfectivo: E,
+      efectivoInicio: roundTwo(F1),
+      efectivoFinal: roundTwo(F2),
     },
     generatedAt: new Date().toISOString(),
   };
