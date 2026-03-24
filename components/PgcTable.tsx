@@ -444,11 +444,6 @@ export default function PgcTable({ structure, data, columns, pctData, drilldown 
                                   </span>
                                   <span className="flex-1 text-text-secondary truncate">
                                     {tx.description}
-                                    {tx.invoiceNumber && (
-                                      <span className="ml-1 text-accent font-medium">
-                                        #{tx.invoiceNumber}
-                                      </span>
-                                    )}
                                   </span>
                                   {tx.type === "invoice" && tx.id && (
                                     <button
@@ -458,10 +453,10 @@ export default function PgcTable({ structure, data, columns, pctData, drilldown 
                                           number: tx.invoiceNumber ?? tx.description,
                                         })
                                       }
-                                      className="opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-accent transition-all mr-2"
+                                      className="text-accent hover:text-accent/70 transition-colors mr-2 shrink-0"
                                       title="Ver factura PDF"
                                     >
-                                      <Eye size={12} />
+                                      <Eye size={13} />
                                     </button>
                                   )}
                                   <span
