@@ -16,7 +16,6 @@
  */
 
 import type { ScopedPrisma } from "@/lib/db-scoped";
-import { generatePyG } from "./pyg-generator";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -64,13 +63,28 @@ export interface TreasuryReport {
   generatedAt: string;
 }
 
-/** EFE (indirect) mode types */
+/** EFE mode types */
+
+export interface EFETransactionDetail {
+  id: string;
+  date: string;
+  concept: string;
+  counterpartName: string | null;
+  amount: number;
+  invoiceNumber?: string;
+}
+
+export interface EFELine {
+  label: string;
+  amount: number;
+  transactions?: EFETransactionDetail[];
+}
 
 export interface EFESection {
   code: string;
   label: string;
   amount: number;
-  children?: { label: string; amount: number }[];
+  children?: EFELine[];
 }
 
 export interface EFEReport {
@@ -305,118 +319,149 @@ async function generateTreasuryReport(
 // EFE (indirect) mode
 // ---------------------------------------------------------------------------
 
-async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promise<EFEReport> {
-  // 1. Get resultado antes de impuestos (A.3) from PyG
-  const pyg = await generatePyG(db, from, to, "titles", false);
-  const resultadoAntesImpuestos = pyg.results.resultadoAntesImpuestos;
+// ---------------------------------------------------------------------------
+// EFE classification cascade for individual transactions
+// ---------------------------------------------------------------------------
 
-  // 2. Fetch non-cash adjustments from classified transactions
-  const nonCashTx = await db.bankTransaction.findMany({
+type EFEBucket =
+  | "cobrosClientes"
+  | "pagosProveedores"
+  | "nominas"
+  | "impuestos"
+  | "otrosOperativos"
+  | "investing_capex"
+  | "investing_disposal"
+  | "investing_financial"
+  | "financing_in"
+  | "financing_out"
+  | "internal"
+  | "excluded"; // NON_CASH
+
+function classifyForEFE(tx: {
+  amount: number;
+  concept: string | null;
+  economicCategory: string | null;
+  classification?: { cashflowType: string | null } | null;
+  reconciliations?: Array<{ invoice?: { type: string } | null }>;
+}): EFEBucket {
+  const concept = (tx.concept ?? "").toUpperCase();
+
+  // 1. economicCategory (highest priority — set by detectors/resolver)
+  if (tx.economicCategory) {
+    const ec = tx.economicCategory;
+    if (ec === "CAPEX_ACQUISITION") return "investing_capex";
+    if (ec === "CAPEX_DISPOSAL") return "investing_disposal";
+    if (
+      ec === "INVESTMENT_ACQUISITION" ||
+      ec === "INVESTMENT_DIVESTMENT" ||
+      ec === "INVESTMENT_RETURN" ||
+      ec === "LOAN_GRANTED" ||
+      ec === "LOAN_REPAYMENT_RECEIVED"
+    )
+      return "investing_financial";
+    if (ec === "FINANCING_IN") return "financing_in";
+    if (ec === "FINANCING_OUT") return "financing_out";
+    if (ec === "TAX_PAYMENT") return "impuestos";
+    if (ec === "INTERCOMPANY") return "internal";
+  }
+
+  // 2. classification.cashflowType (from reconciliation engine)
+  const cft = tx.classification?.cashflowType;
+  if (cft === "INVESTING") return "investing_financial";
+  if (cft === "FINANCING") return tx.amount > 0 ? "financing_in" : "financing_out";
+  if (cft === "INTERNAL") return "internal";
+  if (cft === "NON_CASH") return "excluded";
+
+  // 3. Reconciliation context — matched invoice tells us the nature
+  const reco = tx.reconciliations?.[0];
+  if (reco?.invoice) {
+    const invType = reco.invoice.type;
+    if (invType === "ISSUED" || invType === "CREDIT_RECEIVED") return "cobrosClientes";
+    if (invType === "RECEIVED" || invType === "CREDIT_ISSUED") return "pagosProveedores";
+  }
+
+  // 4. Concept heuristics
+  if (/NOMINA|NÓMINA|SALARIO|PAGO\s*EMPLEADOS|TGSS|SEGURIDAD\s*SOCIAL|SS\s*EMPRESA/.test(concept))
+    return "nominas";
+  if (/AEAT|HACIENDA|AGENCIA\s*TRIBUTARIA|MODELO\s*\d|IVA\s*\d|IRPF/.test(concept))
+    return "impuestos";
+  if (/PRESTAMO|PRÉSTAMO|CUOTA.*ICO|HIPOTECA|LEASING|AMORTIZACION\s*DEUDA/.test(concept))
+    return tx.amount > 0 ? "financing_in" : "financing_out";
+  if (/TRASPASO\s*(ENTRE\s*)?CUENTAS|TRANSFERENCIA\s*INTERNA/.test(concept)) return "internal";
+
+  // 5. Amount sign fallback
+  return tx.amount >= 0 ? "cobrosClientes" : "pagosProveedores";
+}
+
+// ---------------------------------------------------------------------------
+// EFE (direct cash-basis) mode
+// ---------------------------------------------------------------------------
+
+async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promise<EFEReport> {
+  // 1. Fetch ALL bank transactions in period
+  const transactions = await db.bankTransaction.findMany({
     where: {
       valueDate: { gte: from, lte: to },
       status: { notIn: ["DUPLICATE", "IGNORED"] },
-      classification: {
-        cashflowType: "NON_CASH",
-      },
     },
     include: {
-      classification: { include: { account: true } },
+      classification: true,
+      reconciliations: {
+        where: { status: { in: ["APPROVED", "AUTO_APPROVED"] } },
+        include: { invoice: { select: { type: true, number: true } } },
+        take: 1,
+      },
     },
+    orderBy: { valueDate: "asc" },
   });
 
-  // 3. Get amortisation (line 8 from PyG — always a non-cash item)
-  const amortLine = pyg.lines.find((l) => l.code === "8");
-  const amortizacion = amortLine ? Math.abs(amortLine.amount) : 0;
+  // 2. Classify each transaction into EFE buckets
+  type BucketKey = Exclude<EFEBucket, "excluded">;
+  const buckets: Record<BucketKey, EFETransactionDetail[]> = {
+    cobrosClientes: [],
+    pagosProveedores: [],
+    nominas: [],
+    impuestos: [],
+    otrosOperativos: [],
+    investing_capex: [],
+    investing_disposal: [],
+    investing_financial: [],
+    financing_in: [],
+    financing_out: [],
+    internal: [],
+  };
 
-  // 4. Get provision changes (line 10 from PyG)
-  const provisionLine = pyg.lines.find((l) => l.code === "10");
-  const provisiones = provisionLine ? provisionLine.amount : 0;
+  for (const tx of transactions) {
+    const bucket = classifyForEFE(tx);
+    if (bucket === "excluded") continue;
+    buckets[bucket].push({
+      id: tx.id,
+      date: tx.valueDate.toISOString().slice(0, 10),
+      concept: tx.concept ?? "",
+      counterpartName: tx.counterpartName ?? null,
+      amount: tx.amount,
+      invoiceNumber: tx.reconciliations?.[0]?.invoice?.number ?? undefined,
+    });
+  }
 
-  // 5. Working capital changes — compare invoices pending at start vs end
-  const [pendingStart, pendingEnd] = await Promise.all([
-    getWorkingCapitalSnapshot(db, from),
-    getWorkingCapitalSnapshot(db, to),
-  ]);
+  const sum = (arr: EFETransactionDetail[]) => roundTwo(arr.reduce((s, t) => s + t.amount, 0));
 
-  const wcDeudores = -(pendingEnd.deudores - pendingStart.deudores);
-  const wcAcreedores = pendingEnd.acreedores - pendingStart.acreedores;
-  const wcChange = wcDeudores + wcAcreedores;
-
-  // Other non-cash adjustments
-  const otherNonCash = nonCashTx.reduce((s, tx) => s + tx.amount, 0);
-
+  // 3. Calculate section totals
   const flujosExplotacion =
-    resultadoAntesImpuestos + amortizacion + provisiones + wcChange + otherNonCash;
-
-  // 6. Investment flows (from INVESTING-classified txs + InvestmentTransactions)
-  const investingTx = await db.bankTransaction.findMany({
-    where: {
-      valueDate: { gte: from, lte: to },
-      status: { notIn: ["DUPLICATE", "IGNORED"] },
-      classification: { cashflowType: "INVESTING" },
-    },
-  });
-
-  // CAPEX flows (from economicCategory)
-  const capexTx = await db.bankTransaction.findMany({
-    where: {
-      valueDate: { gte: from, lte: to },
-      economicCategory: { in: ["CAPEX_ACQUISITION", "CAPEX_DISPOSAL"] },
-    },
-  });
-  const capexPayments = capexTx
-    .filter((t) => t.economicCategory === "CAPEX_ACQUISITION")
-    .reduce((s, t) => s + t.amount, 0);
-  const capexDisposals = capexTx
-    .filter((t) => t.economicCategory === "CAPEX_DISPOSAL")
-    .reduce((s, t) => s + t.amount, 0);
-
-  // Financial investment flows (from InvestmentTransaction)
-  const invTxs =
-    (await (db as any).investmentTransaction
-      ?.findMany?.({
-        where: {
-          date: { gte: from, lte: to },
-          type: {
-            in: [
-              "ACQUISITION",
-              "PARTIAL_DIVESTMENT",
-              "FULL_DIVESTMENT",
-              "DIVIDEND_RECEIVED",
-              "INTEREST_RECEIVED",
-              "CAPITAL_CALL",
-              "RETURN_OF_CAPITAL",
-            ],
-          },
-        },
-      })
-      .catch(() => [])) ?? [];
-  const invAcquisitions = invTxs
-    .filter((t: any) => ["ACQUISITION", "CAPITAL_CALL"].includes(t.type))
-    .reduce((s: number, t: any) => s + t.amount, 0);
-  const invDisposals = invTxs
-    .filter((t: any) =>
-      ["PARTIAL_DIVESTMENT", "FULL_DIVESTMENT", "RETURN_OF_CAPITAL"].includes(t.type)
-    )
-    .reduce((s: number, t: any) => s + t.amount, 0);
-  const invReturns = invTxs
-    .filter((t: any) => ["DIVIDEND_RECEIVED", "INTEREST_RECEIVED"].includes(t.type))
-    .reduce((s: number, t: any) => s + t.amount, 0);
+    sum(buckets.cobrosClientes) +
+    sum(buckets.pagosProveedores) +
+    sum(buckets.nominas) +
+    sum(buckets.impuestos) +
+    sum(buckets.otrosOperativos);
 
   const flujosInversion =
-    investingTx.reduce((s, tx) => s + tx.amount, 0) + capexPayments + capexDisposals;
+    sum(buckets.investing_capex) +
+    sum(buckets.investing_disposal) +
+    sum(buckets.investing_financial);
 
-  // 7. Financing flows
-  const financingTx = await db.bankTransaction.findMany({
-    where: {
-      valueDate: { gte: from, lte: to },
-      status: { notIn: ["DUPLICATE", "IGNORED"] },
-      classification: { cashflowType: "FINANCING" },
-    },
-  });
-  const flujosFinanciacion = financingTx.reduce((s, tx) => s + tx.amount, 0);
+  const flujosFinanciacion = sum(buckets.financing_in) + sum(buckets.financing_out);
 
-  // 8. Cash position
+  // 4. Cash positions
   const lastTxBefore = await db.bankTransaction.findFirst({
     where: {
       valueDate: { lt: from },
@@ -426,73 +471,72 @@ async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promis
     orderBy: { valueDate: "desc" },
     select: { balanceAfter: true },
   });
-
   const efectivoInicio = lastTxBefore?.balanceAfter ?? 0;
-  const aumentoDisminucion = flujosExplotacion + flujosInversion + flujosFinanciacion;
-  const efectivoFinal = efectivoInicio + aumentoDisminucion;
+
+  const lastTxEnd = await db.bankTransaction.findFirst({
+    where: {
+      valueDate: { lte: to },
+      balanceAfter: { not: null },
+      status: { notIn: ["DUPLICATE", "IGNORED"] },
+    },
+    orderBy: { valueDate: "desc" },
+    select: { balanceAfter: true },
+  });
+  const efectivoFinal = lastTxEnd?.balanceAfter ?? 0;
+  const aumentoDisminucion = efectivoFinal - efectivoInicio;
+
+  // 5. Build sections with drill-down transactions
+  const line = (label: string, arr: EFETransactionDetail[]): EFELine => ({
+    label,
+    amount: sum(arr),
+    transactions: arr.length > 0 ? arr : undefined,
+  });
 
   const sections: EFESection[] = [
     {
       code: "A",
-      label: "Flujos de efectivo de las actividades de explotación",
+      label: "A) FLUJOS DE EFECTIVO DE LAS ACTIVIDADES DE EXPLOTACIÓN",
       amount: roundTwo(flujosExplotacion),
       children: [
-        {
-          label: "Resultado antes de impuestos",
-          amount: roundTwo(resultadoAntesImpuestos),
-        },
-        {
-          label: "Ajuste: Amortización del inmovilizado",
-          amount: roundTwo(amortizacion),
-        },
-        {
-          label: "Ajuste: Variación de provisiones",
-          amount: roundTwo(provisiones),
-        },
-        {
-          label: "Cambios en capital circulante — deudores",
-          amount: roundTwo(wcDeudores),
-        },
-        {
-          label: "Cambios en capital circulante — acreedores",
-          amount: roundTwo(wcAcreedores),
-        },
-        {
-          label: "Otros ajustes no monetarios",
-          amount: roundTwo(otherNonCash),
-        },
-      ],
+        line("Cobros de clientes", buckets.cobrosClientes),
+        line("Pagos a proveedores", buckets.pagosProveedores),
+        line("Nóminas y Seguridad Social", buckets.nominas),
+        line("Impuestos pagados", buckets.impuestos),
+        line("Otros cobros/pagos operativos", buckets.otrosOperativos),
+      ].filter((l) => l.amount !== 0),
     },
     {
       code: "B",
-      label: "Flujos de efectivo de las actividades de inversión",
-      amount: roundTwo(flujosInversion - invAcquisitions + invDisposals + invReturns),
+      label: "B) FLUJOS DE EFECTIVO DE LAS ACTIVIDADES DE INVERSIÓN",
+      amount: roundTwo(flujosInversion),
       children: [
-        { label: "Pagos por adquisición de inmovilizado", amount: roundTwo(capexPayments) },
-        { label: "Cobros por enajenación de inmovilizado", amount: roundTwo(capexDisposals) },
-        { label: "Pagos por inversiones financieras", amount: roundTwo(-invAcquisitions) },
-        { label: "Cobros por desinversiones financieras", amount: roundTwo(invDisposals) },
-        { label: "Dividendos e intereses cobrados", amount: roundTwo(invReturns) },
+        line("Pagos por adquisición de inmovilizado", buckets.investing_capex),
+        line("Cobros por enajenaciones de inmovilizado", buckets.investing_disposal),
+        line("Inversiones/desinversiones financieras", buckets.investing_financial),
       ].filter((l) => l.amount !== 0),
     },
     {
       code: "C",
-      label: "Flujos de efectivo de las actividades de financiación",
+      label: "C) FLUJOS DE EFECTIVO DE LAS ACTIVIDADES DE FINANCIACIÓN",
       amount: roundTwo(flujosFinanciacion),
+      children: [
+        line("Entradas de financiación", buckets.financing_in),
+        line("Pagos de cuotas y préstamos", buckets.financing_out),
+      ].filter((l) => l.amount !== 0),
     },
     {
       code: "D",
-      label: "Aumento/disminución neta del efectivo",
+      label: "D) AUMENTO/DISMINUCIÓN NETA DEL EFECTIVO",
       amount: roundTwo(aumentoDisminucion),
     },
     {
       code: "E",
-      label: "Efectivo al inicio del periodo",
+      label: "E) EFECTIVO AL COMIENZO DEL EJERCICIO",
       amount: roundTwo(efectivoInicio),
     },
     {
       code: "F",
-      label: "Efectivo al final del periodo",
+      label: "F) EFECTIVO AL FINAL DEL EJERCICIO",
       amount: roundTwo(efectivoFinal),
     },
   ];
@@ -526,7 +570,7 @@ interface WorkingCapitalSnapshot {
   acreedores: number;
 }
 
-async function getWorkingCapitalSnapshot(
+export async function getWorkingCapitalSnapshot(
   db: ScopedPrisma,
   asOf: Date
 ): Promise<WorkingCapitalSnapshot> {

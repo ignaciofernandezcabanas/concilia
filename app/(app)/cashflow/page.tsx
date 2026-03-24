@@ -1,20 +1,33 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import TopBar from "@/components/TopBar";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import PgcTable from "@/components/PgcTable";
 import PeriodSelector, { usePeriodData, type PeriodType } from "@/components/PeriodSelector";
-import { EFE_STRUCTURE } from "@/lib/pgc-structure";
 import { useFetch } from "@/hooks/useApi";
 import { qs } from "@/lib/api-client";
-import { Download } from "lucide-react";
+import { Download, ChevronDown, ChevronRight } from "lucide-react";
+
+interface EFETransactionDetail {
+  id: string;
+  date: string;
+  concept: string;
+  counterpartName: string | null;
+  amount: number;
+  invoiceNumber?: string;
+}
+
+interface EFELine {
+  label: string;
+  amount: number;
+  transactions?: EFETransactionDetail[];
+}
 
 interface EFESection {
   code: string;
   label: string;
   amount: number;
-  children?: { label: string; amount: number }[];
+  children?: EFELine[];
 }
 interface EFEReport {
   mode: "indirect";
@@ -55,52 +68,7 @@ export default function CashflowPage() {
   const path = `/api/reports/cashflow${qs({ from: period.from, to: period.to, mode })}`;
   const { data, loading } = useFetch<CashflowReport>(path, [period.from, period.to, mode]);
 
-  // Build EFE data map
-  const { efeDataMap, efeColumns } = useMemo(() => {
-    const map = new Map<string, number>();
-    const cols = [{ key: "total", label: "Total" }];
-
-    if (!data || data.mode !== "indirect") return { efeDataMap: map, efeColumns: cols };
-
-    const report = data as EFEReport;
-    for (const section of report.sections) {
-      map.set(`${section.code}:total`, section.amount);
-    }
-    // Map totals
-    if (report.totals) {
-      map.set("A.5:total", report.totals.flujosExplotacion ?? 0);
-      map.set("B.8:total", report.totals.flujosInversion ?? 0);
-      map.set("C.12:total", report.totals.flujosFinanciacion ?? 0);
-      map.set("E:total", report.totals.aumentoDisminucionEfectivo ?? 0);
-      map.set("F1:total", report.totals.efectivoInicio ?? 0);
-      map.set("F2:total", report.totals.efectivoFinal ?? 0);
-    }
-    // Map children
-    for (const section of report.sections) {
-      if (section.children) {
-        for (const child of section.children) {
-          // Match by label keywords to EFE_STRUCTURE codes
-          if (child.label.includes("Resultado")) map.set("A.1:total", child.amount);
-          else if (child.label.includes("Amortización")) map.set("A.2a:total", child.amount);
-          else if (child.label.includes("provisiones")) map.set("A.2c:total", child.amount);
-          else if (child.label.includes("deudores")) map.set("A.3b:total", child.amount);
-          else if (child.label.includes("acreedores")) map.set("A.3d:total", child.amount);
-          // Block B children (investment flows)
-          else if (child.label.includes("adquisición de inmovilizado"))
-            map.set("B.1:total", child.amount);
-          else if (child.label.includes("enajenación de inmovilizado"))
-            map.set("B.2:total", child.amount);
-          else if (child.label.includes("inversiones financieras"))
-            map.set("B.3:total", child.amount);
-          else if (child.label.includes("desinversiones")) map.set("B.4:total", child.amount);
-          else if (child.label.includes("Dividendos") || child.label.includes("intereses cobrados"))
-            map.set("B.5:total", child.amount);
-        }
-      }
-    }
-
-    return { efeDataMap: map, efeColumns: cols };
-  }, [data]);
+  // EFE data is now rendered directly by EFEView (no PgcTable mapping needed)
 
   return (
     <div className="flex flex-col min-h-full">
@@ -144,12 +112,7 @@ export default function CashflowPage() {
         {loading ? (
           <LoadingSpinner />
         ) : mode === "indirect" ? (
-          <PgcTable
-            structure={EFE_STRUCTURE}
-            data={efeDataMap}
-            columns={efeColumns}
-            drilldown={{ report: "cashflow", from: period.from, to: period.to }}
-          />
+          <EFEView data={data?.mode === "indirect" ? (data as EFEReport) : null} />
         ) : (
           <TreasuryView data={data?.mode === "direct" ? (data as TreasuryReport) : null} />
         )}
@@ -354,6 +317,130 @@ function TDataRow({
         const f = fmtVal(total);
         return <span className={`w-[110px] text-right font-mono ${f.cls}`}>{f.text}</span>;
       })()}
+    </div>
+  );
+}
+
+// ── EFE (direct cash-basis) view with drill-down ──
+
+function EFEView({ data }: { data: EFEReport | null }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  if (!data) return null;
+
+  const toggle = (key: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  return (
+    <div className="bg-white rounded-lg border border-subtle overflow-hidden text-[13px]">
+      {data.sections.map((section) => {
+        const hasChildren = section.children && section.children.length > 0;
+        const isTotal = !hasChildren; // D, E, F are totals without children
+
+        return (
+          <div key={section.code}>
+            {/* Section header */}
+            <div
+              className={`flex items-center h-10 px-6 ${
+                isTotal ? "bg-page" : "bg-subtotal"
+              } border-b border-subtle`}
+            >
+              <span className="flex-1 text-xs font-semibold text-text-primary">
+                {section.label}
+              </span>
+              <span
+                className={`font-mono font-semibold ${
+                  section.amount >= 0 ? "text-green-text" : "text-red-text"
+                }`}
+              >
+                {fmtN(section.amount)} €
+              </span>
+            </div>
+
+            {/* Children (expandable lines) */}
+            {section.children?.map((child, i) => {
+              const lineKey = `${section.code}:${i}`;
+              const isOpen = expanded.has(lineKey);
+              const hasTxs = child.transactions && child.transactions.length > 0;
+
+              return (
+                <div key={lineKey}>
+                  {/* Line row */}
+                  <div
+                    className={`flex items-center h-9 px-6 pl-12 border-b border-border-light ${
+                      hasTxs ? "cursor-pointer hover:bg-hover" : ""
+                    } transition-colors`}
+                    onClick={() => hasTxs && toggle(lineKey)}
+                  >
+                    <span className="flex items-center gap-1.5 flex-1 text-text-primary">
+                      {hasTxs &&
+                        (isOpen ? (
+                          <ChevronDown size={14} className="text-text-tertiary" />
+                        ) : (
+                          <ChevronRight size={14} className="text-text-tertiary" />
+                        ))}
+                      {child.label}
+                      {hasTxs && (
+                        <span className="text-[10px] text-text-tertiary">
+                          ({child.transactions!.length})
+                        </span>
+                      )}
+                    </span>
+                    <span
+                      className={`font-mono ${
+                        child.amount >= 0 ? "text-green-text" : "text-red-text"
+                      }`}
+                    >
+                      {child.amount >= 0 ? "" : ""}
+                      {fmtN(child.amount)} €
+                    </span>
+                  </div>
+
+                  {/* Expanded transactions */}
+                  {isOpen && child.transactions && (
+                    <div className="border-l-2 border-accent ml-12 bg-page">
+                      <div className="flex items-center h-7 px-4 text-[10px] text-text-tertiary uppercase tracking-wide border-b border-border-light">
+                        <span className="w-20">Fecha</span>
+                        <span className="flex-1">Concepto</span>
+                        <span className="w-40 text-right">Contrapartida</span>
+                        <span className="w-24 text-right">Factura</span>
+                        <span className="w-24 text-right">Importe</span>
+                      </div>
+                      {child.transactions.map((tx) => {
+                        const v = fmtVal(tx.amount);
+                        return (
+                          <div
+                            key={tx.id}
+                            className="flex items-center h-8 px-4 text-[12px] border-b border-border-light last:border-0 hover:bg-hover transition-colors"
+                          >
+                            <span className="w-20 text-text-tertiary">{tx.date.slice(5)}</span>
+                            <span className="flex-1 text-text-primary truncate pr-2">
+                              {tx.concept}
+                            </span>
+                            <span className="w-40 text-right text-text-secondary truncate">
+                              {tx.counterpartName ?? "—"}
+                            </span>
+                            <span className="w-24 text-right text-text-tertiary text-[11px]">
+                              {tx.invoiceNumber ?? ""}
+                            </span>
+                            <span className={`w-24 text-right font-mono ${v.cls}`}>{v.text}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 }
