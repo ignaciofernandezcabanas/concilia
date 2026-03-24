@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import TopBar from "@/components/TopBar";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import Badge from "@/components/Badge";
@@ -8,13 +9,16 @@ import { useCompany, useUsers } from "@/hooks/useApi";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/components/AuthProvider";
 import LearningTab from "@/components/LearningTab";
-import { Plus, Check, Save, RefreshCw, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Save, RefreshCw, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 
 type Tab = "users" | "company" | "societies" | "fiscal" | "integrations" | "learning";
+const VALID_TABS: Tab[] = ["users", "company", "societies", "fiscal", "integrations", "learning"];
 
 export default function Ajustes() {
-  const { user } = useAuth();
-  const [tab, setTab] = useState<Tab>("users");
+  useAuth(); // ensure auth context is loaded
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get("tab") as Tab | null;
+  const [tab, setTab] = useState<Tab>(urlTab && VALID_TABS.includes(urlTab) ? urlTab : "users");
 
   const tabs: { value: Tab; label: string }[] = [
     { value: "users", label: "Usuarios" },
@@ -229,8 +233,6 @@ function CompanyTab() {
       hint: "Alertar X días antes del vencimiento de una factura",
     },
   ];
-
-  const fields = [...generalFields, ...thresholdFields];
 
   async function handleSave() {
     setSaving(true);
@@ -1135,6 +1137,7 @@ function SocietiesTab() {
 // Fiscal Tab
 // ══════════════════════════════════════════════════════════════
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 function FiscalTab() {
   const [fiscalType, setFiscalType] = useState<"vat" | "withholdings">("vat");
   const [year, setYear] = useState(new Date().getFullYear());
