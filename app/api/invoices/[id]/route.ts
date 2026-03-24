@@ -1,6 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
+import { errorResponse } from "@/lib/utils/error-response";
 import { createAuditLog } from "@/lib/utils/audit";
+
+/**
+ * GET /api/invoices/[id] — Invoice detail with lines and contact
+ */
+export const GET = withAuth(
+  async (_req: NextRequest, ctx: AuthContext, routeCtx?: { params?: Record<string, string> }) => {
+    const db = ctx.db;
+    try {
+      const id = routeCtx?.params?.id;
+      if (!id) return NextResponse.json({ error: "ID required." }, { status: 400 });
+
+      const invoice = await db.invoice.findUnique({
+        where: { id },
+        include: {
+          contact: { select: { name: true, cif: true, email: true } },
+          lines: true,
+        },
+      });
+
+      if (!invoice) return NextResponse.json({ error: "Not found." }, { status: 404 });
+      return NextResponse.json(invoice);
+    } catch (err) {
+      return errorResponse("Failed to get invoice", err);
+    }
+  }
+);
 
 /**
  * DELETE /api/invoices/[id]
