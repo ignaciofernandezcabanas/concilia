@@ -316,6 +316,20 @@ export default function PgcTable({ structure, data, columns, pctData, drilldown 
                         <span className="flex-1 text-text-secondary truncate">
                           {tx.description}
                         </span>
+                        {tx.type === "invoice" && tx.id && (
+                          <button
+                            onClick={() =>
+                              setViewingPdf({
+                                id: tx.id,
+                                number: tx.invoiceNumber ?? tx.description,
+                              })
+                            }
+                            className="text-accent hover:text-accent/70 transition-colors mr-2 shrink-0"
+                            title="Ver factura PDF"
+                          >
+                            <Eye size={13} />
+                          </button>
+                        )}
                         <span className={`w-[90px] text-right font-mono ${amtColor(tx.amount)}`}>
                           {fmtAmount(tx.amount)}
                         </span>
