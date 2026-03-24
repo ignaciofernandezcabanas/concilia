@@ -62,6 +62,13 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
     isinCif: "",
     ownershipPct: 0,
   });
+  const [pendingMatch, setPendingMatch] = useState<{
+    invoiceId: string;
+    invoiceAmount: number;
+    invoiceNumber: string;
+    difference: number;
+  } | null>(null);
+  const [selectedDiffType, setSelectedDiffType] = useState("");
 
   const txType = tx.amount > 0 ? "Cobro" : "Pago";
   const confidence = reco?.confidenceScore ?? 0;
@@ -601,15 +608,97 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
               Asignar a factura →
             </button>
           )}
-          {showManualMatch && (
+          {showManualMatch && !pendingMatch && (
             <InvoicePicker
               isIncome={tx.amount > 0}
-              onSelect={(invoiceId) => {
-                onResolve({ action: "manual_match", bankTransactionId: tx.id, invoiceId });
+              onSelect={(invoiceId, invoiceAmount, invoiceNumber) => {
+                const diff = Math.abs(tx.amount) - (invoiceAmount ?? 0);
+                if (Math.abs(diff) > 5 && invoiceAmount) {
+                  setPendingMatch({
+                    invoiceId,
+                    invoiceAmount,
+                    invoiceNumber: invoiceNumber ?? invoiceId,
+                    difference: diff,
+                  });
+                } else {
+                  onResolve({ action: "manual_match", bankTransactionId: tx.id, invoiceId });
+                }
               }}
               onCancel={() => setShowManualMatch(false)}
               resolving={resolving}
             />
+          )}
+
+          {/* Difference type selector — shown when match has significant difference */}
+          {pendingMatch && (
+            <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-amber-700 mb-1">Diferencia detectada</p>
+                <div className="flex justify-between text-[11px] text-amber-600">
+                  <span>
+                    Factura {pendingMatch.invoiceNumber}: {formatAmount(pendingMatch.invoiceAmount)}
+                  </span>
+                  <span>Cobrado: {formatAmount(Math.abs(tx.amount))}</span>
+                </div>
+                <p className="text-xs font-mono font-semibold text-amber-800 mt-1">
+                  Diferencia: {formatAmount(pendingMatch.difference)}
+                </p>
+              </div>
+
+              <div>
+                <label className="text-[11px] text-text-secondary mb-1 block">
+                  ¿A qué se debe?
+                </label>
+                <select
+                  value={selectedDiffType}
+                  onChange={(e) => setSelectedDiffType(e.target.value)}
+                  className="w-full border border-border rounded px-2 py-1.5 text-xs"
+                >
+                  <option value="">Selecciona el tipo de diferencia...</option>
+                  <option value="EARLY_PAYMENT_DISCOUNT">Descuento pronto pago (706)</option>
+                  <option value="BANK_COMMISSION">Comisión bancaria/pasarela (626)</option>
+                  <option value="WITHHOLDING_TAX">Retención IRPF (473)</option>
+                  <option value="PARTIAL_WRITE_OFF">Pérdida parcial aceptada (650)</option>
+                  <option value="FX_DIFFERENCE">Diferencia de cambio (668/768)</option>
+                  <option value="OVERPAYMENT_ADVANCE">Pago en exceso / anticipo (438)</option>
+                  <option value="PENDING_CREDIT_NOTE">Nota de crédito pendiente</option>
+                  <option value="NEGOTIATED_ADJUSTMENT">Ajuste comercial negociado</option>
+                  <option value="REQUEST_CLARIFICATION">Pedir aclaración al contacto</option>
+                </select>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  disabled={!selectedDiffType || resolving}
+                  onClick={() => {
+                    onResolve({
+                      action: "manual_match",
+                      bankTransactionId: tx.id,
+                      invoiceId: pendingMatch.invoiceId,
+                      differenceType: selectedDiffType,
+                    });
+                    setPendingMatch(null);
+                    setSelectedDiffType("");
+                  }}
+                  className="flex-1 h-8 bg-accent text-white text-xs rounded hover:bg-accent/90 disabled:opacity-50"
+                >
+                  {resolving
+                    ? "Procesando..."
+                    : selectedDiffType === "REQUEST_CLARIFICATION"
+                      ? "Enviar aclaración"
+                      : "Confirmar match"}
+                </button>
+                <button
+                  onClick={() => {
+                    setPendingMatch(null);
+                    setSelectedDiffType("");
+                  }}
+                  className="text-xs text-text-secondary px-2"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
           )}
 
           {/* Ignore */}
@@ -756,7 +845,7 @@ function InvoicePicker({
   resolving,
 }: {
   isIncome: boolean;
-  onSelect: (invoiceId: string) => void;
+  onSelect: (invoiceId: string, invoiceAmount?: number, invoiceNumber?: string) => void;
   onCancel: () => void;
   resolving: boolean;
 }) {
@@ -808,7 +897,7 @@ function InvoicePicker({
           invoices.map((inv) => (
             <button
               key={inv.id}
-              onClick={() => onSelect(inv.id)}
+              onClick={() => onSelect(inv.id, inv.totalAmount, inv.number)}
               disabled={resolving}
               className="w-full text-left px-2 py-1.5 text-[12px] hover:bg-hover rounded flex justify-between disabled:opacity-50"
             >
