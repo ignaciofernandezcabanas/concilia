@@ -515,9 +515,24 @@ model Reconciliation {
   company             Company              @relation(fields: [companyId], references: [id])
   invoice             Invoice?             @relation(fields: [invoiceId], references: [id])
 
+  // Match con diferencia
+  differenceType                DifferenceType?
+  differenceAmount              Float?
+  differenceJournalEntryId      String?
+
+  // Aclaración por email
+  clarificationEmailSentAt      DateTime?
+  clarificationEmailMessageId   String?
+  clarificationEmailTo          String?
+  clarificationEmailSubject     String?
+  clarificationReceivedAt       DateTime?
+  clarificationSummary          String?
+  clarificationDifferenceType   DifferenceType?
+
   @@index([companyId, status])
   @@index([bankTransactionId])
   @@index([invoiceId])
+  @@index([clarificationEmailMessageId])
 }
 
 model MatchingRule {
@@ -1050,6 +1065,19 @@ enum ReconciliationStatus {
   APPROVED
   AUTO_APPROVED
   REJECTED
+  PENDING_CLARIFICATION
+}
+
+enum DifferenceType {
+  EARLY_PAYMENT_DISCOUNT
+  BANK_COMMISSION
+  WITHHOLDING_TAX
+  PARTIAL_WRITE_OFF
+  FX_DIFFERENCE
+  OVERPAYMENT_ADVANCE
+  PENDING_CREDIT_NOTE
+  NEGOTIATED_ADJUSTMENT
+  REQUEST_CLARIFICATION
 }
 
 enum DifferenceReason {
@@ -1119,6 +1147,9 @@ enum NotificationType {
   DOCUMENT_REQUEST
   INVESTMENT_DOCUMENT_RECEIVED
   CAPEX_UNREGISTERED
+  JOURNAL_ENTRY_PENDING_APPROVAL
+  CLARIFICATION_RECEIVED
+  CLARIFICATION_OVERDUE
 }
 
 enum AgentRunStatus {

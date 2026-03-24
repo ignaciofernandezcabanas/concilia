@@ -35,6 +35,9 @@ export type AITask =
   | "variance_consolidated"
   | "classify_investment_capex"
   | "explain_investment_bandeja"
+  | "classify_match_difference"
+  | "draft_clarification_email"
+  | "parse_clarification_reply"
   // Opus — síntesis compleja
   | "daily_briefing"
   | "weekly_briefing"
@@ -81,6 +84,21 @@ const TASK_CONFIG: Record<AITask, TaskConfig> = {
     model: "claude-sonnet-4-20250514",
     maxTokens: 600,
     temperature: 0.1,
+  },
+  classify_match_difference: {
+    model: "claude-haiku-4-5-20251001",
+    maxTokens: 200,
+    temperature: 0.0,
+  },
+  draft_clarification_email: {
+    model: "claude-sonnet-4-20250514",
+    maxTokens: 500,
+    temperature: 0.3,
+  },
+  parse_clarification_reply: {
+    model: "claude-haiku-4-5-20251001",
+    maxTokens: 200,
+    temperature: 0.0,
   },
   explain_investment_bandeja: {
     model: "claude-haiku-4-5-20251001",

@@ -172,9 +172,8 @@ export async function detectInvestmentOrCapex(
       requiredDocuments: [
         {
           type: "SHARE_PURCHASE_AGREEMENT",
-          description: "Contrato de compraventa de participaciones (SPA)",
+          description: "Contrato de compraventa, ampliación de capital o préstamo",
         },
-        { type: "DEED_OF_ACQUISITION", description: "Escritura pública de transmisión" },
       ],
       confidenceSignals: signals,
     };

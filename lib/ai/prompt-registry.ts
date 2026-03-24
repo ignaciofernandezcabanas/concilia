@@ -769,3 +769,68 @@ export const EXPLAIN_INVESTMENT_BANDEJA = {
   }) =>
     `<movement>\nImporte: ${data.amount} EUR\nConcepto: ${data.concept}\nTipo: ${data.suggestedCategory}\nCuenta PGC: ${data.suggestedPgcAccount}\nDocumentos: ${data.requiredDocuments.join(", ")}\n</movement>`,
 };
+
+// ════════════════════════════════════════════════════════════
+// CLASSIFY MATCH DIFFERENCE (Haiku)
+// ════════════════════════════════════════════════════════════
+
+export const CLASSIFY_MATCH_DIFFERENCE = {
+  task: "classify_match_difference" as const,
+  version: "1.0",
+  system: `Analiza la diferencia entre un cobro bancario y una factura. Determina la causa más probable. Responde SOLO en JSON.`,
+  buildUser: (data: {
+    txAmount: number;
+    invoiceAmount: number;
+    difference: number;
+    differencePct: number;
+    txConcept: string;
+  }) =>
+    `<match_data>\nCobrado: ${data.txAmount} EUR\nFacturado: ${data.invoiceAmount} EUR\nDiferencia: ${data.difference} EUR (${data.differencePct.toFixed(2)}%)\nConcepto: ${data.txConcept}\n</match_data>`,
+  schema: z.object({
+    differenceType: z.string(),
+    suggestedPgcAccount: z.string(),
+    confidence: z.number().min(0).max(1),
+    reasoning: z.string(),
+  }),
+};
+
+// ════════════════════════════════════════════════════════════
+// DRAFT CLARIFICATION EMAIL (Sonnet)
+// ════════════════════════════════════════════════════════════
+
+export const DRAFT_CLARIFICATION_EMAIL = {
+  task: "draft_clarification_email" as const,
+  version: "1.0",
+  system:
+    `Eres el controller financiero. Redacta un email al cliente solicitando aclaración sobre una diferencia en el pago.\n` +
+    `Identifica factura y pago con datos concretos. Menciona la diferencia sin acusar. Pide respuesta en 3 días hábiles.\n` +
+    `Formato: ASUNTO: [asunto] en primera línea, luego el cuerpo. SOLO texto.`,
+  buildUser: (data: {
+    invoiceNumber: string;
+    invoiceAmount: number;
+    receivedAmount: number;
+    difference: number;
+    clientName: string;
+    companyName: string;
+  }) =>
+    `<invoice>\nNúmero: ${data.invoiceNumber}\nImporte: ${data.invoiceAmount} EUR\n</invoice>\n` +
+    `<payment>\nCobrado: ${data.receivedAmount} EUR\nDiferencia: ${data.difference} EUR\n</payment>\n` +
+    `<context>\nCliente: ${data.clientName}\nNuestra empresa: ${data.companyName}\n</context>`,
+};
+
+// ════════════════════════════════════════════════════════════
+// PARSE CLARIFICATION REPLY (Haiku)
+// ════════════════════════════════════════════════════════════
+
+export const PARSE_CLARIFICATION_REPLY = {
+  task: "parse_clarification_reply" as const,
+  version: "1.0",
+  system: `Analiza la respuesta de un cliente sobre una diferencia en un pago. Extrae si explica la razón. Responde SOLO en JSON.`,
+  buildUser: (emailBody: string) => `<reply>\n${emailBody.substring(0, 2000)}\n</reply>`,
+  schema: z.object({
+    explainsDifference: z.boolean(),
+    reason: z.string().nullable(),
+    suggestedDifferenceType: z.string().nullable(),
+    summary: z.string(),
+  }),
+};
