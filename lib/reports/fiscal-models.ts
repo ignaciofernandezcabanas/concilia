@@ -11,6 +11,7 @@
 
 import type { ScopedPrisma } from "@/lib/db-scoped";
 import { generateVatReport, type VatReport } from "./vat-generator";
+import { generatePyG } from "./pyg-generator";
 
 function r2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -405,4 +406,73 @@ export function getFiscalCalendar(year: number): FiscalDeadline[] {
   });
 
   return deadlines.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+}
+
+// ---------------------------------------------------------------------------
+// Model IS — Impuesto sobre Sociedades
+// ---------------------------------------------------------------------------
+
+export interface ModelIS {
+  year: number;
+  baseImponible: number;
+  ajustes: { gastosNoDeducibles: number; ingresosExentos: number };
+  baseImponibleAjustada: number;
+  tipoImpositivo: number;
+  cuotaIntegra: number;
+  deducciones: number;
+  cuotaLiquida: number;
+  retencionesYPagosACuenta: number;
+  cuotaDiferencial: number;
+}
+
+export async function calculateModelIS(db: ScopedPrisma, year: number): Promise<ModelIS> {
+  // 1. Get PyG resultado antes de impuestos for the full year
+  const from = new Date(year, 0, 1);
+  const to = new Date(year, 11, 31);
+  const pyg = await generatePyG(db, from, to, "titles", false);
+  const baseImponible = pyg.results.resultadoAntesImpuestos;
+
+  // 2. Adjustments (structure ready, values 0 for now)
+  const ajustes = { gastosNoDeducibles: 0, ingresosExentos: 0 };
+  const baseAjustada = baseImponible + ajustes.gastosNoDeducibles - ajustes.ingresosExentos;
+
+  // 3. Tax rate: 25% general (Spain). Could be 23% for small companies.
+  const tipoImpositivo = 0.25;
+  const cuotaIntegra = baseAjustada > 0 ? r2(baseAjustada * tipoImpositivo) : 0;
+
+  // 4. Deductions: 0 for now
+  const deducciones = 0;
+  const cuotaLiquida = Math.max(0, cuotaIntegra - deducciones);
+
+  // 5. Withholdings: sum of account 473 balance
+  // Account 473 = "HP retenciones y pagos a cuenta" (asset, debit balance = amount to offset)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const retAccount = await (db as any).account.findFirst({
+    where: { code: "473" },
+    select: { id: true },
+  });
+  let retenciones = 0;
+  if (retAccount) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const jeLines = await (db as any).journalEntryLine.findMany({
+      where: { accountId: retAccount.id },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    retenciones = jeLines.reduce((s: number, l: any) => s + (l.debit - l.credit), 0);
+  }
+
+  const cuotaDiferencial = r2(cuotaLiquida - retenciones);
+
+  return {
+    year,
+    baseImponible: r2(baseImponible),
+    ajustes,
+    baseImponibleAjustada: r2(baseAjustada),
+    tipoImpositivo,
+    cuotaIntegra,
+    deducciones,
+    cuotaLiquida,
+    retencionesYPagosACuenta: r2(retenciones),
+    cuotaDiferencial,
+  };
 }

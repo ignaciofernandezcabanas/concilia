@@ -215,6 +215,23 @@ export async function generatePyG(
   const resultadoExplotacion = sumLines(EXPLOITATION_LINES);
   const resultadoFinanciero = sumLines(FINANCIAL_LINES);
   const resultadoAntesImpuestos = resultadoExplotacion + resultadoFinanciero;
+
+  // Line 17: Impuesto sobre beneficios — if no accounting entries mapped,
+  // estimate IS at 25% of positive pre-tax result (negative = expense).
+  const line17FromAccounts = lineTotals.get("17") ?? 0;
+  if (line17FromAccounts === 0 && resultadoAntesImpuestos > 0) {
+    const isEstimate = roundTwo(resultadoAntesImpuestos * 0.25);
+    lineTotals.set("17", -isEstimate);
+    // Also register in lineAmounts for drill-down
+    if (!lineAmounts.has("17")) {
+      lineAmounts.set("17", new Map());
+    }
+    lineAmounts.get("17")!.set("6300", {
+      amount: -isEstimate,
+      accountName: "Impuesto sobre beneficios (estimación)",
+    });
+  }
+
   const resultadoEjercicio = resultadoAntesImpuestos + (lineTotals.get("17") ?? 0);
 
   // Line 1 is the revenue baseline for percentages

@@ -729,6 +729,32 @@ async function main() {
   );
   addTx(999.99, d(2026, 3, 16), "TRANSFERENCIA RECIBIDA", null, null);
 
+  // Q4 2025 tax payments (January 2026)
+  addTx(
+    -3245.5,
+    d(2026, 1, 20),
+    "AEAT MODELO 303 LIQUIDACION 4T 2025",
+    null,
+    "AGENCIA TRIBUTARIA",
+    "RECONCILED"
+  );
+  addTx(
+    -1876.25,
+    d(2026, 1, 20),
+    "AEAT MODELO 111 RETENCIONES 4T 2025",
+    null,
+    "AGENCIA TRIBUTARIA",
+    "RECONCILED"
+  );
+  addTx(
+    -472.5,
+    d(2026, 1, 20),
+    "AEAT MODELO 115 RETENCIONES ALQUILER 4T 2025",
+    null,
+    "AGENCIA TRIBUTARIA",
+    "RECONCILED"
+  );
+
   // Nóminas + préstamo + SS
   for (const m of [1, 2, 3]) {
     addTx(

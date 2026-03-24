@@ -5,7 +5,7 @@ import { useFetch } from "@/hooks/useApi";
 import { Receipt, Calendar, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { formatAmount } from "@/lib/format";
 
-type Tab = "303" | "111" | "115" | "390" | "calendar";
+type Tab = "303" | "111" | "115" | "390" | "is" | "calendar";
 
 interface Model303 {
   period: { from: string; to: string };
@@ -44,6 +44,19 @@ interface Model390 {
   annualTotals: { devengado: number; deducible: number; resultado: number };
 }
 
+interface ModelIS {
+  year: number;
+  baseImponible: number;
+  ajustes: { gastosNoDeducibles: number; ingresosExentos: number };
+  baseImponibleAjustada: number;
+  tipoImpositivo: number;
+  cuotaIntegra: number;
+  deducciones: number;
+  cuotaLiquida: number;
+  retencionesYPagosACuenta: number;
+  cuotaDiferencial: number;
+}
+
 interface FiscalDeadline {
   model: string;
   quarter?: number;
@@ -78,6 +91,9 @@ export default function FiscalPage() {
   const { data: data390 } = useFetch<Model390>(
     tab === "390" ? `/api/reports/fiscal/390?year=${year}` : null
   );
+  const { data: dataIS } = useFetch<ModelIS>(
+    tab === "is" ? `/api/reports/fiscal/is?year=${year}` : null
+  );
   const { data: calendarData } = useFetch<{ year: number; deadlines: FiscalDeadline[] }>(
     tab === "calendar" ? `/api/reports/fiscal/calendar?year=${year}` : null
   );
@@ -87,6 +103,7 @@ export default function FiscalPage() {
     { id: "111", label: "Modelo 111" },
     { id: "115", label: "Modelo 115" },
     { id: "390", label: "Resumen 390" },
+    { id: "is", label: "Imp. Sociedades" },
     { id: "calendar", label: "Calendario" },
   ];
 
@@ -114,7 +131,7 @@ export default function FiscalPage() {
             ))}
           </select>
         </div>
-        {tab !== "390" && tab !== "calendar" && (
+        {tab !== "390" && tab !== "is" && tab !== "calendar" && (
           <div className="flex items-center gap-2">
             <label className="text-[12px] text-text-secondary">Trimestre</label>
             <div className="flex gap-0.5">
@@ -158,6 +175,7 @@ export default function FiscalPage() {
       {tab === "111" && <Model111View data={data111 ?? undefined} />}
       {tab === "115" && <Model115View data={data115 ?? undefined} />}
       {tab === "390" && <Model390View data={data390 ?? undefined} />}
+      {tab === "is" && <ModelISView data={dataIS ?? undefined} />}
       {tab === "calendar" && <CalendarView deadlines={calendarData?.deadlines ?? []} />}
     </div>
   );
@@ -349,6 +367,66 @@ function Model390View({ data }: { data: Model390 | undefined }) {
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function ModelISView({ data }: { data: ModelIS | undefined }) {
+  if (!data) return <p className="text-[12px] text-text-tertiary py-4">Cargando...</p>;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Section title={`Impuesto sobre Sociedades — Ejercicio ${data.year}`}>
+        <div className="flex justify-between text-[12px]">
+          <span className="text-text-secondary">Base imponible (resultado antes de impuestos)</span>
+          <span className="font-mono text-text-primary">{formatAmount(data.baseImponible)}</span>
+        </div>
+        <div className="flex justify-between text-[12px]">
+          <span className="text-text-secondary">Gastos no deducibles (+)</span>
+          <span className="font-mono text-text-primary">
+            {formatAmount(data.ajustes.gastosNoDeducibles)}
+          </span>
+        </div>
+        <div className="flex justify-between text-[12px]">
+          <span className="text-text-secondary">Ingresos exentos (-)</span>
+          <span className="font-mono text-text-primary">
+            {formatAmount(data.ajustes.ingresosExentos)}
+          </span>
+        </div>
+        <TotalRow label="Base imponible ajustada" amount={data.baseImponibleAjustada} />
+      </Section>
+
+      <Section title="Liquidación">
+        <div className="flex justify-between text-[12px]">
+          <span className="text-text-secondary">
+            Tipo impositivo: {(data.tipoImpositivo * 100).toFixed(0)}%
+          </span>
+          <span className="font-mono text-text-primary">{formatAmount(data.cuotaIntegra)}</span>
+        </div>
+        <div className="flex justify-between text-[12px]">
+          <span className="text-text-secondary">Deducciones</span>
+          <span className="font-mono text-text-primary">{formatAmount(data.deducciones)}</span>
+        </div>
+        <TotalRow label="Cuota líquida" amount={data.cuotaLiquida} />
+      </Section>
+
+      <Section title="Resultado">
+        <div className="flex justify-between text-[12px]">
+          <span className="text-text-secondary">Retenciones y pagos a cuenta</span>
+          <span className="font-mono text-text-primary">
+            {formatAmount(data.retencionesYPagosACuenta)}
+          </span>
+        </div>
+      </Section>
+
+      <div className="bg-context rounded-lg p-4">
+        <div className="flex justify-between text-[13px] font-semibold text-text-primary">
+          <span>Cuota diferencial: {data.cuotaDiferencial >= 0 ? "A ingresar" : "A devolver"}</span>
+          <span className={data.cuotaDiferencial >= 0 ? "text-red-text" : "text-green-text"}>
+            {formatAmount(data.cuotaDiferencial)}
+          </span>
+        </div>
       </div>
     </div>
   );
