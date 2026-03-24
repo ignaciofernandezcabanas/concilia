@@ -111,6 +111,7 @@ model Company {
   notifications            Notification[]
   ownBankAccounts          OwnBankAccount[]
   reconciliations          Reconciliation[]
+  supportingDocuments      SupportingDocument[]
   syncLogs                 SyncLog[]
   users                    User[]
 }
@@ -240,6 +241,7 @@ model JournalEntry {
   investmentTransactions InvestmentTransaction[]
   recurringAccrual       RecurringAccrual?      @relation("AccrualEntries", fields: [recurringAccrualId], references: [id])
   recurringAccrualId     String?
+  supportingDocument     SupportingDocument?    @relation("SupportingDocEntry")
 
   @@unique([companyId, number])
   @@index([companyId, date])
@@ -527,7 +529,8 @@ model Contact {
   deferredEntries   DeferredEntry[]  @relation("DeferredContact")
   inquiries         Inquiry[]
   invoices          Invoice[]
-  recurringAccruals RecurringAccrual[]
+  recurringAccruals    RecurringAccrual[]
+  supportingDocuments  SupportingDocument[] @relation("SupportingDocContact")
 
   @@unique([holdedId, companyId])
 }
@@ -689,6 +692,8 @@ model Reconciliation {
   bankTransaction           BankTransaction?     @relation(fields: [bankTransactionId], references: [id])
   company                   Company              @relation(fields: [companyId], references: [id])
   invoice                   Invoice?             @relation(fields: [invoiceId], references: [id])
+  supportingDocumentId      String?
+  supportingDocument        SupportingDocument?  @relation(fields: [supportingDocumentId], references: [id])
 
   // Match con diferencia
   differenceType                DifferenceType?
@@ -1397,4 +1402,62 @@ enum ProposedAction {
   FOLLOW_UP_STANDARD
   ESCALATE_CONTROLLER
   ESCALATE_DISPUTE
+}
+
+model SupportingDocument {
+  id                String              @id @default(cuid())
+  type              SupportingDocType
+  reference         String?
+  description       String
+  date              DateTime
+  amount            Float
+  contactId         String?
+  contact           Contact?            @relation("SupportingDocContact", fields: [contactId], references: [id])
+  fileUrl           String?
+  fileName          String?
+  debitAccountCode  String
+  creditAccountCode String
+  cashflowType      CashflowType
+  distributionDetail Json?
+  journalEntryId    String?             @unique
+  journalEntry      JournalEntry?       @relation("SupportingDocEntry", fields: [journalEntryId], references: [id])
+  expectedDirection ExpectedDirection
+  expectedAmount    Float?
+  status            DocStatus           @default(REGISTERED)
+  companyId         String
+  company           Company             @relation(fields: [companyId], references: [id])
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  reconciliations   Reconciliation[]
+
+  @@index([companyId, status])
+  @@index([companyId, type])
+  @@index([companyId, date])
+}
+
+enum SupportingDocType {
+  ACTA_JUNTA
+  ESCRITURA
+  CONTRATO_PRESTAMO
+  RESOLUCION_SUBVENCION
+  LIQUIDACION_INTERESES
+  MODELO_FISCAL
+  RECIBO_NOMINA
+  POLIZA_SEGURO
+  CONTRATO_ALQUILER
+  OTRO
+}
+
+enum DocStatus {
+  REGISTERED
+  PENDING_APPROVAL
+  POSTED
+  RECONCILED
+  CANCELLED
+}
+
+enum ExpectedDirection {
+  INFLOW
+  OUTFLOW
+  NONE
 }

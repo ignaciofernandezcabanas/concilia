@@ -45,6 +45,7 @@ const SCOPED_MODELS = new Set([
   "deferredEntry",
   "badDebtTracker",
   "exchangeRateDifference",
+  "supportingDocument",
   // NOT scoped (no companyId): InvoiceLine, BudgetLine, JournalEntryLine,
   //   BankTransactionClassification, DuplicateGroup, Payment, CompanyScope
   // NOT scoped (organizationId instead): IntercompanyLink, AgentRun
