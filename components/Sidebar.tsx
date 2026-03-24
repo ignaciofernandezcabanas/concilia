@@ -48,7 +48,7 @@ const sections: NavSection[] = [
     title: "DIARIO",
     items: [
       { label: "Resumen", icon: LayoutDashboard, href: "/" },
-      { label: "Bandeja", icon: GitCompare, href: "/conciliacion" },
+      { label: "Conciliación", icon: GitCompare, href: "/conciliacion" },
       { label: "Seguimientos", icon: Mail, href: "/seguimientos" },
       { label: "Movimientos", icon: Landmark, href: "/movimientos" },
       { label: "Facturas", icon: FileText, href: "/facturas" },
