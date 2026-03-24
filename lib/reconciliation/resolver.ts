@@ -319,7 +319,7 @@ export async function resolveItem(
           };
         }
 
-        // REQUEST_CLARIFICATION → don't close, send email
+        // REQUEST_CLARIFICATION → create Inquiry linked to Reconciliation
         if (payload.differenceType === "REQUEST_CLARIFICATION") {
           const reco = await tx.reconciliation.create({
             data: {
@@ -343,11 +343,43 @@ export async function resolveItem(
             data: { status: "INVESTIGATING" },
           });
 
+          // Create Inquiry so it appears in Seguimientos
+          const contact = invoice.contactId
+            ? await tx.contact.findUnique({ where: { id: invoice.contactId } })
+            : null;
+          const recipientEmail = contact?.accountingEmail ?? contact?.email ?? "";
+          const recipientName = contact?.accountingContact ?? contact?.name ?? "";
+
+          const subject = `Aclaración diferencia — Fra. ${invoice.number} (${Math.abs(diff).toFixed(2)}€)`;
+          const bodyPlain = `Estimado/a ${recipientName},\n\nEn relación a la factura ${invoice.number} por ${invoice.totalAmount.toFixed(2)}€, hemos registrado un cobro de ${txAbs.toFixed(2)}€, con una diferencia de ${Math.abs(diff).toFixed(2)}€.\n\n¿Podrían indicarnos a qué se debe esta diferencia?\n\nGracias.`;
+          const body = bodyPlain.replace(/\n/g, "<br/>");
+
+          if (contact) {
+            await (tx as any).inquiry.create({
+              data: {
+                triggerType: "EXPENSE_CLARIFICATION",
+                reconciliationId: reco.id,
+                bankTransactionId: bankTx.id,
+                invoiceId: invoice.id,
+                contactId: contact.id,
+                recipientEmail,
+                recipientName,
+                subject,
+                body,
+                bodyPlain,
+                status: "DRAFT",
+                companyId,
+              },
+            });
+          }
+
           return {
             success: true,
             action,
             reconciliationId: reco.id,
-            message: `Match creado con diferencia de ${absDiff.toFixed(2)}€. Pendiente de aclaración del contacto.`,
+            message: contact
+              ? `Aclaración creada en Seguimientos. Revisa y aprueba el envío.`
+              : `Match pendiente de aclaración. No se encontró contacto con email.`,
           };
         }
 

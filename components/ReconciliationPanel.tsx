@@ -250,6 +250,26 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
           </div>
         )}
 
+        {/* PENDING_CLARIFICATION — waiting for external response */}
+        {tx.status === "INVESTIGATING" && reco?.matchReason?.includes("pending_clarification") && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+            <p className="text-xs font-semibold text-blue-700 mb-1">Pendiente de aclaración</p>
+            <p className="text-[11px] text-blue-600">
+              Se ha solicitado aclaración al contacto sobre la diferencia de{" "}
+              <span className="font-mono font-medium">
+                {reco?.difference != null ? formatAmount(Math.abs(reco.difference)) : "—"}
+              </span>
+              .
+            </p>
+            <a
+              href="/seguimientos"
+              className="text-[11px] text-blue-700 hover:underline mt-1 inline-block font-medium"
+            >
+              Ver seguimiento del email →
+            </a>
+          </div>
+        )}
+
         {/* Block 3 — Actions */}
         <div className="flex flex-col gap-2">
           {/* Approve */}

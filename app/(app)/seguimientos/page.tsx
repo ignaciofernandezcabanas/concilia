@@ -179,6 +179,14 @@ export default function SeguimientosPage() {
                 )}
               </div>
               <p className="text-xs text-text-secondary mt-0.5 line-clamp-1">{inquiry.subject}</p>
+              {inquiry.triggerType === "EXPENSE_CLARIFICATION" && (
+                <a
+                  href="/conciliacion"
+                  className="text-[10px] text-accent hover:underline mt-0.5 inline-block"
+                >
+                  Ver en conciliación →
+                </a>
+              )}
               <div className="flex items-center gap-3 mt-1">
                 <span className={`text-[10px] px-1.5 py-0.5 rounded ${cfg.bg} ${cfg.color}`}>
                   {cfg.label}
