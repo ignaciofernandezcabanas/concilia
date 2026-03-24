@@ -31,7 +31,7 @@ export async function calibrateFromDecision(decision: CalibrationDecision): Prom
   if (decision.wasAutoExecuted && decision.wasModified) {
     // Auto-executed but controller corrected → BAD
     const newErrors = (existing?.errors30d ?? 0) + 1;
-    const newAdj = (existing?.adjustment ?? 0) - 0.10;
+    const newAdj = (existing?.adjustment ?? 0) - 0.1;
 
     await prisma.confidenceAdjustment.upsert({
       where: { category_patternKey_companyId: { category, patternKey, companyId } },
@@ -39,7 +39,7 @@ export async function calibrateFromDecision(decision: CalibrationDecision): Prom
         category,
         patternKey,
         companyId,
-        adjustment: -0.10,
+        adjustment: -0.1,
         errors30d: 1,
         lastErrorAt: new Date(),
         pausedUntil: null,
@@ -56,7 +56,7 @@ export async function calibrateFromDecision(decision: CalibrationDecision): Prom
     if (newErrors >= 2) {
       console.warn(
         `[calibrator] Category ${category} paused for company ${companyId} ` +
-        `due to ${newErrors} auto-execute errors.`
+          `due to ${newErrors} auto-execute errors.`
       );
     }
     return;

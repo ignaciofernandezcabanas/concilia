@@ -47,7 +47,7 @@ export async function classifyWithCascade(
       ruleErrorRate: 0, // TODO: compute from historical data
     });
 
-    if (confidence.score >= 0.80) {
+    if (confidence.score >= 0.8) {
       return {
         accountCode: ruleResult.accountCode,
         cashflowType: ruleResult.cashflowType,
@@ -71,12 +71,14 @@ export async function classifyWithCascade(
     orderBy: { valueDate: "desc" },
     take: 5,
   });
-  const genericSummary = genericHistory
-    .map((h) =>
-      `- "${h.concept ?? ""}" | ${h.amount.toFixed(2)} EUR | ` +
-      `${h.classification?.account.code ?? ""} (${h.classification?.account.name ?? ""})`
-    )
-    .join("\n") || "No hay datos históricos.";
+  const genericSummary =
+    genericHistory
+      .map(
+        (h) =>
+          `- "${h.concept ?? ""}" | ${h.amount.toFixed(2)} EUR | ` +
+          `${h.classification?.account.code ?? ""} (${h.classification?.account.name ?? ""})`
+      )
+      .join("\n") || "No hay datos históricos.";
 
   const historySummary = controllerContext
     ? `${controllerContext}\n\n<generic_history>\nÚltimas clasificaciones:\n${genericSummary}\n</generic_history>`
@@ -145,7 +147,7 @@ export async function classifyWithCascade(
       threshold,
       companyId: tx.companyId,
       llmConfidence: 0,
-      systemCheckMultiplier: 0.50,
+      systemCheckMultiplier: 0.5,
     }),
     resolvedBy: "unresolved",
   };

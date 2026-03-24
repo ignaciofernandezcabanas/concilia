@@ -53,15 +53,18 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
   const hasMatch = reco && reco.invoiceId;
 
   // Confidence bar color
-  const barColor = confidence >= 0.90 ? "bg-green" : confidence >= 0.70 ? "bg-amber" : "bg-red";
-  const borderColor = confidence >= 0.90 ? "border-l-green" : confidence >= 0.70 ? "border-l-amber" : "border-l-subtle";
+  const barColor = confidence >= 0.9 ? "bg-green" : confidence >= 0.7 ? "bg-amber" : "bg-red";
+  const borderColor =
+    confidence >= 0.9 ? "border-l-green" : confidence >= 0.7 ? "border-l-amber" : "border-l-subtle";
 
   return (
     <div className="w-[400px] min-w-[400px] bg-white border-l border-subtle flex flex-col h-full overflow-auto">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-subtle shrink-0">
         <span className="text-[14px] font-semibold text-text-primary">Detalle de conciliación</span>
-        <button onClick={onClose} className="text-text-tertiary hover:text-text-primary"><X size={18} /></button>
+        <button onClick={onClose} className="text-text-tertiary hover:text-text-primary">
+          <X size={18} />
+        </button>
       </div>
 
       <div className="flex flex-col gap-4 p-4 overflow-auto">
@@ -69,12 +72,18 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
         <div className="bg-context rounded-lg p-4">
           <h3 className="text-[14px] font-semibold text-text-primary mb-2">{txType} recibido</h3>
           <p className="text-[12px] text-text-secondary mb-3">
-            {tx.detectedType ? TYPE_LABELS[tx.detectedType] ?? tx.detectedType : "Movimiento bancario pendiente de revisión."}
+            {tx.detectedType
+              ? (TYPE_LABELS[tx.detectedType] ?? tx.detectedType)
+              : "Movimiento bancario pendiente de revisión."}
           </p>
           <div className="flex flex-col gap-1.5 text-[12px]">
             <Row label="Fecha" value={formatDate(tx.valueDate)} />
             <Row label="Concepto" value={tx.conceptParsed || tx.concept || "—"} />
-            <Row label="Importe" value={formatAmount(tx.amount)} valueClass={tx.amount >= 0 ? "text-green-text" : "text-red-text"} />
+            <Row
+              label="Importe"
+              value={formatAmount(tx.amount)}
+              valueClass={tx.amount >= 0 ? "text-green-text" : "text-red-text"}
+            />
             {tx.counterpartName && <Row label="Contrapartida" value={tx.counterpartName} />}
             {tx.counterpartIban && <Row label="IBAN" value={tx.counterpartIban} />}
           </div>
@@ -88,7 +97,10 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
                 {confidencePct}% confianza
               </span>
               <div className="flex-1 h-1.5 bg-subtle rounded-full overflow-hidden">
-                <div className={`h-full rounded-full ${barColor}`} style={{ width: `${confidencePct}%` }} />
+                <div
+                  className={`h-full rounded-full ${barColor}`}
+                  style={{ width: `${confidencePct}%` }}
+                />
               </div>
             </div>
 
@@ -107,7 +119,9 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
                 )}
                 <div className="flex justify-between">
                   <span className="text-text-secondary">Importe</span>
-                  <span className="font-mono text-text-primary">{formatAmount(reco.invoice.totalAmount)}</span>
+                  <span className="font-mono text-text-primary">
+                    {formatAmount(reco.invoice.totalAmount)}
+                  </span>
                 </div>
               </div>
             )}
@@ -116,9 +130,14 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
             {reco.difference != null && reco.difference !== 0 && (
               <div className="text-[12px] mb-2">
                 <span className="text-text-secondary">Diferencia: </span>
-                <span className="font-mono font-medium text-amber-text">{formatAmount(reco.difference)}</span>
+                <span className="font-mono font-medium text-amber-text">
+                  {formatAmount(reco.difference)}
+                </span>
                 {reco.differenceReason && (
-                  <span className="text-text-tertiary"> — {DIFF_LABELS[reco.differenceReason] ?? reco.differenceReason}</span>
+                  <span className="text-text-tertiary">
+                    {" "}
+                    — {DIFF_LABELS[reco.differenceReason] ?? reco.differenceReason}
+                  </span>
                 )}
               </div>
             )}
@@ -142,7 +161,9 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
           {/* Approve */}
           {hasMatch && (
             <button
-              onClick={() => onResolve({ action: "approve", reconciliationId: reco!.id, createRule })}
+              onClick={() =>
+                onResolve({ action: "approve", reconciliationId: reco!.id, createRule })
+              }
               disabled={resolving}
               className="w-full h-9 bg-green text-white text-[13px] font-medium rounded-md hover:bg-green-text disabled:opacity-50 flex items-center justify-center gap-2"
             >
@@ -173,7 +194,11 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
                 <button
                   onClick={() => {
                     if (rejectReason.trim()) {
-                      onResolve({ action: "reject", reconciliationId: reco!.id, reason: rejectReason });
+                      onResolve({
+                        action: "reject",
+                        reconciliationId: reco!.id,
+                        reason: rejectReason,
+                      });
                     }
                   }}
                   disabled={!rejectReason.trim() || resolving}
@@ -181,7 +206,10 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
                 >
                   Confirmar rechazo
                 </button>
-                <button onClick={() => setShowReject(false)} className="h-8 px-3 text-[12px] text-text-secondary border border-subtle rounded">
+                <button
+                  onClick={() => setShowReject(false)}
+                  className="h-8 px-3 text-[12px] text-text-secondary border border-subtle rounded"
+                >
                   Cancelar
                 </button>
               </div>
@@ -199,7 +227,12 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
                 Confirmar duplicado
               </button>
               <button
-                onClick={() => onResolve({ action: "mark_legitimate", duplicateGroupId: (tx as Record<string, unknown>).duplicateGroupId as string })}
+                onClick={() =>
+                  onResolve({
+                    action: "mark_legitimate",
+                    duplicateGroupId: (tx as Record<string, unknown>).duplicateGroupId as string,
+                  })
+                }
                 disabled={resolving}
                 className="w-full h-9 border border-subtle text-[13px] font-medium rounded-md text-text-primary hover:bg-hover disabled:opacity-50"
               >
@@ -224,22 +257,26 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
                 Empresa destino: {reco.matchReason?.split(":")[2] ?? "desconocida"}
               </p>
               <button
-                onClick={() => onResolve({
-                  action: "mark_intercompany",
-                  intercompanyAction: "confirm",
-                  bankTransactionId: tx.id,
-                })}
+                onClick={() =>
+                  onResolve({
+                    action: "mark_intercompany",
+                    intercompanyAction: "confirm",
+                    bankTransactionId: tx.id,
+                  })
+                }
                 disabled={resolving}
                 className="w-full h-9 bg-accent text-white text-[13px] font-medium rounded-md hover:bg-accent-dark disabled:opacity-50"
               >
                 Confirmar intercompañía
               </button>
               <button
-                onClick={() => onResolve({
-                  action: "mark_intercompany",
-                  intercompanyAction: "eliminate",
-                  bankTransactionId: tx.id,
-                })}
+                onClick={() =>
+                  onResolve({
+                    action: "mark_intercompany",
+                    intercompanyAction: "eliminate",
+                    bankTransactionId: tx.id,
+                  })
+                }
                 disabled={resolving}
                 className="w-full h-9 border border-subtle text-[13px] font-medium rounded-md text-text-secondary hover:bg-hover disabled:opacity-50"
               >
@@ -270,7 +307,13 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
             <AccountPicker
               bankTransactionId={tx.id}
               onSelect={(accountCode, cashflowType) => {
-                onResolve({ action: "classify", bankTransactionId: tx.id, accountCode, cashflowType, createRule });
+                onResolve({
+                  action: "classify",
+                  bankTransactionId: tx.id,
+                  accountCode,
+                  cashflowType,
+                  createRule,
+                });
               }}
               onCancel={() => setShowClassify(false)}
               resolving={resolving}
@@ -299,7 +342,13 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
 
           {/* Ignore */}
           <button
-            onClick={() => onResolve({ action: "ignore", bankTransactionId: tx.id, reason: "Ignorado por el controller" })}
+            onClick={() =>
+              onResolve({
+                action: "ignore",
+                bankTransactionId: tx.id,
+                reason: "Ignorado por el controller",
+              })
+            }
             disabled={resolving}
             className="w-full h-8 text-[12px] text-text-tertiary hover:text-text-secondary"
           >
@@ -310,8 +359,15 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
         {/* Block 4 — Create rule checkbox */}
         {(hasMatch || showClassify) && (
           <label className="flex items-center gap-2 p-3 border border-subtle rounded-md cursor-pointer">
-            <input type="checkbox" checked={createRule} onChange={(e) => setCreateRule(e.target.checked)} className="rounded border-subtle" />
-            <span className="text-[12px] text-text-secondary">Recordar esta decisión para el futuro</span>
+            <input
+              type="checkbox"
+              checked={createRule}
+              onChange={(e) => setCreateRule(e.target.checked)}
+              className="rounded border-subtle"
+            />
+            <span className="text-[12px] text-text-secondary">
+              Recordar esta decisión para el futuro
+            </span>
           </label>
         )}
       </div>
@@ -321,7 +377,15 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
 
 // ── Sub-components ──
 
-function Row({ label, value, valueClass = "text-text-primary" }: { label: string; value: string; valueClass?: string }) {
+function Row({
+  label,
+  value,
+  valueClass = "text-text-primary",
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+}) {
   return (
     <div className="flex justify-between">
       <span className="text-text-secondary">{label}</span>
@@ -330,7 +394,12 @@ function Row({ label, value, valueClass = "text-text-primary" }: { label: string
   );
 }
 
-function AccountPicker({ bankTransactionId, onSelect, onCancel, resolving }: {
+function AccountPicker({
+  bankTransactionId,
+  onSelect,
+  onCancel,
+  resolving,
+}: {
   bankTransactionId: string;
   onSelect: (accountCode: string, cashflowType: string) => void;
   onCancel: () => void;
@@ -338,7 +407,9 @@ function AccountPicker({ bankTransactionId, onSelect, onCancel, resolving }: {
 }) {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [accounts, setAccounts] = useState<{ code: string; name: string; cashflowType: string | null }[]>([]);
+  const [accounts, setAccounts] = useState<
+    { code: string; name: string; cashflowType: string | null }[]
+  >([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -348,7 +419,10 @@ function AccountPicker({ bankTransactionId, onSelect, onCancel, resolving }: {
 
   useEffect(() => {
     setLoading(true);
-    api.get<{ accounts: typeof accounts }>(`/api/settings/accounts${qs({ search: debouncedSearch })}`)
+    api
+      .get<{ accounts: typeof accounts }>(
+        `/api/settings/accounts${qs({ search: debouncedSearch })}`
+      )
       .then((res) => setAccounts(res.accounts))
       .catch(() => setAccounts([]))
       .finally(() => setLoading(false));
@@ -385,14 +459,22 @@ function AccountPicker({ bankTransactionId, onSelect, onCancel, resolving }: {
           ))
         )}
       </div>
-      <button onClick={onCancel} className="text-[11px] text-text-tertiary hover:text-text-secondary self-start">
+      <button
+        onClick={onCancel}
+        className="text-[11px] text-text-tertiary hover:text-text-secondary self-start"
+      >
         Cancelar
       </button>
     </div>
   );
 }
 
-function InvoicePicker({ isIncome, onSelect, onCancel, resolving }: {
+function InvoicePicker({
+  isIncome,
+  onSelect,
+  onCancel,
+  resolving,
+}: {
   isIncome: boolean;
   onSelect: (invoiceId: string) => void;
   onCancel: () => void;
@@ -400,7 +482,9 @@ function InvoicePicker({ isIncome, onSelect, onCancel, resolving }: {
 }) {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [invoices, setInvoices] = useState<{ id: string; number: string; totalAmount: number; contact?: { name: string } | null }[]>([]);
+  const [invoices, setInvoices] = useState<
+    { id: string; number: string; totalAmount: number; contact?: { name: string } | null }[]
+  >([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -413,7 +497,8 @@ function InvoicePicker({ isIncome, onSelect, onCancel, resolving }: {
     const type = isIncome ? "ISSUED" : "RECEIVED";
     const params: Record<string, unknown> = { type, status: "PENDING", pageSize: 50 };
     if (debouncedSearch.trim()) params.search = debouncedSearch;
-    api.get<{ data: typeof invoices }>(`/api/invoices${qs(params)}`)
+    api
+      .get<{ data: typeof invoices }>(`/api/invoices${qs(params)}`)
       .then((res) => setInvoices(res.data))
       .catch(() => setInvoices([]))
       .finally(() => setLoading(false));
@@ -423,9 +508,17 @@ function InvoicePicker({ isIncome, onSelect, onCancel, resolving }: {
     <div className="border border-subtle rounded-md p-3 flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <Search size={12} className="text-text-tertiary" />
-        <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar factura..." className="flex-1 h-7 text-[12px] border-none outline-none placeholder:text-text-tertiary" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar factura..."
+          className="flex-1 h-7 text-[12px] border-none outline-none placeholder:text-text-tertiary"
+        />
       </div>
-      <span className="text-[11px] font-medium text-text-secondary">Facturas {isIncome ? "emitidas" : "recibidas"} pendientes:</span>
+      <span className="text-[11px] font-medium text-text-secondary">
+        Facturas {isIncome ? "emitidas" : "recibidas"} pendientes:
+      </span>
       <div className="max-h-40 overflow-auto">
         {loading ? (
           <p className="text-[11px] text-text-tertiary p-2">Cargando...</p>
@@ -441,14 +534,19 @@ function InvoicePicker({ isIncome, onSelect, onCancel, resolving }: {
             >
               <span>
                 <span className="font-medium text-accent">{inv.number}</span>
-                {inv.contact?.name && <span className="text-text-secondary ml-1">— {inv.contact.name}</span>}
+                {inv.contact?.name && (
+                  <span className="text-text-secondary ml-1">— {inv.contact.name}</span>
+                )}
               </span>
               <span className="font-mono text-text-primary">{formatAmount(inv.totalAmount)}</span>
             </button>
           ))
         )}
       </div>
-      <button onClick={onCancel} className="text-[11px] text-text-tertiary hover:text-text-secondary self-start">
+      <button
+        onClick={onCancel}
+        className="text-[11px] text-text-tertiary hover:text-text-secondary self-start"
+      >
         Cancelar
       </button>
     </div>

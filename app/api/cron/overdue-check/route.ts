@@ -13,7 +13,9 @@ export const POST = withCronAuth(async (req: NextRequest) => {
     try {
       const body = await req.text();
       if (body) companyId = JSON.parse(body).companyId;
-    } catch { /* no body */ }
+    } catch {
+      /* no body */
+    }
     const now = new Date();
 
     // Build company filter
@@ -70,7 +72,7 @@ export const POST = withCronAuth(async (req: NextRequest) => {
 
       // Calculate total overdue amount
       const totalOverdue = invoices.reduce(
-        (sum: number, inv: typeof invoices[number]) =>
+        (sum: number, inv: (typeof invoices)[number]) =>
           sum + (inv.amountPending ?? inv.totalAmount - inv.amountPaid),
         0
       );
@@ -104,7 +106,7 @@ export const POST = withCronAuth(async (req: NextRequest) => {
               metadata: {
                 overdueCount: invoices.length,
                 totalAmount: totalOverdue,
-                invoiceIds: invoices.map((i: typeof invoices[number]) => i.id),
+                invoiceIds: invoices.map((i: (typeof invoices)[number]) => i.id),
               },
               userId: user.id,
               companyId: cId,
@@ -158,7 +160,10 @@ export const POST = withCronAuth(async (req: NextRequest) => {
         });
         if (existingAlert) continue;
 
-        const totalAmount = soonDue.reduce((s, i) => s + (i.amountPending ?? i.totalAmount - i.amountPaid), 0);
+        const totalAmount = soonDue.reduce(
+          (s, i) => s + (i.amountPending ?? i.totalAmount - i.amountPaid),
+          0
+        );
         await prisma.notification.create({
           data: {
             type: "FINANCIAL_ALERT",

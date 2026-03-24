@@ -46,9 +46,7 @@ export async function detectDuplicates(
     // If both have IBANs, they must match
     if (tx.counterpartIban && candidate.counterpartIban) {
       const normalizedA = tx.counterpartIban.replace(/\s/g, "").toUpperCase();
-      const normalizedB = candidate.counterpartIban
-        .replace(/\s/g, "")
-        .toUpperCase();
+      const normalizedB = candidate.counterpartIban.replace(/\s/g, "").toUpperCase();
       return normalizedA === normalizedB;
     }
 
@@ -86,10 +84,7 @@ export async function detectDuplicates(
       data: {
         status: "PENDING",
         transactions: {
-          connect: [
-            { id: tx.id },
-            ...matchingTx.map((t) => ({ id: t.id })),
-          ],
+          connect: [{ id: tx.id }, ...matchingTx.map((t) => ({ id: t.id }))],
         },
       },
     });

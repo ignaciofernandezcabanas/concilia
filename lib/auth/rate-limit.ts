@@ -13,10 +13,10 @@
 export type RateLimitTier = "read" | "write" | "auth" | "engine";
 
 const TIER_LIMITS: Record<RateLimitTier, { maxRequests: number; windowMs: number }> = {
-  read:   { maxRequests: 100, windowMs: 60_000 },
-  write:  { maxRequests: 30,  windowMs: 60_000 },
-  auth:   { maxRequests: 5,   windowMs: 60_000 },
-  engine: { maxRequests: 3,   windowMs: 60_000 },
+  read: { maxRequests: 100, windowMs: 60_000 },
+  write: { maxRequests: 30, windowMs: 60_000 },
+  auth: { maxRequests: 5, windowMs: 60_000 },
+  engine: { maxRequests: 3, windowMs: 60_000 },
 };
 
 interface BucketEntry {

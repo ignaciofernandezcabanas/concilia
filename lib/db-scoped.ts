@@ -15,12 +15,30 @@ import { prisma } from "@/lib/db";
 
 // Models that have companyId field
 const SCOPED_MODELS = new Set([
-  "company", "user", "account", "ownBankAccount", "contact", "invoice",
-  "bankTransaction", "reconciliation", "matchingRule", "categoryThreshold",
-  "integration", "syncLog", "archiveLog", "notification", "auditLog",
-  "accountingPeriod", "journalEntry", "fixedAsset",
-  "budget", "confidenceAdjustment", "controllerDecision", "learnedPattern",
-  "thresholdCalibration", "inquiry",
+  "company",
+  "user",
+  "account",
+  "ownBankAccount",
+  "contact",
+  "invoice",
+  "bankTransaction",
+  "reconciliation",
+  "matchingRule",
+  "categoryThreshold",
+  "integration",
+  "syncLog",
+  "archiveLog",
+  "notification",
+  "auditLog",
+  "accountingPeriod",
+  "journalEntry",
+  "fixedAsset",
+  "budget",
+  "confidenceAdjustment",
+  "controllerDecision",
+  "learnedPattern",
+  "thresholdCalibration",
+  "inquiry",
   // NOT scoped (no companyId): InvoiceLine, BudgetLine, JournalEntryLine,
   //   BankTransactionClassification, DuplicateGroup, Payment, CompanyScope
   // NOT scoped (organizationId instead): IntercompanyLink, AgentRun
@@ -66,7 +84,10 @@ export function getScopedDb(companyId: string): ScopedPrisma {
         async createMany({ model, args, query }) {
           if (SCOPED_MODELS.has(lcFirst(model)) && model !== "Company") {
             if (Array.isArray(args.data)) {
-              args.data = args.data.map((d: Record<string, unknown>) => ({ ...d, companyId })) as never;
+              args.data = args.data.map((d: Record<string, unknown>) => ({
+                ...d,
+                companyId,
+              })) as never;
             } else {
               args.data = { ...args.data, companyId } as never;
             }
@@ -141,12 +162,24 @@ export function getGroupDb(companyIds: string[]): ScopedPrisma {
           return query(args);
         },
         // Block writes in consolidated mode
-        async create() { throw new Error("Writes not allowed in consolidated view. Select a company first."); },
-        async createMany() { throw new Error("Writes not allowed in consolidated view."); },
-        async update() { throw new Error("Writes not allowed in consolidated view."); },
-        async updateMany() { throw new Error("Writes not allowed in consolidated view."); },
-        async delete() { throw new Error("Writes not allowed in consolidated view."); },
-        async deleteMany() { throw new Error("Writes not allowed in consolidated view."); },
+        async create() {
+          throw new Error("Writes not allowed in consolidated view. Select a company first.");
+        },
+        async createMany() {
+          throw new Error("Writes not allowed in consolidated view.");
+        },
+        async update() {
+          throw new Error("Writes not allowed in consolidated view.");
+        },
+        async updateMany() {
+          throw new Error("Writes not allowed in consolidated view.");
+        },
+        async delete() {
+          throw new Error("Writes not allowed in consolidated view.");
+        },
+        async deleteMany() {
+          throw new Error("Writes not allowed in consolidated view.");
+        },
       },
     },
   }) as unknown as ScopedPrisma;

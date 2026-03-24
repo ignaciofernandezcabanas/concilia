@@ -134,7 +134,7 @@ export async function detectAnomalies(orgId: string, month: string): Promise<Ano
   // Generate explanations for top anomalies
   for (const anomaly of top) {
     const topTxParts = Array.from(
-      (await prisma.bankTransaction.findMany({
+      await prisma.bankTransaction.findMany({
         where: {
           companyId: anomaly.companyId,
           status: "CLASSIFIED",
@@ -144,7 +144,7 @@ export async function detectAnomalies(orgId: string, month: string): Promise<Ano
         orderBy: { amount: "asc" },
         take: 1,
         select: { amount: true, concept: true },
-      }))
+      })
     );
     const topTx = topTxParts[0]
       ? `${Math.abs(topTxParts[0].amount).toFixed(2)} EUR — ${topTxParts[0].concept ?? "Sin concepto"}`

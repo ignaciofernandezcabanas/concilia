@@ -35,10 +35,10 @@ describe("Balance Generator", () => {
   it("deudores (facturas emitidas pendientes) aparecen en activo corriente", async () => {
     // First call = deudores (issued), second = acreedores (received), third/fourth = income/expense
     mockDb.invoice.aggregate
-      .mockResolvedValueOnce({ _sum: { amountPending: 15000 } })  // deudores
-      .mockResolvedValueOnce({ _sum: { amountPending: 5000 } })   // acreedores
-      .mockResolvedValueOnce({ _sum: { totalAmount: 20000 } })    // income
-      .mockResolvedValueOnce({ _sum: { totalAmount: 12000 } });   // expense
+      .mockResolvedValueOnce({ _sum: { amountPending: 15000 } }) // deudores
+      .mockResolvedValueOnce({ _sum: { amountPending: 5000 } }) // acreedores
+      .mockResolvedValueOnce({ _sum: { totalAmount: 20000 } }) // income
+      .mockResolvedValueOnce({ _sum: { totalAmount: 12000 } }); // expense
     mockDb.bankTransaction.findFirst.mockResolvedValue({ balanceAfter: 30000 });
 
     const report = await generateBalance(mockDb as any, new Date("2026-03-31"));
@@ -49,10 +49,10 @@ describe("Balance Generator", () => {
 
   it("acreedores (facturas recibidas pendientes) aparecen en pasivo corriente", async () => {
     mockDb.invoice.aggregate
-      .mockResolvedValueOnce({ _sum: { amountPending: 0 } })      // deudores
-      .mockResolvedValueOnce({ _sum: { amountPending: 8000 } })   // acreedores
-      .mockResolvedValueOnce({ _sum: { totalAmount: 10000 } })    // income
-      .mockResolvedValueOnce({ _sum: { totalAmount: 7000 } });    // expense
+      .mockResolvedValueOnce({ _sum: { amountPending: 0 } }) // deudores
+      .mockResolvedValueOnce({ _sum: { amountPending: 8000 } }) // acreedores
+      .mockResolvedValueOnce({ _sum: { totalAmount: 10000 } }) // income
+      .mockResolvedValueOnce({ _sum: { totalAmount: 7000 } }); // expense
 
     const report = await generateBalance(mockDb as any, new Date("2026-03-31"));
     expect(report.totals.pasivoCorriente).toBe(8000);
@@ -62,8 +62,8 @@ describe("Balance Generator", () => {
     mockDb.invoice.aggregate
       .mockResolvedValueOnce({ _sum: { amountPending: 0 } })
       .mockResolvedValueOnce({ _sum: { amountPending: 0 } })
-      .mockResolvedValueOnce({ _sum: { totalAmount: 50000 } })    // income
-      .mockResolvedValueOnce({ _sum: { totalAmount: 30000 } });   // expense
+      .mockResolvedValueOnce({ _sum: { totalAmount: 50000 } }) // income
+      .mockResolvedValueOnce({ _sum: { totalAmount: 30000 } }); // expense
 
     const report = await generateBalance(mockDb as any, new Date("2026-03-31"));
     expect(report.totals.patrimonioNeto).toBe(20000);
@@ -71,11 +71,11 @@ describe("Balance Generator", () => {
 
   it("efectivo viene del último movimiento bancario", async () => {
     mockDb.invoice.aggregate.mockResolvedValue({ _sum: { amountPending: 0, totalAmount: 0 } });
-    mockDb.bankTransaction.findFirst.mockResolvedValue({ balanceAfter: 87432.50 });
+    mockDb.bankTransaction.findFirst.mockResolvedValue({ balanceAfter: 87432.5 });
 
     const report = await generateBalance(mockDb as any, new Date("2026-03-31"));
     // Activo corriente incluye el efectivo
-    expect(report.totals.activoCorriente).toBe(87432.50);
+    expect(report.totals.activoCorriente).toBe(87432.5);
   });
 
   it("asOf filtra correctamente", async () => {

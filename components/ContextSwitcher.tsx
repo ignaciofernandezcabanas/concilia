@@ -5,14 +5,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { useFetch } from "@/hooks/useApi";
 import { useAuth } from "@/components/AuthProvider";
-import {
-  ChevronDown,
-  Building2,
-  Check,
-  Layers,
-  Plus,
-  Settings,
-} from "lucide-react";
+import { ChevronDown, Building2, Check, Layers, Plus, Settings } from "lucide-react";
 
 interface OrgCompany {
   id: string;
@@ -151,9 +144,7 @@ export default function ContextSwitcher() {
                     className="w-full flex items-center gap-2 px-3 py-2 text-[12px] hover:bg-hover transition-colors"
                   >
                     <Layers size={14} className="text-accent shrink-0" />
-                    <span className="flex-1 text-left font-medium text-accent">
-                      Consolidado
-                    </span>
+                    <span className="flex-1 text-left font-medium text-accent">Consolidado</span>
                     {isConsolidated && activeOrgId === m.organization.id && (
                       <Check size={14} className="text-accent" />
                     )}
@@ -171,12 +162,12 @@ export default function ContextSwitcher() {
                     <span className="flex-1 text-left truncate text-text-primary">
                       {co.shortName || co.name}
                       {co.ownershipPercentage != null && co.ownershipPercentage < 100 && (
-                        <span className="text-[10px] text-text-tertiary ml-1">({co.ownershipPercentage}%)</span>
+                        <span className="text-[10px] text-text-tertiary ml-1">
+                          ({co.ownershipPercentage}%)
+                        </span>
                       )}
                     </span>
-                    <span className="text-[10px] text-text-tertiary">
-                      {co.cif}
-                    </span>
+                    <span className="text-[10px] text-text-tertiary">{co.cif}</span>
                     {!isConsolidated && activeCompanyId === co.id && (
                       <Check size={14} className="text-accent" />
                     )}

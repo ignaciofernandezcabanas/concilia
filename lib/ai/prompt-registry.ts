@@ -71,13 +71,17 @@ export const EXTRACT_INVOICE_PDF = {
     supplierCif: z.string().nullable(),
     type: z.enum(["ISSUED", "RECEIVED"]).default("RECEIVED"),
     confidence: z.number().min(0).max(1).default(0.5),
-    lines: z.array(z.object({
-      description: z.string(),
-      quantity: z.number(),
-      unitPrice: z.number(),
-      total: z.number(),
-      vatRate: z.number(),
-    })).default([]),
+    lines: z
+      .array(
+        z.object({
+          description: z.string(),
+          quantity: z.number(),
+          unitPrice: z.number(),
+          total: z.number(),
+          vatRate: z.number(),
+        })
+      )
+      .default([]),
   }),
 };
 
@@ -94,10 +98,23 @@ export const EXPLAIN_BANDEJA = {
     `Usa lenguaje de negocio, no técnico. Di "cobro" no "transacción positiva".\n` +
     `Si hay una acción recomendada, sugiérela.`,
   buildUser: (data: {
-    txType: string; amount: string; date: string; concept: string;
-    counterpart: string; matchType: string; confidence: string;
-    threshold: string; matchReason: string;
-    invoice?: { number: string; contact: string; amount: string; dueDate?: string; difference?: string; differenceReason?: string };
+    txType: string;
+    amount: string;
+    date: string;
+    concept: string;
+    counterpart: string;
+    matchType: string;
+    confidence: string;
+    threshold: string;
+    matchReason: string;
+    invoice?: {
+      number: string;
+      contact: string;
+      amount: string;
+      dueDate?: string;
+      difference?: string;
+      differenceReason?: string;
+    };
     materialityNote?: string;
   }) => {
     let prompt =
@@ -150,7 +167,9 @@ export const CLASSIFY_QUICK = {
   schema: z.object({
     accountCode: z.string(),
     accountName: z.string(),
-    cashflowType: z.enum(["OPERATING", "INVESTING", "FINANCING", "INTERNAL", "NON_CASH"]).default("OPERATING"),
+    cashflowType: z
+      .enum(["OPERATING", "INVESTING", "FINANCING", "INTERNAL", "NON_CASH"])
+      .default("OPERATING"),
     confidence: z.number().min(0).max(1),
     reasoning: z.string(),
   }),
@@ -187,13 +206,15 @@ export const MATCH_LLM = {
     `JSON: { steps: { amount_analysis, counterpart_analysis, date_analysis, concept_analysis, decision }, ` +
     `matchedInvoiceId (string|null), confidence (0-1), reasoning (1 frase) }`,
   schema: z.object({
-    steps: z.object({
-      amount_analysis: z.string().optional(),
-      counterpart_analysis: z.string().optional(),
-      date_analysis: z.string().optional(),
-      concept_analysis: z.string().optional(),
-      decision: z.string().optional(),
-    }).optional(),
+    steps: z
+      .object({
+        amount_analysis: z.string().optional(),
+        counterpart_analysis: z.string().optional(),
+        date_analysis: z.string().optional(),
+        concept_analysis: z.string().optional(),
+        decision: z.string().optional(),
+      })
+      .optional(),
     matchedInvoiceId: z.string().nullable(),
     confidence: z.number().min(0).max(1),
     reasoning: z.string(),
@@ -228,16 +249,20 @@ export const CLASSIFY_LLM = {
     `JSON: { steps: { nature, subgroup, precedent, cashflow_reasoning, confidence_reasoning }, ` +
     `accountCode, accountName, cashflowType, confidence (0-1), reasoning (1 frase) }`,
   schema: z.object({
-    steps: z.object({
-      nature: z.string().optional(),
-      subgroup: z.string().optional(),
-      precedent: z.string().optional(),
-      cashflow_reasoning: z.string().optional(),
-      confidence_reasoning: z.string().optional(),
-    }).optional(),
+    steps: z
+      .object({
+        nature: z.string().optional(),
+        subgroup: z.string().optional(),
+        precedent: z.string().optional(),
+        cashflow_reasoning: z.string().optional(),
+        confidence_reasoning: z.string().optional(),
+      })
+      .optional(),
     accountCode: z.string(),
     accountName: z.string(),
-    cashflowType: z.enum(["OPERATING", "INVESTING", "FINANCING", "INTERNAL", "NON_CASH"]).default("OPERATING"),
+    cashflowType: z
+      .enum(["OPERATING", "INVESTING", "FINANCING", "INTERNAL", "NON_CASH"])
+      .default("OPERATING"),
     confidence: z.number().min(0).max(1),
     reasoning: z.string(),
   }),
@@ -285,13 +310,15 @@ export const PARSE_RULE_NL = {
       differencePercent: z.object({ min: z.number(), max: z.number() }).nullable().optional(),
     }),
     action: z.string(),
-    actionDetails: z.object({
-      accountCode: z.string().nullable().optional(),
-      accountName: z.string().nullable().optional(),
-      cashflowType: z.string().nullable().optional(),
-      differenceReason: z.string().nullable().optional(),
-      description: z.string().optional(),
-    }).optional(),
+    actionDetails: z
+      .object({
+        accountCode: z.string().nullable().optional(),
+        accountName: z.string().nullable().optional(),
+        cashflowType: z.string().nullable().optional(),
+        differenceReason: z.string().nullable().optional(),
+        description: z.string().optional(),
+      })
+      .optional(),
     humanReadable: z.string(),
     assumptions: z.array(z.string()).default([]),
     suggestions: z.array(z.string()).default([]),
@@ -308,7 +335,14 @@ export const EXPLAIN_ANOMALY = {
   system:
     `Eres un controller financiero español. Explica anomalías de gasto detectadas. ` +
     `Sé conciso (2-3 frases). Responde SOLO con texto, sin JSON.`,
-  buildUser: (data: { accountCode: string; accountName: string; currentAmount: number; avgAmount: number; zScore: number; topTx: string }) =>
+  buildUser: (data: {
+    accountCode: string;
+    accountName: string;
+    currentAmount: number;
+    avgAmount: number;
+    zScore: number;
+    topTx: string;
+  }) =>
     `<anomaly_data>\n` +
     `Cuenta: ${data.accountCode} - ${data.accountName}\n` +
     `Gasto este mes: ${data.currentAmount.toFixed(2)} EUR\n` +
@@ -329,7 +363,12 @@ export const TREASURY_ADVICE = {
   system:
     `Eres un tesorero experto español. Da consejos concisos (3-4 frases) sobre gestión de tesorería. ` +
     `Responde SOLO con texto, sin JSON.`,
-  buildUser: (data: { currentBalance: number; projectedLow: number; weekLabel: string; details: string }) =>
+  buildUser: (data: {
+    currentBalance: number;
+    projectedLow: number;
+    weekLabel: string;
+    details: string;
+  }) =>
     `<treasury_data>\n` +
     `Saldo actual: ${data.currentBalance.toFixed(2)} EUR\n` +
     `Saldo proyectado más bajo: ${data.projectedLow.toFixed(2)} EUR (semana ${data.weekLabel})\n` +
@@ -348,7 +387,14 @@ export const DRAFT_REMINDER = {
   system:
     `Eres un asistente de cobros. Redacta recordatorios de pago profesionales y cordiales en español. ` +
     `Responde SOLO con el texto del email, sin JSON. Incluye: asunto y cuerpo.`,
-  buildUser: (data: { contactName: string; invoiceNumber: string; amount: number; dueDate: string; daysPastDue: number; companyName: string }) =>
+  buildUser: (data: {
+    contactName: string;
+    invoiceNumber: string;
+    amount: number;
+    dueDate: string;
+    daysPastDue: number;
+    companyName: string;
+  }) =>
     `<invoice_data>\n` +
     `Contacto: ${data.contactName}\n` +
     `Factura: ${data.invoiceNumber}\n` +
@@ -377,8 +423,13 @@ export const DAILY_BRIEFING = {
     `5. ACCIÓN HOY: la 1 cosa más importante.\n` +
     `Responde SOLO con texto formateado, sin JSON.`,
   buildUser: (data: {
-    orgName: string; metricsJson: string; forecastJson: string; anomaliesJson: string;
-    bandejaCount: number; fiscalJson: string; consolidationJson?: string;
+    orgName: string;
+    metricsJson: string;
+    forecastJson: string;
+    anomaliesJson: string;
+    bandejaCount: number;
+    fiscalJson: string;
+    consolidationJson?: string;
   }) =>
     `<company_data>\n` +
     `Organización: ${data.orgName}\n\n` +
@@ -407,7 +458,12 @@ export const CLOSE_PROPOSAL = {
     `1. POR SOCIEDAD: checklist de cada empresa (txs pendientes, asientos, periodo abierto/cerrado).\n` +
     `2. CONSOLIDACIÓN GRUPO: eliminaciones IC, NCI, FX, equity method, asientos de consolidación.\n` +
     `Responde SOLO con texto formateado, sin JSON.`,
-  buildUser: (data: { orgName: string; month: string; checklistJson: string; consolidationJson?: string }) =>
+  buildUser: (data: {
+    orgName: string;
+    month: string;
+    checklistJson: string;
+    consolidationJson?: string;
+  }) =>
     `<company_data>\n` +
     `Organización: ${data.orgName}\n` +
     `Mes de cierre: ${data.month}\n\n` +
@@ -432,7 +488,12 @@ export const CONSOLIDATION_REVIEW = {
     `Checks: 1) Eliminaciones IC completas, 2) NCI coherente con % participación,\n` +
     `3) Equity method correcto, 4) Saldos IC cuadrados, 5) FX aplicado si hay moneda ≠ EUR.\n` +
     `Responde SOLO con texto formateado.`,
-  buildUser: (data: { perCompanyJson: string; eliminationsJson: string; nciAmount: number; consolidatedJson: string }) =>
+  buildUser: (data: {
+    perCompanyJson: string;
+    eliminationsJson: string;
+    nciAmount: number;
+    consolidatedJson: string;
+  }) =>
     `<consolidation_data>\n` +
     `Resultados por sociedad:\n${data.perCompanyJson}\n\n` +
     `Eliminaciones IC propuestas:\n${data.eliminationsJson}\n\n` +
@@ -453,7 +514,14 @@ export const IC_ELIMINATION_EXPLAIN = {
     `Eres un contable español experto en consolidación. Explica eliminaciones intercompañía.\n` +
     `Indica: tipo (ingreso/gasto, deudor/acreedor, dividendo, préstamo), asiento propuesto, impacto en consolidado.\n` +
     `Responde SOLO con texto, 3-4 frases.`,
-  buildUser: (data: { companyA: string; companyB: string; amount: number; accountA: string; accountB: string; txConcept: string }) =>
+  buildUser: (data: {
+    companyA: string;
+    companyB: string;
+    amount: number;
+    accountA: string;
+    accountB: string;
+    txConcept: string;
+  }) =>
     `<intercompany_data>\n` +
     `Sociedad A: ${data.companyA} → cuenta ${data.accountA}\n` +
     `Sociedad B: ${data.companyB} → cuenta ${data.accountB}\n` +
@@ -493,7 +561,14 @@ export const VARIANCE_CONSOLIDATED = {
     `Eres un analista financiero español. Descompón la variación consolidada.\n` +
     `Factores: volumen, precio, mix de subsidiarias, scope (nuevas/vendidas), FX, one-offs.\n` +
     `Responde con 3-5 frases analíticas. SOLO texto.`,
-  buildUser: (data: { lineCode: string; lineName: string; actual: number; budget: number; priorYear: number; perCompanyBreakdown: string }) =>
+  buildUser: (data: {
+    lineCode: string;
+    lineName: string;
+    actual: number;
+    budget: number;
+    priorYear: number;
+    perCompanyBreakdown: string;
+  }) =>
     `<variance_data>\n` +
     `Línea: ${data.lineCode} - ${data.lineName}\n` +
     `Actual: ${data.actual.toFixed(2)} EUR\n` +
@@ -524,9 +599,17 @@ export const DRAFT_INQUIRY = {
     `8. Si es follow-up 2+, menciona que es urgente por cierre de periodo.\n\n` +
     `Responde SOLO con JSON: { subject, htmlBody, plainBody }`,
   buildUser: (data: {
-    trigger: string; companyName: string; contactName: string; accountingContact?: string;
-    amount?: number; date?: string; concept?: string; invoiceNumber?: string;
-    followUpNumber: number; previousSubject?: string; tone: string;
+    trigger: string;
+    companyName: string;
+    contactName: string;
+    accountingContact?: string;
+    amount?: number;
+    date?: string;
+    concept?: string;
+    invoiceNumber?: string;
+    followUpNumber: number;
+    previousSubject?: string;
+    tone: string;
   }) => {
     let context = `<inquiry_context>\n`;
     context += `Empresa: ${data.companyName}\n`;
@@ -561,7 +644,13 @@ export const ANALYZE_INQUIRY_RESPONSE = {
     `Analiza la respuesta a una solicitud de documentación financiera.\n` +
     `Determina si la respuesta resuelve la consulta original.\n` +
     `Responde SOLO con JSON.`,
-  buildUser: (data: { originalSubject: string; originalTrigger: string; responseText: string; hasAttachments: boolean; attachmentNames: string[] }) =>
+  buildUser: (data: {
+    originalSubject: string;
+    originalTrigger: string;
+    responseText: string;
+    hasAttachments: boolean;
+    attachmentNames: string[];
+  }) =>
     `<inquiry_response>\n` +
     `Solicitud original: ${data.originalSubject}\n` +
     `Tipo: ${data.originalTrigger}\n` +
@@ -597,8 +686,11 @@ export const EVALUATE_INQUIRY_RESPONSE = {
     `7. ¿Es una respuesta automática (fuera de oficina)?\n\n` +
     `Responde SOLO con JSON válido.`,
   buildUser: (data: {
-    originalSubject: string; originalTrigger: string; responseText: string;
-    hasAttachments: boolean; attachmentTypes: string[];
+    originalSubject: string;
+    originalTrigger: string;
+    responseText: string;
+    hasAttachments: boolean;
+    attachmentTypes: string[];
     amountExpected?: number;
   }) =>
     `<inquiry_context>\n` +
@@ -618,11 +710,13 @@ export const EVALUATE_INQUIRY_RESPONSE = {
     responseType: z.string(),
     sentiment: z.enum(["cooperative", "neutral", "reluctant", "hostile"]),
     promisedDeliveryDate: z.string().nullable(),
-    redirectContact: z.object({
-      name: z.string().nullable(),
-      email: z.string().nullable(),
-      department: z.string().nullable(),
-    }).nullable(),
+    redirectContact: z
+      .object({
+        name: z.string().nullable(),
+        email: z.string().nullable(),
+        department: z.string().nullable(),
+      })
+      .nullable(),
     questionAsked: z.string().nullable(),
     disputeReason: z.string().nullable(),
     summary: z.string(),

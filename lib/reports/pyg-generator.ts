@@ -92,19 +92,7 @@ const PYG_LINE_LABELS: Record<string, string> = {
 };
 
 // Lines that contribute to each aggregated result
-const EXPLOITATION_LINES = [
-  "1",
-  "2",
-  "3",
-  "4",
-  "5",
-  "6",
-  "7",
-  "8",
-  "9",
-  "10",
-  "11",
-];
+const EXPLOITATION_LINES = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"];
 const FINANCIAL_LINES = ["12", "13", "14", "15", "16"];
 
 // ---------------------------------------------------------------------------
@@ -148,18 +136,10 @@ export async function generatePyG(
   });
 
   // Build a map: pygLine -> { accountCode -> amount }
-  const lineAmounts = new Map<
-    string,
-    Map<string, { amount: number; accountName: string }>
-  >();
+  const lineAmounts = new Map<string, Map<string, { amount: number; accountName: string }>>();
 
   // Helper to initialise line entries
-  const addToLine = (
-    pygLine: string,
-    accountCode: string,
-    accountName: string,
-    amount: number
-  ) => {
+  const addToLine = (pygLine: string, accountCode: string, accountName: string, amount: number) => {
     if (!lineAmounts.has(pygLine)) {
       lineAmounts.set(pygLine, new Map());
     }
@@ -186,12 +166,7 @@ export async function generatePyG(
     // Received invoices (expenses) are typically already negative in PGC mapping
     // but we keep the sign as-is since the pygLine assignment determines the nature
 
-    addToLine(
-      line.account.pygLine,
-      line.account.code,
-      line.account.name,
-      amount
-    );
+    addToLine(line.account.pygLine, line.account.code, line.account.name, amount);
   }
 
   // Process classified bank transactions (for expenses without invoices)
@@ -222,8 +197,7 @@ export async function generatePyG(
   const resultadoExplotacion = sumLines(EXPLOITATION_LINES);
   const resultadoFinanciero = sumLines(FINANCIAL_LINES);
   const resultadoAntesImpuestos = resultadoExplotacion + resultadoFinanciero;
-  const resultadoEjercicio =
-    resultadoAntesImpuestos + (lineTotals.get("17") ?? 0);
+  const resultadoEjercicio = resultadoAntesImpuestos + (lineTotals.get("17") ?? 0);
 
   // Line 1 is the revenue baseline for percentages
   const revenue = lineTotals.get("1") ?? 0;
@@ -232,9 +206,7 @@ export async function generatePyG(
 
   // EBITDA: A.1 + amortización (line 8 is negative, so adding it back)
   const amortizacion = lineTotals.get("8") ?? 0;
-  const ebitda = includeEbitda
-    ? resultadoExplotacion - amortizacion
-    : null;
+  const ebitda = includeEbitda ? resultadoExplotacion - amortizacion : null;
 
   // Build output lines based on requested level
   const buildLine = (code: string): PyGLineDetail => {
@@ -254,10 +226,7 @@ export async function generatePyG(
             code: accountCode,
             label: `${accountCode} - ${accountName}`,
             amount: roundTwo(acctAmount),
-            percentOverRevenue:
-              pctOf(acctAmount) !== null
-                ? roundTwo(pctOf(acctAmount)!)
-                : null,
+            percentOverRevenue: pctOf(acctAmount) !== null ? roundTwo(pctOf(acctAmount)!) : null,
           })
         );
         detail.children.sort((a, b) => a.code.localeCompare(b.code));
@@ -300,9 +269,7 @@ export async function generatePyG(
         code: "A.4",
         label: "Resultado del ejercicio",
         amount: roundTwo(resultadoEjercicio),
-        percentOverRevenue: pctOf(resultadoEjercicio)
-          ? roundTwo(pctOf(resultadoEjercicio)!)
-          : null,
+        percentOverRevenue: pctOf(resultadoEjercicio) ? roundTwo(pctOf(resultadoEjercicio)!) : null,
       },
     ];
   } else {
@@ -324,9 +291,7 @@ export async function generatePyG(
       code: "A.2",
       label: "A.2) Resultado financiero",
       amount: roundTwo(resultadoFinanciero),
-      percentOverRevenue: pctOf(resultadoFinanciero)
-        ? roundTwo(pctOf(resultadoFinanciero)!)
-        : null,
+      percentOverRevenue: pctOf(resultadoFinanciero) ? roundTwo(pctOf(resultadoFinanciero)!) : null,
     };
     const a3: PyGLineDetail = {
       code: "A.3",
@@ -340,9 +305,7 @@ export async function generatePyG(
       code: "A.4",
       label: "A.4) Resultado del ejercicio",
       amount: roundTwo(resultadoEjercicio),
-      percentOverRevenue: pctOf(resultadoEjercicio)
-        ? roundTwo(pctOf(resultadoEjercicio)!)
-        : null,
+      percentOverRevenue: pctOf(resultadoEjercicio) ? roundTwo(pctOf(resultadoEjercicio)!) : null,
     };
 
     // Insert aggregated lines at proper positions

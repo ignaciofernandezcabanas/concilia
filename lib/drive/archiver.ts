@@ -41,7 +41,7 @@ interface DriveIntegrationConfig {
  */
 export async function archiveQuarter(
   companyId: string,
-  quarter: string,
+  quarter: string
 ): Promise<ArchiveQuarterResult> {
   const result: ArchiveQuarterResult = {
     issuedCount: 0,
@@ -98,10 +98,7 @@ export async function archiveQuarter(
     ? formatSubfolderName(driveConfig.subfolderFormat, quarter)
     : quarter;
 
-  const quarterFolder = await driveClient.ensureFolder(
-    subfolderName,
-    driveConfig.rootFolderId,
-  );
+  const quarterFolder = await driveClient.ensureFolder(subfolderName, driveConfig.rootFolderId);
 
   let issuedFolderId = quarterFolder.id;
   let receivedFolderId = quarterFolder.id;
@@ -125,8 +122,7 @@ export async function archiveQuarter(
       const pdfBuffer = Buffer.from(pdfResponse.data, "base64");
 
       // Determine target folder
-      const isIssued =
-        invoice.type === "ISSUED" || invoice.type === "CREDIT_ISSUED";
+      const isIssued = invoice.type === "ISSUED" || invoice.type === "CREDIT_ISSUED";
       const targetFolderId = isIssued ? issuedFolderId : receivedFolderId;
 
       // Upload to Drive
@@ -135,7 +131,7 @@ export async function archiveQuarter(
         fileName,
         pdfBuffer,
         "application/pdf",
-        targetFolderId,
+        targetFolderId
       );
 
       // Update invoice with Drive file ID
@@ -151,9 +147,7 @@ export async function archiveQuarter(
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(
-        `[archiveQuarter] Error archiving invoice ${invoice.number}: ${message}`,
-      );
+      console.error(`[archiveQuarter] Error archiving invoice ${invoice.number}: ${message}`);
       result.errors.push({
         invoiceId: invoice.id,
         invoiceNumber: invoice.number,
@@ -167,7 +161,7 @@ export async function archiveQuarter(
   await writeArchiveLog(companyId, quarter, status, result);
 
   console.log(
-    `[archiveQuarter] company=${companyId} quarter=${quarter} issued=${result.issuedCount} received=${result.receivedCount} errors=${result.errorCount}`,
+    `[archiveQuarter] company=${companyId} quarter=${quarter} issued=${result.issuedCount} received=${result.receivedCount} errors=${result.errorCount}`
   );
 
   return result;
@@ -183,9 +177,7 @@ function parseQuarter(quarter: string): {
 } {
   const match = quarter.match(/^(\d{4})-Q([1-4])$/);
   if (!match) {
-    throw new Error(
-      `Invalid quarter format: "${quarter}". Expected "YYYY-QN" (e.g. "2026-Q1").`,
-    );
+    throw new Error(`Invalid quarter format: "${quarter}". Expected "YYYY-QN" (e.g. "2026-Q1").`);
   }
 
   const year = parseInt(match[1], 10);
@@ -202,10 +194,7 @@ function formatSubfolderName(format: string, quarter: string): string {
   const match = quarter.match(/^(\d{4})-Q([1-4])$/);
   if (!match) return quarter;
 
-  return format
-    .replace("YYYY", match[1])
-    .replace("QN", `Q${match[2]}`)
-    .replace("N", match[2]);
+  return format.replace("YYYY", match[1]).replace("QN", `Q${match[2]}`).replace("N", match[2]);
 }
 
 function buildFileName(invoiceNumber: string, issueDate: Date): string {
@@ -219,7 +208,7 @@ async function writeArchiveLog(
   companyId: string,
   quarter: string,
   status: string,
-  result: ArchiveQuarterResult,
+  result: ArchiveQuarterResult
 ): Promise<void> {
   await prisma.archiveLog.create({
     data: {

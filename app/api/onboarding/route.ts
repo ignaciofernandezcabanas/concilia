@@ -10,17 +10,20 @@ const onboardingSchema = z.object({
   company: z.object({
     name: z.string().min(1, "Nombre es requerido"),
     shortName: z.string().optional(),
-    cif: z.string().regex(
-      /^[A-HJNP-SUVW]\d{7}[0-9A-J]$|^\d{8}[A-Z]$|^[XYZ]\d{7}[A-Z]$/,
-      "CIF/NIF inválido"
-    ),
+    cif: z
+      .string()
+      .regex(/^[A-HJNP-SUVW]\d{7}[0-9A-J]$|^\d{8}[A-Z]$|^[XYZ]\d{7}[A-Z]$/, "CIF/NIF inválido"),
     currency: z.string().default("EUR"),
   }),
-  bankAccounts: z.array(z.object({
-    iban: z.string().min(1),
-    bankName: z.string().optional(),
-    alias: z.string().optional(),
-  })).min(1, "Al menos una cuenta bancaria es requerida"),
+  bankAccounts: z
+    .array(
+      z.object({
+        iban: z.string().min(1),
+        bankName: z.string().optional(),
+        alias: z.string().optional(),
+      })
+    )
+    .min(1, "Al menos una cuenta bancaria es requerida"),
   loadPgc: z.boolean().default(true),
 });
 
@@ -42,7 +45,10 @@ export async function POST(req: NextRequest) {
     const token = authHeader.slice(7);
 
     const supabase = createServerClient();
-    const { data: { user: supabaseUser }, error: authError } = await supabase.auth.getUser(token);
+    const {
+      data: { user: supabaseUser },
+      error: authError,
+    } = await supabase.auth.getUser(token);
     if (authError || !supabaseUser) {
       return NextResponse.json({ error: "Invalid token." }, { status: 401 });
     }
@@ -59,7 +65,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = onboardingSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: "Datos inválidos.", details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json(
+        { error: "Datos inválidos.", details: parsed.error.flatten() },
+        { status: 400 }
+      );
     }
 
     const { mode, orgName, company: companyData, bankAccounts, loadPgc } = parsed.data;

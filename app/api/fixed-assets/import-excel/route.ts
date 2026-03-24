@@ -16,7 +16,11 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     let imported = 0;
     for (const row of rows) {
       const accounts = await db.account.findMany({
-        where: { code: { in: [row.assetAccountCode, row.depreciationAccountCode, row.accumDepAccountCode] } },
+        where: {
+          code: {
+            in: [row.assetAccountCode, row.depreciationAccountCode, row.accumDepAccountCode],
+          },
+        },
         select: { id: true, code: true },
       });
       const accountMap = new Map(accounts.map((a) => [a.code, a.id]));
@@ -51,7 +55,12 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       imported++;
     }
 
-    return NextResponse.json({ success: true, imported, errors, total: rows.length + errors.length });
+    return NextResponse.json({
+      success: true,
+      imported,
+      errors,
+      total: rows.length + errors.length,
+    });
   } catch (err) {
     return errorResponse("Error al importar activos.", err);
   }

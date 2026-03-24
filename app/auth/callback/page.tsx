@@ -33,7 +33,9 @@ export default function AuthCallbackPage() {
         router.push("/");
       } else {
         // Wait for onAuthStateChange to fire
-        const { data: { subscription } } = sb.auth.onAuthStateChange((event, s) => {
+        const {
+          data: { subscription },
+        } = sb.auth.onAuthStateChange((event, s) => {
           if (event === "SIGNED_IN" && s) {
             subscription.unsubscribe();
             router.push("/");

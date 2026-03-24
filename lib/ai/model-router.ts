@@ -48,30 +48,38 @@ interface TaskConfig {
 
 const TASK_CONFIG: Record<AITask, TaskConfig> = {
   // Haiku
-  parse_concept:        { model: "claude-haiku-4-5-20251001", maxTokens: 200, temperature: 0.0 },
-  extract_invoice_pdf:  { model: "claude-haiku-4-5-20251001", maxTokens: 300, temperature: 0.0 },
-  explain_bandeja:      { model: "claude-haiku-4-5-20251001", maxTokens: 300, temperature: 0.2 },
+  parse_concept: { model: "claude-haiku-4-5-20251001", maxTokens: 200, temperature: 0.0 },
+  extract_invoice_pdf: { model: "claude-haiku-4-5-20251001", maxTokens: 300, temperature: 0.0 },
+  explain_bandeja: { model: "claude-haiku-4-5-20251001", maxTokens: 300, temperature: 0.2 },
   validate_email_draft: { model: "claude-haiku-4-5-20251001", maxTokens: 150, temperature: 0.0 },
-  classify_quick:       { model: "claude-haiku-4-5-20251001", maxTokens: 200, temperature: 0.0 },
+  classify_quick: { model: "claude-haiku-4-5-20251001", maxTokens: 200, temperature: 0.0 },
   // Sonnet
-  match_llm:            { model: "claude-sonnet-4-20250514", maxTokens: 1200, temperature: 0.1 },
-  classify_llm:         { model: "claude-sonnet-4-20250514", maxTokens: 1200, temperature: 0.1 },
-  parse_rule_nl:        { model: "claude-sonnet-4-20250514", maxTokens: 1000, temperature: 0.1 },
-  draft_reminder:       { model: "claude-sonnet-4-20250514", maxTokens: 800, temperature: 0.3 },
+  match_llm: { model: "claude-sonnet-4-20250514", maxTokens: 1200, temperature: 0.1 },
+  classify_llm: { model: "claude-sonnet-4-20250514", maxTokens: 1200, temperature: 0.1 },
+  parse_rule_nl: { model: "claude-sonnet-4-20250514", maxTokens: 1000, temperature: 0.1 },
+  draft_reminder: { model: "claude-sonnet-4-20250514", maxTokens: 800, temperature: 0.3 },
   detect_periodification: { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.1 },
-  explain_anomaly:      { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.2 },
-  treasury_advice:      { model: "claude-sonnet-4-20250514", maxTokens: 600, temperature: 0.2 },
-  draft_inquiry:        { model: "claude-sonnet-4-20250514", maxTokens: 1000, temperature: 0.3 },
-  analyze_inquiry_response: { model: "claude-haiku-4-5-20251001", maxTokens: 300, temperature: 0.0 },
-  evaluate_inquiry_response: { model: "claude-sonnet-4-20250514", maxTokens: 800, temperature: 0.1 },
+  explain_anomaly: { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.2 },
+  treasury_advice: { model: "claude-sonnet-4-20250514", maxTokens: 600, temperature: 0.2 },
+  draft_inquiry: { model: "claude-sonnet-4-20250514", maxTokens: 1000, temperature: 0.3 },
+  analyze_inquiry_response: {
+    model: "claude-haiku-4-5-20251001",
+    maxTokens: 300,
+    temperature: 0.0,
+  },
+  evaluate_inquiry_response: {
+    model: "claude-sonnet-4-20250514",
+    maxTokens: 800,
+    temperature: 0.1,
+  },
   ic_elimination_explain: { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.2 },
-  explain_group_anomaly:  { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.2 },
-  variance_consolidated:  { model: "claude-sonnet-4-20250514", maxTokens: 600, temperature: 0.2 },
+  explain_group_anomaly: { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.2 },
+  variance_consolidated: { model: "claude-sonnet-4-20250514", maxTokens: 600, temperature: 0.2 },
   // Opus
-  daily_briefing:       { model: "claude-opus-4-6", maxTokens: 1500, temperature: 0.3 },
-  weekly_briefing:      { model: "claude-opus-4-6", maxTokens: 2000, temperature: 0.3 },
-  close_proposal:       { model: "claude-opus-4-6", maxTokens: 1200, temperature: 0.2 },
-  risk_analysis:        { model: "claude-opus-4-6", maxTokens: 800, temperature: 0.2 },
+  daily_briefing: { model: "claude-opus-4-6", maxTokens: 1500, temperature: 0.3 },
+  weekly_briefing: { model: "claude-opus-4-6", maxTokens: 2000, temperature: 0.3 },
+  close_proposal: { model: "claude-opus-4-6", maxTokens: 1200, temperature: 0.2 },
+  risk_analysis: { model: "claude-opus-4-6", maxTokens: 800, temperature: 0.2 },
   consolidation_review: { model: "claude-opus-4-6", maxTokens: 1200, temperature: 0.2 },
 };
 
@@ -108,7 +116,7 @@ function recordCall(record: AICallRecord): void {
     const status = record.success ? "✅" : "❌";
     console.log(
       `[ai] ${record.task} | ${record.model.split("-").slice(-2, -1)[0] ?? record.model} | ` +
-      `${record.inputTokens}→${record.outputTokens} tok | ${record.latencyMs}ms | ${status}`
+        `${record.inputTokens}→${record.outputTokens} tok | ${record.latencyMs}ms | ${status}`
     );
   }
 }
@@ -140,18 +148,25 @@ export async function callAI(
 
   if (!response) {
     recordCall({
-      task, model: config.model,
-      inputTokens: 0, outputTokens: 0,
-      latencyMs, success: false, timestamp: new Date(),
+      task,
+      model: config.model,
+      inputTokens: 0,
+      outputTokens: 0,
+      latencyMs,
+      success: false,
+      timestamp: new Date(),
     });
     return null;
   }
 
   recordCall({
-    task, model: config.model,
+    task,
+    model: config.model,
     inputTokens: response.usage?.input_tokens ?? 0,
     outputTokens: response.usage?.output_tokens ?? 0,
-    latencyMs, success: true, timestamp: new Date(),
+    latencyMs,
+    success: true,
+    timestamp: new Date(),
   });
 
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
@@ -242,18 +257,25 @@ export async function callAIWithDocument(
 
   if (!response) {
     recordCall({
-      task, model: config.model,
-      inputTokens: 0, outputTokens: 0,
-      latencyMs, success: false, timestamp: new Date(),
+      task,
+      model: config.model,
+      inputTokens: 0,
+      outputTokens: 0,
+      latencyMs,
+      success: false,
+      timestamp: new Date(),
     });
     return null;
   }
 
   recordCall({
-    task, model: config.model,
+    task,
+    model: config.model,
     inputTokens: response.usage?.input_tokens ?? 0,
     outputTokens: response.usage?.output_tokens ?? 0,
-    latencyMs, success: true, timestamp: new Date(),
+    latencyMs,
+    success: true,
+    timestamp: new Date(),
   });
 
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";

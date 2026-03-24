@@ -18,7 +18,7 @@ const updateSchema = z.object({
  * GET /api/integrations/gmail
  */
 export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const integration = await db.integration.findFirst({
     where: { companyId: ctx.company.id, type: "GOOGLE_DRIVE" },
   });
@@ -39,7 +39,7 @@ export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
  * Connect multiple Gmail accounts for read-only invoice scanning.
  */
 export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const body = await req.json();
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
@@ -50,7 +50,12 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   }
 
   // Verify each account
-  const verifiedAccounts: { clientId: string; clientSecret: string; refreshToken: string; email: string }[] = [];
+  const verifiedAccounts: {
+    clientId: string;
+    clientSecret: string;
+    refreshToken: string;
+    email: string;
+  }[] = [];
   for (const acct of parsed.data.accounts) {
     try {
       const gmail = new GmailClient(acct);
@@ -89,7 +94,9 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     entityType: "Integration",
     entityId: existing?.id ?? "new",
     details: { emails: verifiedAccounts.map((a) => a.email), mode: "read_only" },
-  }).catch((err) => console.warn("[gmail] Non-critical operation failed:", err instanceof Error ? err.message : err));
+  }).catch((err) =>
+    console.warn("[gmail] Non-critical operation failed:", err instanceof Error ? err.message : err)
+  );
 
   return NextResponse.json({
     success: true,

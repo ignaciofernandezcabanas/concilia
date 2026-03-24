@@ -11,7 +11,7 @@ vi.mock("@/lib/ai/model-router", () => ({
 }));
 
 vi.mock("@/lib/ai/prompt-registry", async (importOriginal) => {
-  const actual = await importOriginal() as Record<string, unknown>;
+  const actual = (await importOriginal()) as Record<string, unknown>;
   return actual;
 });
 
@@ -31,8 +31,13 @@ describe("LLM Classifier", () => {
 
     const { classifyByLlm } = await import("@/lib/reconciliation/classifiers/llm-classifier");
     const tx = {
-      id: "tx_1", amount: -99.99, concept: "PAGO NETFLIX", status: "PENDING",
-      counterpartName: "Netflix", counterpartIban: null, valueDate: new Date(),
+      id: "tx_1",
+      amount: -99.99,
+      concept: "PAGO NETFLIX",
+      status: "PENDING",
+      counterpartName: "Netflix",
+      counterpartIban: null,
+      valueDate: new Date(),
     };
 
     const result = await classifyByLlm(tx as any, []);
@@ -47,7 +52,13 @@ describe("LLM Classifier", () => {
     mockCallAIJson.mockResolvedValue(null);
 
     const { classifyByLlm } = await import("@/lib/reconciliation/classifiers/llm-classifier");
-    const tx = { id: "tx_1", amount: -50, concept: "???", status: "PENDING", valueDate: new Date() };
+    const tx = {
+      id: "tx_1",
+      amount: -50,
+      concept: "???",
+      status: "PENDING",
+      valueDate: new Date(),
+    };
 
     const result = await classifyByLlm(tx as any, []);
     expect(result).toBeNull();
@@ -104,14 +115,24 @@ describe("LLM Match", () => {
 
     const { findLlmMatch } = await import("@/lib/reconciliation/matchers/llm-match");
     const tx = {
-      id: "tx_1", amount: 5000, concept: "COBRO FRA-001 CLIENTE SA",
-      status: "PENDING", valueDate: new Date(), counterpartName: "Cliente SA",
-      counterpartIban: null, externalId: "csv:1",
+      id: "tx_1",
+      amount: 5000,
+      concept: "COBRO FRA-001 CLIENTE SA",
+      status: "PENDING",
+      valueDate: new Date(),
+      counterpartName: "Cliente SA",
+      counterpartIban: null,
+      externalId: "csv:1",
     };
     const invoices = [
       {
-        id: "inv_1", number: "FRA-001", totalAmount: 5000, amountPending: 5000,
-        type: "ISSUED", issueDate: new Date(), dueDate: new Date(),
+        id: "inv_1",
+        number: "FRA-001",
+        totalAmount: 5000,
+        amountPending: 5000,
+        type: "ISSUED",
+        issueDate: new Date(),
+        dueDate: new Date(),
         contact: { name: "Cliente SA", iban: null, cif: null },
       },
     ];
@@ -123,7 +144,13 @@ describe("LLM Match", () => {
 
   it("sin candidatas → null", async () => {
     const { findLlmMatch } = await import("@/lib/reconciliation/matchers/llm-match");
-    const tx = { id: "tx_1", amount: -999, concept: "MOVIMIENTO RARO", status: "PENDING", valueDate: new Date() };
+    const tx = {
+      id: "tx_1",
+      amount: -999,
+      concept: "MOVIMIENTO RARO",
+      status: "PENDING",
+      valueDate: new Date(),
+    };
 
     const result = await findLlmMatch(tx as any, [], []);
     expect(result).toBeNull();

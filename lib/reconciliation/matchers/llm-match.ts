@@ -70,7 +70,7 @@ export async function findLlmMatch(
     const matchedInvoice = invoiceList.find((inv) => inv.id === parsed.matchedInvoiceId);
     if (!matchedInvoice) return null;
 
-    const confidence = Math.min(0.80, Math.max(0.60, parsed.confidence));
+    const confidence = Math.min(0.8, Math.max(0.6, parsed.confidence));
 
     return {
       invoiceId: parsed.matchedInvoiceId,

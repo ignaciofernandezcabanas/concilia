@@ -54,7 +54,10 @@ export default function Dashboard() {
   }
 
   const d = data ?? {
-    income: 0, expenses: 0, cashflow: 0, pendingCount: 0,
+    income: 0,
+    expenses: 0,
+    cashflow: 0,
+    pendingCount: 0,
     reconciled: { count: 0, amount: 0 },
     pendingMatch: { count: 0, amount: 0 },
     unclassified: { count: 0, amount: 0 },
@@ -116,7 +119,9 @@ export default function Dashboard() {
                 value={formatAmount(ebitda)}
                 icon={<BarChart3 size={14} className={ebitda >= 0 ? "text-green" : "text-red"} />}
                 valueClass={ebitda >= 0 ? "text-green-text" : "text-red-text"}
-                subtitle={d.income > 0 ? `${Math.round((ebitda / d.income) * 100)}% margen` : undefined}
+                subtitle={
+                  d.income > 0 ? `${Math.round((ebitda / d.income) * 100)}% margen` : undefined
+                }
               />
               <KPICard
                 label="Cashflow neto"
@@ -134,7 +139,12 @@ export default function Dashboard() {
               <KPICard
                 label="Bandeja"
                 value={String(d.pendingCount)}
-                icon={<AlertCircle size={14} className={d.pendingCount > 0 ? "text-amber" : "text-green"} />}
+                icon={
+                  <AlertCircle
+                    size={14}
+                    className={d.pendingCount > 0 ? "text-amber" : "text-green"}
+                  />
+                }
                 valueClass={d.pendingCount > 0 ? "text-amber" : "text-green-text"}
                 subtitle="requieren revisión"
               />
@@ -166,9 +176,15 @@ export default function Dashboard() {
             <div className="bg-white rounded-lg border border-subtle overflow-hidden">
               <div className="flex items-center h-11 px-5 border-b border-subtle">
                 <span className="flex-1 text-xs font-semibold text-text-secondary">Estado</span>
-                <span className="w-20 text-xs font-semibold text-text-secondary text-right">Nº</span>
-                <span className="w-[140px] text-xs font-semibold text-text-secondary text-right pr-6">Importe</span>
-                <span className="w-[100px] text-xs font-semibold text-text-secondary text-right">Acción</span>
+                <span className="w-20 text-xs font-semibold text-text-secondary text-right">
+                  Nº
+                </span>
+                <span className="w-[140px] text-xs font-semibold text-text-secondary text-right pr-6">
+                  Importe
+                </span>
+                <span className="w-[100px] text-xs font-semibold text-text-secondary text-right">
+                  Acción
+                </span>
               </div>
               <SummaryRow
                 concept="Conciliadas"
@@ -202,9 +218,17 @@ export default function Dashboard() {
 }
 
 function KPICard({
-  label, value, icon, valueClass = "text-text-primary", subtitle,
+  label,
+  value,
+  icon,
+  valueClass = "text-text-primary",
+  subtitle,
 }: {
-  label: string; value: string; icon: React.ReactNode; valueClass?: string; subtitle?: string;
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+  valueClass?: string;
+  subtitle?: string;
 }) {
   return (
     <div className="bg-white rounded-lg border border-subtle p-4 flex flex-col gap-1.5">
@@ -219,9 +243,15 @@ function KPICard({
 }
 
 function QuickAction({
-  label, href, icon, description,
+  label,
+  href,
+  icon,
+  description,
 }: {
-  label: string; href: string; icon: React.ReactNode; description: string;
+  label: string;
+  href: string;
+  icon: React.ReactNode;
+  description: string;
 }) {
   return (
     <Link
@@ -235,16 +265,30 @@ function QuickAction({
         <span className="text-[13px] font-medium text-text-primary block truncate">{label}</span>
         <span className="text-[11px] text-text-tertiary">{description}</span>
       </div>
-      <ArrowRight size={14} className="text-text-tertiary group-hover:text-accent transition-colors shrink-0" />
+      <ArrowRight
+        size={14}
+        className="text-text-tertiary group-hover:text-accent transition-colors shrink-0"
+      />
     </Link>
   );
 }
 
 function SummaryRow({
-  concept, count, amount, dot, actionLabel, actionHref, border = true,
+  concept,
+  count,
+  amount,
+  dot,
+  actionLabel,
+  actionHref,
+  border = true,
 }: {
-  concept: string; count: number; amount: number; dot: string;
-  actionLabel?: string; actionHref?: string; border?: boolean;
+  concept: string;
+  count: number;
+  amount: number;
+  dot: string;
+  actionLabel?: string;
+  actionHref?: string;
+  border?: boolean;
 }) {
   return (
     <div className={`flex items-center h-11 px-5 ${border ? "border-b border-border-light" : ""}`}>

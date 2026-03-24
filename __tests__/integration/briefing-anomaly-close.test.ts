@@ -29,7 +29,15 @@ describe("Daily Briefing", () => {
 
     const result = await generateDailyBriefing(
       "Grupo Acme",
-      { companiesProcessed: 2, txsProcessed: 10, txsAutoExecuted: 8, txsToBandeja: 2, llmCallsTotal: 3, errorsCount: 0, stepErrors: [] },
+      {
+        companiesProcessed: 2,
+        txsProcessed: 10,
+        txsAutoExecuted: 8,
+        txsToBandeja: 2,
+        llmCallsTotal: 3,
+        errorsCount: 0,
+        stepErrors: [],
+      },
       [{ weekStart: "2026-03-23", projectedBalance: 50000 }],
       [],
       5,
@@ -50,12 +58,28 @@ describe("Daily Briefing", () => {
 
     await generateDailyBriefing(
       "Test Org",
-      { companiesProcessed: 1, txsProcessed: 5, txsAutoExecuted: 3, txsToBandeja: 2, llmCallsTotal: 1, errorsCount: 0, stepErrors: [] },
+      {
+        companiesProcessed: 1,
+        txsProcessed: 5,
+        txsAutoExecuted: 3,
+        txsToBandeja: 2,
+        llmCallsTotal: 1,
+        errorsCount: 0,
+        stepErrors: [],
+      },
       null,
-      [{
-        companyId: "c1", companyName: "A", accountCode: "628", accountName: "Suministros",
-        currentAmount: 5000, avgAmount: 1000, zScore: 4.0, explanation: "Gasto muy alto",
-      }],
+      [
+        {
+          companyId: "c1",
+          companyName: "A",
+          accountCode: "628",
+          accountName: "Suministros",
+          currentAmount: 5000,
+          avgAmount: 1000,
+          zScore: 4.0,
+          explanation: "Gasto muy alto",
+        },
+      ],
       0,
       null
     );
@@ -73,7 +97,15 @@ describe("Daily Briefing", () => {
 
     await generateDailyBriefing(
       "Test Org",
-      { companiesProcessed: 1, txsProcessed: 5, txsAutoExecuted: 5, txsToBandeja: 0, llmCallsTotal: 0, errorsCount: 0, stepErrors: [] },
+      {
+        companiesProcessed: 1,
+        txsProcessed: 5,
+        txsAutoExecuted: 5,
+        txsToBandeja: 0,
+        llmCallsTotal: 0,
+        errorsCount: 0,
+        stepErrors: [],
+      },
       null,
       [],
       0,
@@ -101,15 +133,40 @@ describe("Anomaly Detector", () => {
     // Current month: 3000 EUR in account 628
     mockPrisma.bankTransaction.findMany
       .mockResolvedValueOnce([
-        { amount: -3000, valueDate: new Date("2026-03-15"), concept: "Electricidad", classification: { account: { code: "628", name: "Suministros" } } },
+        {
+          amount: -3000,
+          valueDate: new Date("2026-03-15"),
+          concept: "Electricidad",
+          classification: { account: { code: "628", name: "Suministros" } },
+        },
       ])
       .mockResolvedValueOnce([
         // 6 months of ~1000/month
-        { amount: -900, valueDate: new Date("2025-10-15"), classification: { account: { code: "628" } } },
-        { amount: -1100, valueDate: new Date("2025-11-15"), classification: { account: { code: "628" } } },
-        { amount: -1000, valueDate: new Date("2025-12-15"), classification: { account: { code: "628" } } },
-        { amount: -950, valueDate: new Date("2026-01-15"), classification: { account: { code: "628" } } },
-        { amount: -1050, valueDate: new Date("2026-02-15"), classification: { account: { code: "628" } } },
+        {
+          amount: -900,
+          valueDate: new Date("2025-10-15"),
+          classification: { account: { code: "628" } },
+        },
+        {
+          amount: -1100,
+          valueDate: new Date("2025-11-15"),
+          classification: { account: { code: "628" } },
+        },
+        {
+          amount: -1000,
+          valueDate: new Date("2025-12-15"),
+          classification: { account: { code: "628" } },
+        },
+        {
+          amount: -950,
+          valueDate: new Date("2026-01-15"),
+          classification: { account: { code: "628" } },
+        },
+        {
+          amount: -1050,
+          valueDate: new Date("2026-02-15"),
+          classification: { account: { code: "628" } },
+        },
       ])
       // For top tx lookup
       .mockResolvedValueOnce([{ amount: -3000, concept: "Electricidad" }]);
@@ -132,14 +189,39 @@ describe("Anomaly Detector", () => {
     // Current: 1000 (normal)
     mockPrisma.bankTransaction.findMany
       .mockResolvedValueOnce([
-        { amount: -1000, valueDate: new Date("2026-03-15"), concept: "Normal", classification: { account: { code: "628", name: "Suministros" } } },
+        {
+          amount: -1000,
+          valueDate: new Date("2026-03-15"),
+          concept: "Normal",
+          classification: { account: { code: "628", name: "Suministros" } },
+        },
       ])
       .mockResolvedValueOnce([
-        { amount: -900, valueDate: new Date("2025-10-15"), classification: { account: { code: "628" } } },
-        { amount: -1100, valueDate: new Date("2025-11-15"), classification: { account: { code: "628" } } },
-        { amount: -1000, valueDate: new Date("2025-12-15"), classification: { account: { code: "628" } } },
-        { amount: -950, valueDate: new Date("2026-01-15"), classification: { account: { code: "628" } } },
-        { amount: -1050, valueDate: new Date("2026-02-15"), classification: { account: { code: "628" } } },
+        {
+          amount: -900,
+          valueDate: new Date("2025-10-15"),
+          classification: { account: { code: "628" } },
+        },
+        {
+          amount: -1100,
+          valueDate: new Date("2025-11-15"),
+          classification: { account: { code: "628" } },
+        },
+        {
+          amount: -1000,
+          valueDate: new Date("2025-12-15"),
+          classification: { account: { code: "628" } },
+        },
+        {
+          amount: -950,
+          valueDate: new Date("2026-01-15"),
+          classification: { account: { code: "628" } },
+        },
+        {
+          amount: -1050,
+          valueDate: new Date("2026-02-15"),
+          classification: { account: { code: "628" } },
+        },
       ]);
 
     const anomalies = await detectAnomalies("org_1", "2026-03");
@@ -154,12 +236,25 @@ describe("Anomaly Detector", () => {
 
     mockPrisma.bankTransaction.findMany
       .mockResolvedValueOnce([
-        { amount: -5000, valueDate: new Date("2026-03-15"), concept: "Big", classification: { account: { code: "628", name: "Suministros" } } },
+        {
+          amount: -5000,
+          valueDate: new Date("2026-03-15"),
+          concept: "Big",
+          classification: { account: { code: "628", name: "Suministros" } },
+        },
       ])
       .mockResolvedValueOnce([
         // Only 2 months of history
-        { amount: -1000, valueDate: new Date("2026-01-15"), classification: { account: { code: "628" } } },
-        { amount: -1000, valueDate: new Date("2026-02-15"), classification: { account: { code: "628" } } },
+        {
+          amount: -1000,
+          valueDate: new Date("2026-01-15"),
+          classification: { account: { code: "628" } },
+        },
+        {
+          amount: -1000,
+          valueDate: new Date("2026-02-15"),
+          classification: { account: { code: "628" } },
+        },
       ]);
 
     const anomalies = await detectAnomalies("org_1", "2026-03");
@@ -183,7 +278,10 @@ describe("Close Proposal", () => {
     mockPrisma.accountingPeriod.findMany.mockResolvedValue([
       { company: { shortName: "Alpha", name: "Alpha S.L." } },
     ]);
-    mockPrisma.bankTransaction = { ...mockPrisma.bankTransaction, count: vi.fn().mockResolvedValue(5) } as any;
+    mockPrisma.bankTransaction = {
+      ...mockPrisma.bankTransaction,
+      count: vi.fn().mockResolvedValue(5),
+    } as any;
 
     mockCallAI.mockResolvedValue("Propuesta de cierre: Alpha pendiente de cerrar.");
 
@@ -198,13 +296,14 @@ describe("Close Proposal", () => {
   });
 
   it("menciona interco pendiente", async () => {
-    mockPrisma.company.findMany.mockResolvedValue([
-      { id: "c1", name: "A", shortName: "A" },
-    ]);
+    mockPrisma.company.findMany.mockResolvedValue([{ id: "c1", name: "A", shortName: "A" }]);
     mockPrisma.journalEntry.count.mockResolvedValue(0);
     mockPrisma.intercompanyLink.count.mockResolvedValue(4);
     mockPrisma.accountingPeriod.findMany.mockResolvedValue([]);
-    mockPrisma.bankTransaction = { ...mockPrisma.bankTransaction, count: vi.fn().mockResolvedValue(0) } as any;
+    mockPrisma.bankTransaction = {
+      ...mockPrisma.bankTransaction,
+      count: vi.fn().mockResolvedValue(0),
+    } as any;
 
     mockCallAI.mockResolvedValue("4 operaciones intercompañía pendientes.");
 

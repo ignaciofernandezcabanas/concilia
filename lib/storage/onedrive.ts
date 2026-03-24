@@ -19,13 +19,17 @@ export class OneDriveProvider implements StorageProvider {
   }
 
   async listFiles(folderId: string): Promise<StorageFile[]> {
-    const path = folderId === "root"
-      ? `${GRAPH_URL}/me/drive/root/children`
-      : `${GRAPH_URL}/me/drive/items/${folderId}/children`;
+    const path =
+      folderId === "root"
+        ? `${GRAPH_URL}/me/drive/root/children`
+        : `${GRAPH_URL}/me/drive/items/${folderId}/children`;
 
-    const res = await fetch(`${path}?$select=id,name,file,size,createdDateTime,lastModifiedDateTime,webUrl`, {
-      headers: this.headers(),
-    });
+    const res = await fetch(
+      `${path}?$select=id,name,file,size,createdDateTime,lastModifiedDateTime,webUrl`,
+      {
+        headers: this.headers(),
+      }
+    );
     if (!res.ok) throw new Error(`OneDrive listFiles failed: ${res.status}`);
     const data = await res.json();
     return (data.value ?? [])
@@ -67,9 +71,10 @@ export class OneDriveProvider implements StorageProvider {
   }
 
   async createFolder(parentId: string, name: string): Promise<StorageFolder> {
-    const path = parentId === "root"
-      ? `${GRAPH_URL}/me/drive/root/children`
-      : `${GRAPH_URL}/me/drive/items/${parentId}/children`;
+    const path =
+      parentId === "root"
+        ? `${GRAPH_URL}/me/drive/root/children`
+        : `${GRAPH_URL}/me/drive/items/${parentId}/children`;
 
     const res = await fetch(path, {
       method: "POST",
@@ -109,9 +114,10 @@ export class OneDriveProvider implements StorageProvider {
         parentId = folder.id;
       } catch {
         // If creation fails (conflict), list and find
-        const listPath = parentId === "root"
-          ? `${GRAPH_URL}/me/drive/root/children`
-          : `${GRAPH_URL}/me/drive/items/${parentId}/children`;
+        const listPath =
+          parentId === "root"
+            ? `${GRAPH_URL}/me/drive/root/children`
+            : `${GRAPH_URL}/me/drive/items/${parentId}/children`;
         const res = await fetch(`${listPath}?$filter=name eq '${part}'`, {
           headers: this.headers(),
         });

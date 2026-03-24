@@ -23,14 +23,13 @@ export function getSupabase(): SupabaseClient | null {
 async function getToken(): Promise<string | null> {
   const sb = getSupabase();
   if (!sb) return null;
-  const { data: { session } } = await sb.auth.getSession();
+  const {
+    data: { session },
+  } = await sb.auth.getSession();
   return session?.access_token ?? null;
 }
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = await getToken();
 
   const headers: Record<string, string> = {
@@ -72,8 +71,7 @@ export const api = {
     request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
-  delete: <T>(path: string) =>
-    request<T>(path, { method: "DELETE" }),
+  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
 
 export function qs(params: Record<string, unknown>): string {
@@ -81,9 +79,7 @@ export function qs(params: Record<string, unknown>): string {
     ([, v]) => v !== undefined && v !== null && v !== ""
   );
   if (entries.length === 0) return "";
-  return "?" + new URLSearchParams(
-    entries.map(([k, v]) => [k, String(v)])
-  ).toString();
+  return "?" + new URLSearchParams(entries.map(([k, v]) => [k, String(v)])).toString();
 }
 
 export const auth = {
@@ -106,7 +102,9 @@ export const auth = {
     if (!sb) return;
     return sb.auth.signOut();
   },
-  onAuthStateChange: (cb: Parameters<NonNullable<ReturnType<typeof getSupabase>>["auth"]["onAuthStateChange"]>[0]) => {
+  onAuthStateChange: (
+    cb: Parameters<NonNullable<ReturnType<typeof getSupabase>>["auth"]["onAuthStateChange"]>[0]
+  ) => {
     const sb = getSupabase();
     if (!sb) return { data: { subscription: { unsubscribe: () => {} } } };
     return sb.auth.onAuthStateChange(cb);

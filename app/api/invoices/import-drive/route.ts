@@ -19,7 +19,7 @@ const bodySchema = z.object({
  * Body: { folderId: "..." }
  */
 export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const { company, user } = ctx;
 
   let body: unknown;
@@ -48,7 +48,10 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
 
   const config = integration.config as Record<string, string>;
   if (!config.clientId || !config.clientSecret || !config.refreshToken) {
-    return NextResponse.json({ error: "Credenciales de Google Drive incompletas." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Credenciales de Google Drive incompletas." },
+      { status: 400 }
+    );
   }
 
   // Authenticate with Google Drive
@@ -198,7 +201,19 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     entityType: "Invoice",
     entityId: "batch",
     details: { folderId: parsed.data.folderId, filesCount: pdfFiles.length, created, skipped },
-  }).catch((err) => console.warn("[import-drive] Non-critical operation failed:", err instanceof Error ? err.message : err));
+  }).catch((err) =>
+    console.warn(
+      "[import-drive] Non-critical operation failed:",
+      err instanceof Error ? err.message : err
+    )
+  );
 
-  return NextResponse.json({ success: true, created, skipped, total: pdfFiles.length, errors: errors.slice(0, 30), results });
+  return NextResponse.json({
+    success: true,
+    created,
+    skipped,
+    total: pdfFiles.length,
+    errors: errors.slice(0, 30),
+    results,
+  });
 }, "classify:transaction");

@@ -29,7 +29,9 @@ export const POST = withCronAuth(async (_req: NextRequest) => {
     const periodStart = lastMonth;
     const periodEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
-    const companies = await prisma.company.findMany({ select: { id: true, autoApproveThreshold: true } });
+    const companies = await prisma.company.findMany({
+      select: { id: true, autoApproveThreshold: true },
+    });
 
     for (const company of companies) {
       const categories = ["EXACT_MATCH", "GROUPED_MATCH", "DIFFERENCE_MATCH", "CLASSIFICATION"];
@@ -83,9 +85,7 @@ export const POST = withCronAuth(async (_req: NextRequest) => {
           orderBy: { period: "desc" },
         });
 
-        const monthsNoError = autoErrors === 0
-          ? (prevCalibration?.monthsNoError ?? 0) + 1
-          : 0;
+        const monthsNoError = autoErrors === 0 ? (prevCalibration?.monthsNoError ?? 0) + 1 : 0;
 
         // Calculate suggested threshold
         let suggested = company.autoApproveThreshold;
@@ -94,7 +94,7 @@ export const POST = withCronAuth(async (_req: NextRequest) => {
           suggested = Math.min(0.99, suggested + 0.05);
         } else if (monthsNoError >= 3 && manualApproved > (manualApproved + manualRejected) * 0.1) {
           // 3+ months no errors AND >10% of bandeja was approved unchanged → lower threshold
-          suggested = Math.max(0.50, suggested - 0.02);
+          suggested = Math.max(0.5, suggested - 0.02);
         }
 
         // Update CategoryThreshold if suggestion differs from current

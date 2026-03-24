@@ -33,7 +33,11 @@ describe("Confidence Calibrator", () => {
 
   it("error auto-execute → persiste adjustment negativo", async () => {
     mockPrisma.confidenceAdjustment.findUnique.mockResolvedValue({
-      id: "ca_1", adjustment: 0, errors30d: 0, lastErrorAt: null, pausedUntil: null,
+      id: "ca_1",
+      adjustment: 0,
+      errors30d: 0,
+      lastErrorAt: null,
+      pausedUntil: null,
     });
 
     await calibrateFromDecision({
@@ -49,7 +53,11 @@ describe("Confidence Calibrator", () => {
 
   it("aprobado sin cambio → persiste adjustment positivo", async () => {
     mockPrisma.confidenceAdjustment.findUnique.mockResolvedValue({
-      id: "ca_1", adjustment: 0, errors30d: 0, lastErrorAt: null, pausedUntil: null,
+      id: "ca_1",
+      adjustment: 0,
+      errors30d: 0,
+      lastErrorAt: null,
+      pausedUntil: null,
     });
 
     await calibrateFromDecision({

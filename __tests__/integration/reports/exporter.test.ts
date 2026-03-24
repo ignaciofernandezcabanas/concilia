@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { exportToExcel, exportToCsv } from "@/lib/reports/exporter";
 
 const sampleData = [
-  { codigo: "700", nombre: "Ventas", importe: 15000.50 },
+  { codigo: "700", nombre: "Ventas", importe: 15000.5 },
   { codigo: "600", nombre: "Compras", importe: 8000.25 },
 ];
 

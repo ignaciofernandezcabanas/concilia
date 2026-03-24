@@ -12,13 +12,25 @@ interface Props {
   onNext: () => void;
 }
 
-export default function PeriodSelector({ periodType, setPeriodType, label, onPrev, onNext }: Props) {
+export default function PeriodSelector({
+  periodType,
+  setPeriodType,
+  label,
+  onPrev,
+  onNext,
+}: Props) {
   return (
     <div className="flex items-center gap-2.5">
       <div className="flex items-center gap-2 bg-white border border-subtle rounded-md px-3 h-8">
-        <button onClick={onPrev}><ChevronLeft size={14} className="text-text-secondary" /></button>
-        <span className="text-xs font-medium text-text-primary capitalize w-28 text-center">{label}</span>
-        <button onClick={onNext}><ChevronRight size={14} className="text-text-secondary" /></button>
+        <button onClick={onPrev}>
+          <ChevronLeft size={14} className="text-text-secondary" />
+        </button>
+        <span className="text-xs font-medium text-text-primary capitalize w-28 text-center">
+          {label}
+        </span>
+        <button onClick={onNext}>
+          <ChevronRight size={14} className="text-text-secondary" />
+        </button>
       </div>
       <div className="flex items-center h-8 rounded-md overflow-hidden border border-subtle">
         {(["month", "quarter", "year"] as PeriodType[]).map((pt, i) => (
@@ -26,7 +38,9 @@ export default function PeriodSelector({ periodType, setPeriodType, label, onPre
             key={pt}
             onClick={() => setPeriodType(pt)}
             className={`px-3 h-full text-xs font-medium ${
-              periodType === pt ? "bg-accent text-white" : "bg-white text-text-secondary hover:bg-hover"
+              periodType === pt
+                ? "bg-accent text-white"
+                : "bg-white text-text-secondary hover:bg-hover"
             } ${i > 0 ? "border-l border-subtle" : ""}`}
           >
             {{ month: "Mensual", quarter: "Trimestral", year: "Anual" }[pt]}
@@ -48,7 +62,9 @@ export function usePeriodData(periodType: PeriodType, offset: number) {
       from: fmt(d),
       to: fmt(end),
       label: d.toLocaleDateString("es-ES", { month: "long", year: "numeric" }),
-      months: [{ key: fmt(d).slice(0, 7), label: d.toLocaleDateString("es-ES", { month: "short" }) }],
+      months: [
+        { key: fmt(d).slice(0, 7), label: d.toLocaleDateString("es-ES", { month: "short" }) },
+      ],
     };
   }
 

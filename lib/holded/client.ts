@@ -96,8 +96,7 @@ const RATE_LIMIT_DELAY_MS = 60_000; // back off a full window on 429
 export class HoldedClient {
   private readonly apiKey: string;
   private readonly invoicingBaseUrl = "https://api.holded.com/api/invoicing/v1";
-  private readonly accountingBaseUrl =
-    "https://api.holded.com/api/accounting/v1";
+  private readonly accountingBaseUrl = "https://api.holded.com/api/accounting/v1";
 
   constructor(apiKey: string) {
     if (!apiKey) throw new Error("HoldedClient: apiKey is required");
@@ -108,49 +107,29 @@ export class HoldedClient {
   // Public methods
   // -----------------------------------------------------------------------
 
-  async getInvoices(
-    page = 1,
-    updatedAfter?: Date,
-  ): Promise<HoldedInvoice[]> {
+  async getInvoices(page = 1, updatedAfter?: Date): Promise<HoldedInvoice[]> {
     const params = new URLSearchParams({ page: String(page) });
     if (updatedAfter) {
-      params.set(
-        "updatedAfter",
-        String(Math.floor(updatedAfter.getTime() / 1000)),
-      );
+      params.set("updatedAfter", String(Math.floor(updatedAfter.getTime() / 1000)));
     }
-    return this.get<HoldedInvoice[]>(
-      `${this.invoicingBaseUrl}/documents/invoice?${params}`,
-    );
+    return this.get<HoldedInvoice[]>(`${this.invoicingBaseUrl}/documents/invoice?${params}`);
   }
 
-  async getPurchases(
-    page = 1,
-    updatedAfter?: Date,
-  ): Promise<HoldedInvoice[]> {
+  async getPurchases(page = 1, updatedAfter?: Date): Promise<HoldedInvoice[]> {
     const params = new URLSearchParams({ page: String(page) });
     if (updatedAfter) {
-      params.set(
-        "updatedAfter",
-        String(Math.floor(updatedAfter.getTime() / 1000)),
-      );
+      params.set("updatedAfter", String(Math.floor(updatedAfter.getTime() / 1000)));
     }
-    return this.get<HoldedInvoice[]>(
-      `${this.invoicingBaseUrl}/documents/purchase?${params}`,
-    );
+    return this.get<HoldedInvoice[]>(`${this.invoicingBaseUrl}/documents/purchase?${params}`);
   }
 
   async getContacts(page = 1): Promise<HoldedContact[]> {
     const params = new URLSearchParams({ page: String(page) });
-    return this.get<HoldedContact[]>(
-      `${this.invoicingBaseUrl}/contacts?${params}`,
-    );
+    return this.get<HoldedContact[]>(`${this.invoicingBaseUrl}/contacts?${params}`);
   }
 
   async getPayments(invoiceId: string): Promise<HoldedPayment[]> {
-    return this.get<HoldedPayment[]>(
-      `${this.invoicingBaseUrl}/documents/${invoiceId}/payments`,
-    );
+    return this.get<HoldedPayment[]>(`${this.invoicingBaseUrl}/documents/${invoiceId}/payments`);
   }
 
   async getAccounts(): Promise<HoldedAccount[]> {
@@ -159,7 +138,7 @@ export class HoldedClient {
 
   async getInvoicePdf(invoiceId: string): Promise<HoldedPdfResponse> {
     return this.get<HoldedPdfResponse>(
-      `${this.invoicingBaseUrl}/documents/invoice/${invoiceId}/pdf`,
+      `${this.invoicingBaseUrl}/documents/invoice/${invoiceId}/pdf`
     );
   }
 
@@ -199,10 +178,9 @@ export class HoldedClient {
         if (response.status === 429) {
           // Rate limited – wait and retry
           const retryAfter =
-            parseInt(response.headers.get("Retry-After") ?? "", 10) * 1000 ||
-            RATE_LIMIT_DELAY_MS;
+            parseInt(response.headers.get("Retry-After") ?? "", 10) * 1000 || RATE_LIMIT_DELAY_MS;
           console.warn(
-            `[HoldedClient] 429 rate limited, waiting ${retryAfter}ms (attempt ${attempt + 1}/${MAX_RETRIES + 1})`,
+            `[HoldedClient] 429 rate limited, waiting ${retryAfter}ms (attempt ${attempt + 1}/${MAX_RETRIES + 1})`
           );
           await sleep(retryAfter);
           continue;
@@ -210,16 +188,14 @@ export class HoldedClient {
 
         if (response.status >= 500) {
           const body = await response.text();
-          throw new Error(
-            `Holded server error ${response.status}: ${body.slice(0, 200)}`,
-          );
+          throw new Error(`Holded server error ${response.status}: ${body.slice(0, 200)}`);
         }
 
         if (!response.ok) {
           const body = await response.text();
           throw new HoldedApiError(
             `Holded API error ${response.status}: ${body.slice(0, 500)}`,
-            response.status,
+            response.status
           );
         }
 
@@ -235,7 +211,7 @@ export class HoldedClient {
         if (attempt < MAX_RETRIES) {
           const delay = BASE_DELAY_MS * Math.pow(2, attempt);
           console.warn(
-            `[HoldedClient] Request failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}), retrying in ${delay}ms: ${lastError.message}`,
+            `[HoldedClient] Request failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}), retrying in ${delay}ms: ${lastError.message}`
           );
           await sleep(delay);
         }
@@ -245,9 +221,7 @@ export class HoldedClient {
     throw lastError ?? new Error("HoldedClient: request failed after retries");
   }
 
-  private async paginate<T>(
-    fetcher: (page: number) => Promise<T[]>,
-  ): Promise<T[]> {
+  private async paginate<T>(fetcher: (page: number) => Promise<T[]>): Promise<T[]> {
     const all: T[] = [];
     let page = 1;
 
@@ -269,7 +243,7 @@ export class HoldedClient {
 export class HoldedApiError extends Error {
   constructor(
     message: string,
-    public readonly status: number,
+    public readonly status: number
   ) {
     super(message);
     this.name = "HoldedApiError";

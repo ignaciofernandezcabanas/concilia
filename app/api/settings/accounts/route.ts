@@ -12,13 +12,15 @@ import { z } from "zod";
  * - all=true: return all accounts (no limit)
  */
 export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const url = req.nextUrl;
   const search = url.searchParams.get("search") ?? "";
   const group = url.searchParams.get("group");
   const all = url.searchParams.get("all") === "true";
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"));
-  const limit = all ? 500 : Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "50")));
+  const limit = all
+    ? 500
+    : Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "50")));
   const skip = all ? 0 : (page - 1) * limit;
 
   const where = {
@@ -76,7 +78,7 @@ const createSchema = z.object({
  * Creates a new PGC account.
  */
 export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const body = await req.json();
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
@@ -93,10 +95,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     where: { code_companyId: { code, companyId: ctx.company.id } },
   });
   if (existing) {
-    return NextResponse.json(
-      { error: `La cuenta ${code} ya existe.` },
-      { status: 409 }
-    );
+    return NextResponse.json({ error: `La cuenta ${code} ya existe.` }, { status: 409 });
   }
 
   const account = await db.account.create({
@@ -128,7 +127,10 @@ const updateSchema = z.object({
   code: z.string().min(1),
   name: z.string().min(1).optional(),
   pygLine: z.string().nullable().optional(),
-  cashflowType: z.enum(["OPERATING", "INVESTING", "FINANCING", "INTERNAL", "NON_CASH"]).nullable().optional(),
+  cashflowType: z
+    .enum(["OPERATING", "INVESTING", "FINANCING", "INTERNAL", "NON_CASH"])
+    .nullable()
+    .optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -138,7 +140,7 @@ const updateSchema = z.object({
  * Updates an existing account. Identified by code.
  */
 export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const body = await req.json();
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {

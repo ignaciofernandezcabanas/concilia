@@ -2,14 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
 import { z } from "zod";
 
-const CATEGORIES = ["EXACT_MATCH", "GROUPED_MATCH", "DIFFERENCE_MATCH", "PARTIAL_MATCH", "CLASSIFICATION"];
+const CATEGORIES = [
+  "EXACT_MATCH",
+  "GROUPED_MATCH",
+  "DIFFERENCE_MATCH",
+  "PARTIAL_MATCH",
+  "CLASSIFICATION",
+];
 
 /**
  * GET /api/settings/thresholds
  * Returns per-category thresholds + global fallback.
  */
 export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const { company } = ctx;
 
   const categoryThresholds = await db.categoryThreshold.findMany({
@@ -37,26 +43,33 @@ export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
  * Body: { category: string, threshold: number } or { category: string, reset: true }
  */
 export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const { company } = ctx;
   const body = await req.json();
 
   const schema = z.object({
     category: z.enum(CATEGORIES as [string, ...string[]]),
-    threshold: z.number().min(0.50).max(0.99).optional(),
+    threshold: z.number().min(0.5).max(0.99).optional(),
     reset: z.boolean().optional(),
   });
 
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Validation failed.", details: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json(
+      { error: "Validation failed.", details: parsed.error.flatten() },
+      { status: 400 }
+    );
   }
 
   if (parsed.data.reset) {
     await db.categoryThreshold.deleteMany({
       where: { companyId: company.id, category: parsed.data.category },
     });
-    return NextResponse.json({ success: true, threshold: company.autoApproveThreshold, isCustom: false });
+    return NextResponse.json({
+      success: true,
+      threshold: company.autoApproveThreshold,
+      isCustom: false,
+    });
   }
 
   if (parsed.data.threshold == null) {
@@ -67,7 +80,11 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     where: {
       companyId_category: { companyId: company.id, category: parsed.data.category },
     },
-    create: { companyId: company.id, category: parsed.data.category, threshold: parsed.data.threshold },
+    create: {
+      companyId: company.id,
+      category: parsed.data.category,
+      threshold: parsed.data.threshold,
+    },
     update: { threshold: parsed.data.threshold },
   });
 

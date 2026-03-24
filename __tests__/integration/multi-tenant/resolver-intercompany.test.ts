@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockPrisma = vi.hoisted(() => ({
   $transaction: vi.fn(),
@@ -15,24 +15,24 @@ const mockPrisma = vi.hoisted(() => ({
     create: vi.fn(),
   },
 }));
-vi.mock('@/lib/db', () => ({ prisma: mockPrisma }));
+vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
 
 const mockTrackDecision = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/reconciliation/decision-tracker', () => ({
+vi.mock("@/lib/reconciliation/decision-tracker", () => ({
   trackControllerDecision: mockTrackDecision,
 }));
 
-vi.mock('@/lib/reconciliation/invoice-payments', () => ({
+vi.mock("@/lib/reconciliation/invoice-payments", () => ({
   updateInvoicePaymentStatus: vi.fn(),
 }));
 
-vi.mock('@/lib/ai/confidence-calibrator', () => ({
+vi.mock("@/lib/ai/confidence-calibrator", () => ({
   calibrateFromDecision: vi.fn(),
 }));
 
-import { resolveItem } from '@/lib/reconciliation/resolver';
+import { resolveItem } from "@/lib/reconciliation/resolver";
 
-describe('mark_intercompany action', () => {
+describe("mark_intercompany action", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPrisma.$transaction.mockImplementation(async (fn: Function) => fn(mockPrisma));
@@ -43,19 +43,19 @@ describe('mark_intercompany action', () => {
   });
 
   const link = {
-    id: 'link_1',
+    id: "link_1",
     amount: 5000,
-    date: new Date('2026-03-15'),
-    concept: 'Transferencia intercompañía',
-    status: 'DETECTED',
-    companyAId: 'company_1',
-    companyBId: 'company_2',
-    transactionAId: 'tx_1',
+    date: new Date("2026-03-15"),
+    concept: "Transferencia intercompañía",
+    status: "DETECTED",
+    companyAId: "company_1",
+    companyBId: "company_2",
+    transactionAId: "tx_1",
     transactionBId: null,
-    organizationId: 'org_1',
+    organizationId: "org_1",
   };
 
-  it('confirms intercompany link and reconciles transaction', async () => {
+  it("confirms intercompany link and reconciles transaction", async () => {
     mockPrisma.intercompanyLink.findUniqueOrThrow.mockResolvedValue(link);
     mockPrisma.intercompanyLink.update.mockResolvedValue({});
     mockPrisma.bankTransaction.update.mockResolvedValue({});
@@ -63,30 +63,30 @@ describe('mark_intercompany action', () => {
 
     const result = await resolveItem(
       {
-        action: 'mark_intercompany',
-        intercompanyLinkId: 'link_1',
-        intercompanyAction: 'confirm',
+        action: "mark_intercompany",
+        intercompanyLinkId: "link_1",
+        intercompanyAction: "confirm",
       },
-      'user_1',
-      'company_1'
+      "user_1",
+      "company_1"
     );
 
     expect(result.success).toBe(true);
-    expect(result.message).toContain('confirmed');
+    expect(result.message).toContain("confirmed");
 
     // Link status updated
     expect(mockPrisma.intercompanyLink.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'link_1' },
-        data: expect.objectContaining({ status: 'CONFIRMED' }),
+        where: { id: "link_1" },
+        data: expect.objectContaining({ status: "CONFIRMED" }),
       })
     );
 
     // Transaction reconciled
     expect(mockPrisma.bankTransaction.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'tx_1' },
-        data: expect.objectContaining({ status: 'RECONCILED', detectedType: 'INTERCOMPANY' }),
+        where: { id: "tx_1" },
+        data: expect.objectContaining({ status: "RECONCILED", detectedType: "INTERCOMPANY" }),
       })
     );
 
@@ -94,8 +94,8 @@ describe('mark_intercompany action', () => {
     expect(mockPrisma.auditLog.create).toHaveBeenCalled();
   });
 
-  it('auto-links counterpart transaction when confirming', async () => {
-    const counterpartTx = { id: 'tx_2', amount: -5000, companyId: 'company_2' };
+  it("auto-links counterpart transaction when confirming", async () => {
+    const counterpartTx = { id: "tx_2", amount: -5000, companyId: "company_2" };
     mockPrisma.intercompanyLink.findUniqueOrThrow.mockResolvedValue(link);
     mockPrisma.intercompanyLink.update.mockResolvedValue({});
     mockPrisma.bankTransaction.update.mockResolvedValue({});
@@ -103,83 +103,83 @@ describe('mark_intercompany action', () => {
 
     await resolveItem(
       {
-        action: 'mark_intercompany',
-        intercompanyLinkId: 'link_1',
-        intercompanyAction: 'confirm',
+        action: "mark_intercompany",
+        intercompanyLinkId: "link_1",
+        intercompanyAction: "confirm",
       },
-      'user_1',
-      'company_1'
+      "user_1",
+      "company_1"
     );
 
     // Should link counterpart
     expect(mockPrisma.intercompanyLink.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ transactionBId: 'tx_2' }),
+        data: expect.objectContaining({ transactionBId: "tx_2" }),
       })
     );
 
     // Counterpart tx should also be reconciled
     expect(mockPrisma.bankTransaction.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'tx_2' },
-        data: expect.objectContaining({ status: 'RECONCILED', detectedType: 'INTERCOMPANY' }),
+        where: { id: "tx_2" },
+        data: expect.objectContaining({ status: "RECONCILED", detectedType: "INTERCOMPANY" }),
       })
     );
   });
 
-  it('eliminates intercompany link and returns tx to pending', async () => {
+  it("eliminates intercompany link and returns tx to pending", async () => {
     mockPrisma.intercompanyLink.findUniqueOrThrow.mockResolvedValue(link);
     mockPrisma.intercompanyLink.update.mockResolvedValue({});
     mockPrisma.bankTransaction.update.mockResolvedValue({});
 
     const result = await resolveItem(
       {
-        action: 'mark_intercompany',
-        intercompanyLinkId: 'link_1',
-        intercompanyAction: 'eliminate',
+        action: "mark_intercompany",
+        intercompanyLinkId: "link_1",
+        intercompanyAction: "eliminate",
       },
-      'user_1',
-      'company_1'
+      "user_1",
+      "company_1"
     );
 
     expect(result.success).toBe(true);
-    expect(result.message).toContain('eliminated');
+    expect(result.message).toContain("eliminated");
 
     // Link eliminated
     expect(mockPrisma.intercompanyLink.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: 'ELIMINATED' }),
+        data: expect.objectContaining({ status: "ELIMINATED" }),
       })
     );
 
     // Transaction back to PENDING
     expect(mockPrisma.bankTransaction.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'tx_1' },
-        data: expect.objectContaining({ status: 'PENDING' }),
+        where: { id: "tx_1" },
+        data: expect.objectContaining({ status: "PENDING" }),
       })
     );
   });
 
-  it('does not search for counterpart when eliminating', async () => {
+  it("does not search for counterpart when eliminating", async () => {
     mockPrisma.intercompanyLink.findUniqueOrThrow.mockResolvedValue(link);
     mockPrisma.intercompanyLink.update.mockResolvedValue({});
     mockPrisma.bankTransaction.update.mockResolvedValue({});
 
     await resolveItem(
       {
-        action: 'mark_intercompany',
-        intercompanyLinkId: 'link_1',
-        intercompanyAction: 'eliminate',
+        action: "mark_intercompany",
+        intercompanyLinkId: "link_1",
+        intercompanyAction: "eliminate",
       },
-      'user_1',
-      'company_1'
+      "user_1",
+      "company_1"
     );
 
     expect(mockPrisma.bankTransaction.findFirst).not.toHaveBeenCalled();
   });
 
-  it('tracks decision in feedback loop', async () => {
+  it("tracks decision in feedback loop", async () => {
     mockPrisma.intercompanyLink.findUniqueOrThrow.mockResolvedValue(link);
     mockPrisma.intercompanyLink.update.mockResolvedValue({});
     mockPrisma.bankTransaction.update.mockResolvedValue({});
@@ -187,20 +187,20 @@ describe('mark_intercompany action', () => {
 
     await resolveItem(
       {
-        action: 'mark_intercompany',
-        intercompanyLinkId: 'link_1',
-        intercompanyAction: 'confirm',
+        action: "mark_intercompany",
+        intercompanyLinkId: "link_1",
+        intercompanyAction: "confirm",
       },
-      'user_1',
-      'company_1'
+      "user_1",
+      "company_1"
     );
 
     expect(mockTrackDecision).toHaveBeenCalledWith(
       expect.anything(), // db
       expect.objectContaining({
-        userId: 'user_1',
-        companyId: 'company_1',
-        controllerAction: 'mark_intercompany',
+        userId: "user_1",
+        companyId: "company_1",
+        controllerAction: "mark_intercompany",
       })
     );
   });

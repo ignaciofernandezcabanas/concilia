@@ -107,14 +107,13 @@ export class GoCardlessClient {
       const body = await response.text();
       throw new GoCardlessApiError(
         `GoCardless authentication failed (${response.status}): ${body.slice(0, 500)}`,
-        response.status,
+        response.status
       );
     }
 
     const data = (await response.json()) as GoCardlessTokenResponse;
     this.accessToken = data.access;
-    this.tokenExpiresAt =
-      Date.now() + (data.access_expires - TOKEN_SAFETY_MARGIN_S) * 1000;
+    this.tokenExpiresAt = Date.now() + (data.access_expires - TOKEN_SAFETY_MARGIN_S) * 1000;
 
     console.log("[GoCardlessClient] Authenticated successfully");
   }
@@ -126,7 +125,7 @@ export class GoCardlessClient {
   async getTransactions(
     accountId: string,
     dateFrom?: string,
-    dateTo?: string,
+    dateTo?: string
   ): Promise<GoCardlessTransactionsResponse> {
     const params = new URLSearchParams();
     if (dateFrom) params.set("date_from", dateFrom);
@@ -134,22 +133,16 @@ export class GoCardlessClient {
 
     const qs = params.toString() ? `?${params}` : "";
     return this.request<GoCardlessTransactionsResponse>(
-      `/api/v2/accounts/${accountId}/transactions/${qs}`,
+      `/api/v2/accounts/${accountId}/transactions/${qs}`
     );
   }
 
   async getBalances(accountId: string): Promise<GoCardlessBalancesResponse> {
-    return this.request<GoCardlessBalancesResponse>(
-      `/api/v2/accounts/${accountId}/balances/`,
-    );
+    return this.request<GoCardlessBalancesResponse>(`/api/v2/accounts/${accountId}/balances/`);
   }
 
-  async getAccountDetails(
-    accountId: string,
-  ): Promise<GoCardlessAccountDetails> {
-    return this.request<GoCardlessAccountDetails>(
-      `/api/v2/accounts/${accountId}/details/`,
-    );
+  async getAccountDetails(accountId: string): Promise<GoCardlessAccountDetails> {
+    return this.request<GoCardlessAccountDetails>(`/api/v2/accounts/${accountId}/details/`);
   }
 
   // -----------------------------------------------------------------------
@@ -190,7 +183,7 @@ export class GoCardlessClient {
         const body = await retry.text();
         throw new GoCardlessApiError(
           `GoCardless API error ${retry.status}: ${body.slice(0, 500)}`,
-          retry.status,
+          retry.status
         );
       }
 
@@ -201,7 +194,7 @@ export class GoCardlessClient {
       const body = await response.text();
       throw new GoCardlessApiError(
         `GoCardless API error ${response.status}: ${body.slice(0, 500)}`,
-        response.status,
+        response.status
       );
     }
 
@@ -216,7 +209,7 @@ export class GoCardlessClient {
 export class GoCardlessApiError extends Error {
   constructor(
     message: string,
-    public readonly status: number,
+    public readonly status: number
   ) {
     super(message);
     this.name = "GoCardlessApiError";

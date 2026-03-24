@@ -19,10 +19,16 @@ export default function Movimientos() {
   const [deleting, setDeleting] = useState(false);
 
   function toggleSelect(id: string) {
-    setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setSelected((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
   }
   function toggleAll() {
-    setSelected(selected.size === transactions.length ? new Set() : new Set(transactions.map((t) => t.id)));
+    setSelected(
+      selected.size === transactions.length ? new Set() : new Set(transactions.map((t) => t.id))
+    );
   }
   async function handleDelete(ids: string[]) {
     if (!confirm(`¿Eliminar ${ids.length} movimiento${ids.length > 1 ? "s" : ""}?`)) return;
@@ -92,7 +98,10 @@ export default function Movimientos() {
         <div className="flex items-center gap-3">
           <select
             value={status}
-            onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
             className="h-8 px-3 text-[13px] bg-white border border-subtle rounded-md text-text-secondary"
           >
             <option value="">Todos los estados</option>
@@ -138,7 +147,12 @@ export default function Movimientos() {
             <div className="bg-white rounded-lg border border-subtle overflow-hidden">
               <div className="flex items-center h-10 px-5 border-b border-subtle text-xs font-semibold text-text-secondary">
                 <span className="w-8">
-                  <input type="checkbox" checked={selected.size === transactions.length && transactions.length > 0} onChange={toggleAll} className="rounded border-subtle cursor-pointer" />
+                  <input
+                    type="checkbox"
+                    checked={selected.size === transactions.length && transactions.length > 0}
+                    onChange={toggleAll}
+                    className="rounded border-subtle cursor-pointer"
+                  />
                 </span>
                 <span className="w-24">Fecha</span>
                 <span className="flex-1">Concepto</span>
@@ -153,7 +167,12 @@ export default function Movimientos() {
                   className={`flex items-center h-12 px-5 text-[13px] border-b border-border-light hover:bg-page transition-colors ${selected.has(tx.id) ? "bg-accent-light/30" : ""}`}
                 >
                   <span className="w-8">
-                    <input type="checkbox" checked={selected.has(tx.id)} onChange={() => toggleSelect(tx.id)} className="rounded border-subtle cursor-pointer" />
+                    <input
+                      type="checkbox"
+                      checked={selected.has(tx.id)}
+                      onChange={() => toggleSelect(tx.id)}
+                      className="rounded border-subtle cursor-pointer"
+                    />
                   </span>
                   <span className="w-24 text-text-secondary">{formatDate(tx.valueDate)}</span>
                   <span className="flex-1 text-text-primary truncate">
@@ -162,12 +181,20 @@ export default function Movimientos() {
                   <span className="w-[160px] text-text-secondary truncate">
                     {tx.counterpartName || tx.counterpartIban || "—"}
                   </span>
-                  <span className={`w-[110px] text-right font-mono font-medium ${tx.amount >= 0 ? "text-green-text" : "text-red-text"}`}>
+                  <span
+                    className={`w-[110px] text-right font-mono font-medium ${tx.amount >= 0 ? "text-green-text" : "text-red-text"}`}
+                  >
                     {formatAmount(tx.amount)}
                   </span>
-                  <span className="w-24 flex justify-center"><Badge value={tx.status} /></span>
+                  <span className="w-24 flex justify-center">
+                    <Badge value={tx.status} />
+                  </span>
                   <span className="w-12 flex justify-center">
-                    <button onClick={() => handleDelete([tx.id])} className="p-1 rounded hover:bg-red-light text-text-tertiary hover:text-red" title="Eliminar">
+                    <button
+                      onClick={() => handleDelete([tx.id])}
+                      className="p-1 rounded hover:bg-red-light text-text-tertiary hover:text-red"
+                      title="Eliminar"
+                    >
                       <Trash2 size={14} />
                     </button>
                   </span>
@@ -207,13 +234,7 @@ export default function Movimientos() {
 // CSV Import Modal
 // ══════════════════════════════════════════════════════════════
 
-function CsvImportModal({
-  onClose,
-  onSuccess,
-}: {
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
+function CsvImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -271,7 +292,10 @@ function CsvImportModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
+    <div
+      className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
+      onClick={onClose}
+    >
       <div
         className="bg-white rounded-lg border border-subtle w-full max-w-lg shadow-xl relative"
         onClick={(e) => e.stopPropagation()}
@@ -280,15 +304,23 @@ function CsvImportModal({
         {uploading && (
           <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3 rounded-lg">
             <div className="w-8 h-8 border-3 border-subtle border-t-accent rounded-full animate-spin" />
-            <span className="text-[14px] font-semibold text-text-primary">Importando movimientos...</span>
+            <span className="text-[14px] font-semibold text-text-primary">
+              Importando movimientos...
+            </span>
             <span className="text-[12px] text-text-secondary">Procesando el archivo CSV</span>
           </div>
         )}
 
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-subtle">
-          <h2 className="text-[15px] font-semibold text-text-primary">Importar movimientos bancarios</h2>
-          <button onClick={onClose} disabled={uploading} className="text-text-tertiary hover:text-text-primary disabled:opacity-30">
+          <h2 className="text-[15px] font-semibold text-text-primary">
+            Importar movimientos bancarios
+          </h2>
+          <button
+            onClick={onClose}
+            disabled={uploading}
+            className="text-text-tertiary hover:text-text-primary disabled:opacity-30"
+          >
             <X size={18} />
           </button>
         </div>
@@ -306,8 +338,12 @@ function CsvImportModal({
               <p className="text-[13px] text-text-primary font-medium">{file.name}</p>
             ) : (
               <>
-                <p className="text-[13px] text-text-primary">Arrastra tu CSV aquí o haz click para seleccionar</p>
-                <p className="text-[11px] text-text-tertiary mt-1">Soporta formatos de la mayoría de bancos españoles</p>
+                <p className="text-[13px] text-text-primary">
+                  Arrastra tu CSV aquí o haz click para seleccionar
+                </p>
+                <p className="text-[11px] text-text-tertiary mt-1">
+                  Soporta formatos de la mayoría de bancos españoles
+                </p>
               </>
             )}
             <input
@@ -321,20 +357,26 @@ function CsvImportModal({
 
           {/* Format info */}
           <div className="bg-page rounded-md p-3 text-[11px] text-text-secondary">
-            <p className="font-medium text-text-primary mb-1">Columnas detectadas automáticamente:</p>
+            <p className="font-medium text-text-primary mb-1">
+              Columnas detectadas automáticamente:
+            </p>
             <p>Fecha, Concepto/Descripción, Importe, Saldo, Referencia, Beneficiario</p>
-            <p className="mt-1">Separador: <code className="bg-hover px-1 rounded">;</code> <code className="bg-hover px-1 rounded">,</code> o <code className="bg-hover px-1 rounded">tab</code> (auto-detectado)</p>
+            <p className="mt-1">
+              Separador: <code className="bg-hover px-1 rounded">;</code>{" "}
+              <code className="bg-hover px-1 rounded">,</code> o{" "}
+              <code className="bg-hover px-1 rounded">tab</code> (auto-detectado)
+            </p>
             <p>Formatos de fecha: DD/MM/YYYY, YYYY-MM-DD, DD-MM-YYYY</p>
           </div>
 
           {/* Error */}
-          {error && (
-            <p className="text-xs text-red-text bg-red-light px-3 py-2 rounded">{error}</p>
-          )}
+          {error && <p className="text-xs text-red-text bg-red-light px-3 py-2 rounded">{error}</p>}
 
           {/* Result */}
           {result && (
-            <div className={`text-xs px-3 py-2 rounded ${result.created > 0 ? "bg-green-light text-green-text" : "bg-amber-light text-amber-text"}`}>
+            <div
+              className={`text-xs px-3 py-2 rounded ${result.created > 0 ? "bg-green-light text-green-text" : "bg-amber-light text-amber-text"}`}
+            >
               <p className="font-medium">
                 {result.created} movimientos importados
                 {result.skipped > 0 && ` · ${result.skipped} duplicados omitidos`}
@@ -343,7 +385,9 @@ function CsvImportModal({
                 <details className="mt-1">
                   <summary className="cursor-pointer">{result.errors.length} errores</summary>
                   <ul className="mt-1 list-disc pl-4">
-                    {result.errors.map((e, i) => <li key={i}>{e}</li>)}
+                    {result.errors.map((e, i) => (
+                      <li key={i}>{e}</li>
+                    ))}
                   </ul>
                 </details>
               )}
@@ -378,6 +422,8 @@ async function getToken(): Promise<string | null> {
   const { getSupabase } = await import("@/lib/api-client");
   const sb = getSupabase();
   if (!sb) return null;
-  const { data: { session } } = await sb.auth.getSession();
+  const {
+    data: { session },
+  } = await sb.auth.getSession();
   return session?.access_token ?? null;
 }

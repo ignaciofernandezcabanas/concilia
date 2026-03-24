@@ -29,9 +29,15 @@ describe("Reconciliation Report", () => {
   it("facturas sin conciliar listadas correctamente", async () => {
     mockDb.invoice.findMany.mockResolvedValue([
       {
-        id: "inv_1", number: "FRA-001", type: "ISSUED", totalAmount: 5000,
-        amountPending: 5000, issueDate: new Date("2026-03-10"), dueDate: new Date("2026-04-10"),
-        status: "PENDING", description: "Servicios marzo",
+        id: "inv_1",
+        number: "FRA-001",
+        type: "ISSUED",
+        totalAmount: 5000,
+        amountPending: 5000,
+        issueDate: new Date("2026-03-10"),
+        dueDate: new Date("2026-04-10"),
+        status: "PENDING",
+        description: "Servicios marzo",
         contact: { name: "Cliente SA" },
         reconciliations: [], // no reconciliation
       },
@@ -46,8 +52,13 @@ describe("Reconciliation Report", () => {
   it("txs sin conciliar listadas correctamente", async () => {
     mockDb.bankTransaction.findMany.mockResolvedValue([
       {
-        id: "tx_1", amount: -1200, concept: "PAGO PROVEEDOR", valueDate: new Date("2026-03-15"),
-        counterpartName: "Proveedor SL", counterpartIban: "ES76...", status: "PENDING",
+        id: "tx_1",
+        amount: -1200,
+        concept: "PAGO PROVEEDOR",
+        valueDate: new Date("2026-03-15"),
+        counterpartName: "Proveedor SL",
+        counterpartIban: "ES76...",
+        status: "PENDING",
         detectedType: null,
         reconciliations: [],
       },
@@ -60,12 +71,46 @@ describe("Reconciliation Report", () => {
 
   it("calcula reconciliationRate correctamente con items parcialmente conciliados", async () => {
     mockDb.invoice.findMany.mockResolvedValue([
-      { id: "inv_1", reconciliations: [{ status: "APPROVED" }], number: "1", type: "ISSUED", totalAmount: 100, amountPending: 0, issueDate: new Date("2026-03-01"), status: "PAID", contact: null },
-      { id: "inv_2", reconciliations: [], number: "2", type: "ISSUED", totalAmount: 200, amountPending: 200, issueDate: new Date("2026-03-05"), status: "PENDING", contact: null },
+      {
+        id: "inv_1",
+        reconciliations: [{ status: "APPROVED" }],
+        number: "1",
+        type: "ISSUED",
+        totalAmount: 100,
+        amountPending: 0,
+        issueDate: new Date("2026-03-01"),
+        status: "PAID",
+        contact: null,
+      },
+      {
+        id: "inv_2",
+        reconciliations: [],
+        number: "2",
+        type: "ISSUED",
+        totalAmount: 200,
+        amountPending: 200,
+        issueDate: new Date("2026-03-05"),
+        status: "PENDING",
+        contact: null,
+      },
     ]);
     mockDb.bankTransaction.findMany.mockResolvedValue([
-      { id: "tx_1", reconciliations: [{ status: "APPROVED" }], amount: 100, concept: "COBRO", valueDate: new Date("2026-03-01"), status: "RECONCILED" },
-      { id: "tx_2", reconciliations: [], amount: -500, concept: "PAGO", valueDate: new Date("2026-03-10"), status: "PENDING" },
+      {
+        id: "tx_1",
+        reconciliations: [{ status: "APPROVED" }],
+        amount: 100,
+        concept: "COBRO",
+        valueDate: new Date("2026-03-01"),
+        status: "RECONCILED",
+      },
+      {
+        id: "tx_2",
+        reconciliations: [],
+        amount: -500,
+        concept: "PAGO",
+        valueDate: new Date("2026-03-10"),
+        status: "PENDING",
+      },
     ]);
 
     const report = await generateReconciliationReport(mockDb as any, "2026-03");

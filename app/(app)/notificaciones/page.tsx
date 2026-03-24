@@ -112,11 +112,12 @@ export default function Notificaciones() {
           {tabs.map((tab) => (
             <button
               key={tab.value}
-              onClick={() => { setFilter(tab.value); setPage(1); }}
+              onClick={() => {
+                setFilter(tab.value);
+                setPage(1);
+              }}
               className={`px-3 py-1.5 text-[13px] font-medium ${
-                filter === tab.value
-                  ? "bg-accent text-white"
-                  : "text-text-secondary hover:bg-hover"
+                filter === tab.value ? "bg-accent text-white" : "text-text-secondary hover:bg-hover"
               }`}
             >
               {tab.label}
@@ -127,12 +128,19 @@ export default function Notificaciones() {
         {loading ? (
           <LoadingSpinner />
         ) : notifications.length === 0 ? (
-          <EmptyState icon={Bell} title="Sin notificaciones" description="No hay notificaciones pendientes." />
+          <EmptyState
+            icon={Bell}
+            title="Sin notificaciones"
+            description="No hay notificaciones pendientes."
+          />
         ) : (
           <div className="flex flex-col bg-white rounded-lg border border-subtle overflow-hidden">
             {notifications.map((notif, i) => {
               const Icon = TYPE_ICONS[notif.type] ?? Bell;
-              const colors = TYPE_COLORS[notif.type] ?? { icon: "text-text-secondary", bg: "bg-hover" };
+              const colors = TYPE_COLORS[notif.type] ?? {
+                icon: "text-text-secondary",
+                bg: "bg-hover",
+              };
 
               return (
                 <button
@@ -145,7 +153,9 @@ export default function Notificaciones() {
                     i < notifications.length - 1 ? "border-b border-border-light" : ""
                   } ${!notif.isRead ? "bg-accent-light/30" : ""} hover:bg-hover/50 transition-colors`}
                 >
-                  <div className={`w-8 h-8 rounded-full ${colors.bg} flex items-center justify-center shrink-0`}>
+                  <div
+                    className={`w-8 h-8 rounded-full ${colors.bg} flex items-center justify-center shrink-0`}
+                  >
                     <Icon size={16} className={colors.icon} />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -153,9 +163,7 @@ export default function Notificaciones() {
                       <span className="text-[13px] font-semibold text-text-primary">
                         {notif.title}
                       </span>
-                      {!notif.isRead && (
-                        <div className="w-2 h-2 rounded-full bg-accent shrink-0" />
-                      )}
+                      {!notif.isRead && <div className="w-2 h-2 rounded-full bg-accent shrink-0" />}
                     </div>
                     <p className="text-xs text-text-secondary mt-0.5">{notif.body}</p>
                     <span className="text-[11px] text-text-tertiary mt-1 block">
@@ -163,9 +171,7 @@ export default function Notificaciones() {
                     </span>
                   </div>
                   {notif.actionUrl && (
-                    <span className="text-xs text-accent font-medium shrink-0 mt-1">
-                      Ver →
-                    </span>
+                    <span className="text-xs text-accent font-medium shrink-0 mt-1">Ver →</span>
                   )}
                 </button>
               );

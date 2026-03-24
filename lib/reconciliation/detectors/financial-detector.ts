@@ -60,9 +60,7 @@ export async function detectFinancialOp(
   }
 
   // Check for monthly recurrence
-  const isMonthlyPattern = checkMonthlyPattern(
-    historicalTx.map((t) => t.valueDate)
-  );
+  const isMonthlyPattern = checkMonthlyPattern(historicalTx.map((t) => t.valueDate));
 
   if (!isMonthlyPattern) {
     return { isFinancial: false, suggestedPrincipal: null, suggestedInterest: null };
@@ -118,13 +116,11 @@ function checkMonthlyPattern(dates: Date[]): boolean {
   let monthlyCount = 0;
 
   for (let i = 1; i < sorted.length; i++) {
-    const diffDays =
-      (sorted[i].getTime() - sorted[i - 1].getTime()) / (24 * 60 * 60 * 1000);
+    const diffDays = (sorted[i].getTime() - sorted[i - 1].getTime()) / (24 * 60 * 60 * 1000);
 
     // A month is roughly 28-31 days; allow some tolerance
     const isMonthlyGap =
-      diffDays >= 28 - MONTHLY_TOLERANCE_DAYS &&
-      diffDays <= 31 + MONTHLY_TOLERANCE_DAYS;
+      diffDays >= 28 - MONTHLY_TOLERANCE_DAYS && diffDays <= 31 + MONTHLY_TOLERANCE_DAYS;
 
     if (isMonthlyGap) {
       monthlyCount++;

@@ -38,8 +38,21 @@ interface PatternItem {
 interface LearningData {
   patterns: PatternItem[];
   rules: RuleItem[];
-  calibrations: { category: string; period: string; currentThreshold: number; suggestedThreshold?: number; autoApprovedCount: number; autoApprovedErrors: number; monthsNoError: number }[];
-  stats: { totalDecisions: number; acceptedUnchanged: number; modified: number; acceptanceRate: number | null };
+  calibrations: {
+    category: string;
+    period: string;
+    currentThreshold: number;
+    suggestedThreshold?: number;
+    autoApprovedCount: number;
+    autoApprovedErrors: number;
+    monthsNoError: number;
+  }[];
+  stats: {
+    totalDecisions: number;
+    acceptedUnchanged: number;
+    modified: number;
+    acceptanceRate: number | null;
+  };
 }
 
 // ── Main Component ──
@@ -48,7 +61,8 @@ export default function LearningTab() {
   const { data, loading, refetch } = useFetch<LearningData>("/api/settings/learning");
 
   if (loading) return <LoadingSpinner />;
-  if (!data) return <p className="text-[13px] text-text-tertiary">Cargando datos de aprendizaje...</p>;
+  if (!data)
+    return <p className="text-[13px] text-text-tertiary">Cargando datos de aprendizaje...</p>;
 
   const { patterns, rules, stats } = data;
 
@@ -103,7 +117,7 @@ export default function LearningTab() {
         <StatCard
           label="Tasa de aceptación"
           value={stats.acceptanceRate != null ? `${(stats.acceptanceRate * 100).toFixed(1)}%` : "—"}
-          highlight={stats.acceptanceRate != null && stats.acceptanceRate >= 0.80}
+          highlight={stats.acceptanceRate != null && stats.acceptanceRate >= 0.8}
           isText
         />
       </div>
@@ -116,9 +130,12 @@ export default function LearningTab() {
 
       {/* Unified rules + patterns table */}
       <div>
-        <h3 className="text-[14px] font-semibold text-text-primary mb-1">Reglas y patrones aprendidos</h3>
+        <h3 className="text-[14px] font-semibold text-text-primary mb-1">
+          Reglas y patrones aprendidos
+        </h3>
         <p className="text-[11px] text-text-tertiary mb-3">
-          Las reglas explícitas prevalecen sobre los patrones implícitos. Puedes eliminar cualquiera — el algoritmo ajustará su comportamiento.
+          Las reglas explícitas prevalecen sobre los patrones implícitos. Puedes eliminar cualquiera
+          — el algoritmo ajustará su comportamiento.
         </p>
 
         {allItems.length === 0 ? (
@@ -141,45 +158,84 @@ export default function LearningTab() {
               <span className="w-24" />
             </div>
             {allItems.map((item) => (
-              <div key={`${item.source}-${item.id}`} className={`flex items-center h-10 px-4 text-[12px] border-b border-border-light ${!item.isActive ? "opacity-40" : ""}`}>
+              <div
+                key={`${item.source}-${item.id}`}
+                className={`flex items-center h-10 px-4 text-[12px] border-b border-border-light ${!item.isActive ? "opacity-40" : ""}`}
+              >
                 <span className="w-16">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                    item.source === "rule" ? "bg-accent-light text-accent" : "bg-purple-light text-purple"
-                  }`}>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                      item.source === "rule"
+                        ? "bg-accent-light text-accent"
+                        : "bg-purple-light text-purple"
+                    }`}
+                  >
                     {item.source === "rule" ? "Regla" : "Patrón"}
                   </span>
                 </span>
                 <span className="flex-1 text-text-primary truncate">{item.label}</span>
                 <span className="w-40 text-text-secondary truncate">{item.detail}</span>
-                <span className="w-14 text-right font-mono text-text-primary">{item.occurrences}</span>
-                <span className={`w-20 text-right font-mono ${
-                  item.confidence == null ? "text-text-tertiary" :
-                  item.confidence >= 0.8 ? "text-green-text" :
-                  item.confidence >= 0.5 ? "text-amber-text" : "text-red-text"
-                }`}>
-                  {item.confidence != null ? `${(item.confidence * 100).toFixed(0)}%` : item.source === "rule" ? "100%" : "—"}
+                <span className="w-14 text-right font-mono text-text-primary">
+                  {item.occurrences}
+                </span>
+                <span
+                  className={`w-20 text-right font-mono ${
+                    item.confidence == null
+                      ? "text-text-tertiary"
+                      : item.confidence >= 0.8
+                        ? "text-green-text"
+                        : item.confidence >= 0.5
+                          ? "text-amber-text"
+                          : "text-red-text"
+                  }`}
+                >
+                  {item.confidence != null
+                    ? `${(item.confidence * 100).toFixed(0)}%`
+                    : item.source === "rule"
+                      ? "100%"
+                      : "—"}
                 </span>
                 <span className="w-16 text-center">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${item.isActive ? "bg-green-light text-green-text" : "bg-hover text-text-tertiary"}`}>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded ${item.isActive ? "bg-green-light text-green-text" : "bg-hover text-text-tertiary"}`}
+                  >
                     {item.isActive ? "Activa" : "Inactiva"}
                   </span>
                 </span>
                 <span className="w-24 flex justify-end gap-1">
                   {/* Pattern lifecycle actions */}
-                  {item.source === "pattern" && (() => {
-                    const p = patterns.find((pp) => pp.id === item.id);
-                    const pStatus = p?.status ?? "SUGGESTED";
-                    if (pStatus === "SUGGESTED") return (
-                      <>
-                        <button onClick={() => handlePatternReview(item.id, "approve")} className="text-[10px] text-green-text hover:underline">Aprobar</button>
-                        <button onClick={() => handlePatternReview(item.id, "reject")} className="text-[10px] text-red-text hover:underline">Rechazar</button>
-                      </>
-                    );
-                    if (pStatus === "ACTIVE_SUPERVISED") return (
-                      <button onClick={() => handlePatternReview(item.id, "promote")} className="text-[10px] text-accent hover:underline">Promover</button>
-                    );
-                    return null;
-                  })()}
+                  {item.source === "pattern" &&
+                    (() => {
+                      const p = patterns.find((pp) => pp.id === item.id);
+                      const pStatus = p?.status ?? "SUGGESTED";
+                      if (pStatus === "SUGGESTED")
+                        return (
+                          <>
+                            <button
+                              onClick={() => handlePatternReview(item.id, "approve")}
+                              className="text-[10px] text-green-text hover:underline"
+                            >
+                              Aprobar
+                            </button>
+                            <button
+                              onClick={() => handlePatternReview(item.id, "reject")}
+                              className="text-[10px] text-red-text hover:underline"
+                            >
+                              Rechazar
+                            </button>
+                          </>
+                        );
+                      if (pStatus === "ACTIVE_SUPERVISED")
+                        return (
+                          <button
+                            onClick={() => handlePatternReview(item.id, "promote")}
+                            className="text-[10px] text-accent hover:underline"
+                          >
+                            Promover
+                          </button>
+                        );
+                      return null;
+                    })()}
                   <button
                     onClick={() => handleDelete(item.source, item.id)}
                     className="p-1 rounded hover:bg-red-light text-text-tertiary hover:text-red transition-colors"
@@ -216,10 +272,11 @@ function NLRuleCreator({ onCreated }: { onCreated: () => void }) {
     setSuccess("");
     setProposal(null);
     try {
-      const res = await api.post<{ proposal: Record<string, unknown>; assumptions: string[]; suggestions: string[] }>(
-        "/api/settings/rules/parse",
-        { text }
-      );
+      const res = await api.post<{
+        proposal: Record<string, unknown>;
+        assumptions: string[];
+        suggestions: string[];
+      }>("/api/settings/rules/parse", { text });
       setProposal(res.proposal);
       setAssumptions(res.assumptions ?? []);
       setSuggestions(res.suggestions ?? []);
@@ -260,7 +317,8 @@ function NLRuleCreator({ onCreated }: { onCreated: () => void }) {
         <h3 className="text-[14px] font-semibold text-text-primary">Crear regla</h3>
       </div>
       <p className="text-[11px] text-text-tertiary mb-3">
-        Describe la regla en lenguaje natural. El sistema la interpretará con IA y te pedirá confirmación antes de activarla.
+        Describe la regla en lenguaje natural. El sistema la interpretará con IA y te pedirá
+        confirmación antes de activarla.
       </p>
 
       {/* Input */}
@@ -268,7 +326,10 @@ function NLRuleCreator({ onCreated }: { onCreated: () => void }) {
         <input
           type="text"
           value={text}
-          onChange={(e) => { setText(e.target.value); setSuccess(""); }}
+          onChange={(e) => {
+            setText(e.target.value);
+            setSuccess("");
+          }}
           onKeyDown={(e) => e.key === "Enter" && !parsing && handleParse()}
           placeholder='Ej: "Los cobros de Mercadona con un 2% menos son descuento por pronto pago"'
           className="flex-1 h-10 px-4 text-[13px] border border-subtle rounded-lg placeholder:text-text-tertiary focus:border-accent focus:outline-none"
@@ -284,8 +345,12 @@ function NLRuleCreator({ onCreated }: { onCreated: () => void }) {
         </button>
       </div>
 
-      {error && <p className="text-xs text-red-text bg-red-light px-3 py-2 rounded mb-3">{error}</p>}
-      {success && <p className="text-xs text-green-text bg-green-light px-3 py-2 rounded mb-3">{success}</p>}
+      {error && (
+        <p className="text-xs text-red-text bg-red-light px-3 py-2 rounded mb-3">{error}</p>
+      )}
+      {success && (
+        <p className="text-xs text-green-text bg-green-light px-3 py-2 rounded mb-3">{success}</p>
+      )}
 
       {/* Proposal card */}
       {proposal && (
@@ -293,34 +358,56 @@ function NLRuleCreator({ onCreated }: { onCreated: () => void }) {
           <div className="text-[12px] font-semibold text-accent mb-2">Regla interpretada:</div>
 
           {proposal.humanReadable ? (
-            <p className="text-[13px] text-text-primary font-medium mb-3">{String(proposal.humanReadable)}</p>
+            <p className="text-[13px] text-text-primary font-medium mb-3">
+              {String(proposal.humanReadable)}
+            </p>
           ) : null}
 
           {/* Structured details */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px] mb-3">
             <ConditionDetails conditions={proposal.conditions as Record<string, unknown>} />
-            <ActionDetails action={proposal.action as string} details={proposal.actionDetails as Record<string, unknown>} />
+            <ActionDetails
+              action={proposal.action as string}
+              details={proposal.actionDetails as Record<string, unknown>}
+            />
           </div>
 
           {assumptions.length > 0 && (
             <div className="bg-amber-light rounded p-2.5 mb-2">
               <span className="text-[11px] font-semibold text-amber-text">Asumido: </span>
-              {assumptions.map((a, i) => <span key={i} className="text-[11px] text-amber-text">{i > 0 ? " · " : ""}{a}</span>)}
+              {assumptions.map((a, i) => (
+                <span key={i} className="text-[11px] text-amber-text">
+                  {i > 0 ? " · " : ""}
+                  {a}
+                </span>
+              ))}
             </div>
           )}
 
           {suggestions.length > 0 && (
             <div className="bg-accent-light rounded p-2.5 mb-2">
               <span className="text-[11px] font-semibold text-accent">Sugerencia: </span>
-              {suggestions.map((s, i) => <span key={i} className="text-[11px] text-accent">{i > 0 ? " · " : ""}{s}</span>)}
+              {suggestions.map((s, i) => (
+                <span key={i} className="text-[11px] text-accent">
+                  {i > 0 ? " · " : ""}
+                  {s}
+                </span>
+              ))}
             </div>
           )}
 
           <div className="flex gap-2 mt-3">
-            <button onClick={handleConfirm} disabled={confirming} className="h-8 px-4 bg-green text-white text-[12px] font-medium rounded-md disabled:opacity-50">
+            <button
+              onClick={handleConfirm}
+              disabled={confirming}
+              className="h-8 px-4 bg-green text-white text-[12px] font-medium rounded-md disabled:opacity-50"
+            >
               {confirming ? "Creando..." : "Confirmar y activar"}
             </button>
-            <button onClick={handleCancel} className="h-8 px-4 text-[12px] text-text-secondary border border-subtle rounded-md hover:bg-hover">
+            <button
+              onClick={handleCancel}
+              className="h-8 px-4 text-[12px] text-text-secondary border border-subtle rounded-md hover:bg-hover"
+            >
               Cancelar
             </button>
           </div>
@@ -333,22 +420,53 @@ function NLRuleCreator({ onCreated }: { onCreated: () => void }) {
 function ConditionDetails({ conditions }: { conditions?: Record<string, unknown> }) {
   if (!conditions) return null;
   const rows: [string, string][] = [];
-  if (conditions.counterpartName) rows.push(["Contrapartida", conditions.counterpartName as string]);
+  if (conditions.counterpartName)
+    rows.push(["Contrapartida", conditions.counterpartName as string]);
   if (conditions.counterpartCif) rows.push(["CIF", conditions.counterpartCif as string]);
   if (conditions.counterpartIban) rows.push(["IBAN", conditions.counterpartIban as string]);
   if (conditions.conceptPattern) rows.push(["Concepto", conditions.conceptPattern as string]);
   if (conditions.transactionType) rows.push(["Tipo", conditions.transactionType as string]);
-  if (conditions.minAmount || conditions.maxAmount) rows.push(["Importe", `${conditions.minAmount ?? "—"}€ — ${conditions.maxAmount ?? "—"}€`]);
-  return <>{rows.map(([k, v]) => <div key={k}><span className="text-text-tertiary">{k}:</span> <span className="text-text-primary">{v}</span></div>)}</>;
+  if (conditions.minAmount || conditions.maxAmount)
+    rows.push(["Importe", `${conditions.minAmount ?? "—"}€ — ${conditions.maxAmount ?? "—"}€`]);
+  return (
+    <>
+      {rows.map(([k, v]) => (
+        <div key={k}>
+          <span className="text-text-tertiary">{k}:</span>{" "}
+          <span className="text-text-primary">{v}</span>
+        </div>
+      ))}
+    </>
+  );
 }
 
-function ActionDetails({ action, details }: { action?: string; details?: Record<string, unknown> }) {
+function ActionDetails({
+  action,
+  details,
+}: {
+  action?: string;
+  details?: Record<string, unknown>;
+}) {
   if (!action) return null;
   const rows: [string, string][] = [["Acción", action]];
-  if (details?.accountCode) rows.push(["Cuenta PGC", `${details.accountCode}${details.accountName ? ` - ${details.accountName}` : ""}`]);
-  if (details?.differenceReason) rows.push(["Causa diferencia", details.differenceReason as string]);
+  if (details?.accountCode)
+    rows.push([
+      "Cuenta PGC",
+      `${details.accountCode}${details.accountName ? ` - ${details.accountName}` : ""}`,
+    ]);
+  if (details?.differenceReason)
+    rows.push(["Causa diferencia", details.differenceReason as string]);
   if (details?.description) rows.push(["Nota", details.description as string]);
-  return <>{rows.map(([k, v]) => <div key={k}><span className="text-text-tertiary">{k}:</span> <span className="text-text-primary">{v}</span></div>)}</>;
+  return (
+    <>
+      {rows.map(([k, v]) => (
+        <div key={k}>
+          <span className="text-text-tertiary">{k}:</span>{" "}
+          <span className="text-text-primary">{v}</span>
+        </div>
+      ))}
+    </>
+  );
 }
 
 // ── Stat Card ──
@@ -391,7 +509,8 @@ function CategoryThresholds() {
     <div>
       <h3 className="text-[14px] font-semibold text-text-primary mb-1">Umbrales por categoría</h3>
       <p className="text-[11px] text-text-tertiary mb-3">
-        Umbral global: {(data.global * 100).toFixed(0)}%. Las categorías sin umbral propio usan el global.
+        Umbral global: {(data.global * 100).toFixed(0)}%. Las categorías sin umbral propio usan el
+        global.
       </p>
       <div className="bg-white rounded-lg border border-subtle overflow-hidden">
         <div className="flex items-center h-9 px-4 border-b border-subtle text-[11px] font-semibold text-text-secondary">
@@ -401,8 +520,13 @@ function CategoryThresholds() {
           <span className="w-20" />
         </div>
         {data.categories.map((cat) => (
-          <div key={cat.category} className="flex items-center h-10 px-4 text-[12px] border-b border-border-light">
-            <span className="flex-1 text-text-primary">{CATEGORY_LABELS[cat.category] ?? cat.category}</span>
+          <div
+            key={cat.category}
+            className="flex items-center h-10 px-4 text-[12px] border-b border-border-light"
+          >
+            <span className="flex-1 text-text-primary">
+              {CATEGORY_LABELS[cat.category] ?? cat.category}
+            </span>
             <span className="w-24 text-right">
               {editing === cat.category ? (
                 <input
@@ -423,18 +547,26 @@ function CategoryThresholds() {
             </span>
             <span className="w-20 text-center">
               {cat.isCustom && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-light text-accent">Custom</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-light text-accent">
+                  Custom
+                </span>
               )}
             </span>
             <span className="w-20 flex justify-end gap-1">
               <button
-                onClick={() => { setEditing(cat.category); setEditValue(cat.threshold.toString()); }}
+                onClick={() => {
+                  setEditing(cat.category);
+                  setEditValue(cat.threshold.toString());
+                }}
                 className="text-[10px] text-accent hover:underline"
               >
                 Editar
               </button>
               {cat.isCustom && (
-                <button onClick={() => resetThreshold(cat.category)} className="text-[10px] text-text-tertiary hover:underline">
+                <button
+                  onClick={() => resetThreshold(cat.category)}
+                  className="text-[10px] text-text-tertiary hover:underline"
+                >
                   Reset
                 </button>
               )}
@@ -446,11 +578,23 @@ function CategoryThresholds() {
   );
 }
 
-function StatCard({ label, value, highlight, isText }: { label: string; value: string | number; highlight?: boolean; isText?: boolean }) {
+function StatCard({
+  label,
+  value,
+  highlight,
+  isText,
+}: {
+  label: string;
+  value: string | number;
+  highlight?: boolean;
+  isText?: boolean;
+}) {
   return (
     <div className="bg-white rounded-lg border border-subtle p-4 text-center">
       <div className="text-[11px] text-text-secondary mb-1">{label}</div>
-      <div className={`text-lg font-semibold ${isText ? "" : "font-mono"} ${highlight ? "text-green-text" : "text-text-primary"}`}>
+      <div
+        className={`text-lg font-semibold ${isText ? "" : "font-mono"} ${highlight ? "text-green-text" : "text-text-primary"}`}
+      >
         {value}
       </div>
     </div>

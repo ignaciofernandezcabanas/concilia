@@ -13,7 +13,7 @@ const updateSchema = z.object({
  * Returns Holded integration config for the company.
  */
 export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const integration = await db.integration.findUnique({
     where: {
       type_companyId: { type: "HOLDED", companyId: ctx.company.id },
@@ -39,7 +39,7 @@ export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
  * Connect or update Holded integration.
  */
 export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const body = await req.json();
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
@@ -63,10 +63,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       );
     }
   } catch {
-    return NextResponse.json(
-      { error: "No se pudo conectar con Holded." },
-      { status: 502 }
-    );
+    return NextResponse.json({ error: "No se pudo conectar con Holded." }, { status: 502 });
   }
 
   const integration = await db.integration.upsert({
@@ -94,9 +91,17 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     entityType: "Integration",
     entityId: integration.id,
     details: { syncFrequency },
-  }).catch((err) => console.warn("[holded] Non-critical operation failed:", err instanceof Error ? err.message : err));
+  }).catch((err) =>
+    console.warn(
+      "[holded] Non-critical operation failed:",
+      err instanceof Error ? err.message : err
+    )
+  );
 
-  return NextResponse.json({ success: true, integration: { id: integration.id, status: integration.status } });
+  return NextResponse.json({
+    success: true,
+    integration: { id: integration.id, status: integration.status },
+  });
 }, "manage:integrations");
 
 /**
@@ -104,7 +109,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
  * Disconnect Holded integration.
  */
 export const DELETE = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   await db.integration.updateMany({
     where: { type: "HOLDED", companyId: ctx.company.id },
     data: { status: "DISCONNECTED", config: {}, error: null },

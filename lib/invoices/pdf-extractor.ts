@@ -20,7 +20,13 @@ export interface ExtractedInvoice {
   supplierCif: string | null;
   type: "ISSUED" | "RECEIVED";
   confidence: number;
-  lines: { description: string; quantity: number; unitPrice: number; total: number; vatRate: number }[];
+  lines: {
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    vatRate: number;
+  }[];
 }
 
 export async function extractInvoiceFromPdf(

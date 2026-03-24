@@ -14,7 +14,10 @@ import { generateForecast } from "@/lib/reports/forecast-generator";
 describe("Forecast Generator", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDb.bankTransaction.findFirst.mockResolvedValue({ balanceAfter: 50000, valueDate: new Date("2026-03-20") });
+    mockDb.bankTransaction.findFirst.mockResolvedValue({
+      balanceAfter: 50000,
+      valueDate: new Date("2026-03-20"),
+    });
     mockDb.bankTransaction.findMany.mockResolvedValue([]);
     mockDb.invoice.findMany.mockResolvedValue([]);
   });
@@ -26,10 +29,13 @@ describe("Forecast Generator", () => {
   });
 
   it("saldo actual viene del último movimiento bancario", async () => {
-    mockDb.bankTransaction.findFirst.mockResolvedValue({ balanceAfter: 87432.50, valueDate: new Date() });
+    mockDb.bankTransaction.findFirst.mockResolvedValue({
+      balanceAfter: 87432.5,
+      valueDate: new Date(),
+    });
 
     const report = await generateForecast(mockDb as any);
-    expect(report.currentBalance).toBe(87432.50);
+    expect(report.currentBalance).toBe(87432.5);
   });
 
   it("facturas emitidas pendientes aparecen como cobros esperados", async () => {

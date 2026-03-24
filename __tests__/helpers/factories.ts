@@ -4,7 +4,15 @@
  * Use overrides to customize specific fields.
  */
 
-import type { BankTransaction, Invoice, Company, Contact, Reconciliation, MatchingRule, LearnedPattern } from "@prisma/client";
+import type {
+  BankTransaction,
+  Invoice,
+  Company,
+  Contact,
+  Reconciliation,
+  MatchingRule,
+  LearnedPattern,
+} from "@prisma/client";
 
 const DEFAULT_COMPANY_ID = "company_1";
 const DEFAULT_CONTACT_ID = "contact_1";
@@ -23,7 +31,7 @@ export function buildCompany(overrides: Record<string, unknown> = {}): Company {
     csvSeparator: ";",
     createdAt: new Date("2025-01-01"),
     updatedAt: new Date("2025-01-01"),
-    autoApproveThreshold: 0.90,
+    autoApproveThreshold: 0.9,
     materialityThreshold: 500,
     materialityMinor: 5,
     preAlertDays: 7,
@@ -49,7 +57,9 @@ export function buildContact(overrides: Record<string, unknown> = {}): Contact {
 }
 
 // ── Invoice ──
-export function buildInvoice(overrides: Record<string, unknown> = {}): Invoice & { contact: Contact } {
+export function buildInvoice(
+  overrides: Record<string, unknown> = {}
+): Invoice & { contact: Contact } {
   return {
     id: "invoice_1",
     holdedId: null,
@@ -57,14 +67,14 @@ export function buildInvoice(overrides: Record<string, unknown> = {}): Invoice &
     type: "RECEIVED" as const,
     issueDate: new Date("2026-03-01"),
     dueDate: new Date("2026-04-01"),
-    totalAmount: 1000.00,
+    totalAmount: 1000.0,
     netAmount: 826.45,
     vatAmount: 173.55,
     currency: "EUR",
     description: "Servicio de consultoría",
     status: "PENDING" as const,
     amountPaid: 0,
-    amountPending: 1000.00,
+    amountPending: 1000.0,
     provisionedAmount: 0,
     provisionType: null,
     pdfUrl: null,
@@ -87,7 +97,7 @@ export function buildBankTransaction(overrides: Record<string, unknown> = {}): B
     externalId: "csv_2026-03-15_-1000.00_47254.02",
     valueDate: new Date("2026-03-15"),
     bookingDate: new Date("2026-03-15"),
-    amount: -1000.00,
+    amount: -1000.0,
     currency: "EUR",
     concept: "TRANSF PROVEEDOR TEST SL",
     conceptParsed: null,
@@ -120,8 +130,8 @@ export function buildReconciliation(overrides: Record<string, unknown> = {}): Re
     confidenceScore: 0.95,
     matchReason: "exact_amount+iban_match",
     status: "PROPOSED" as const,
-    invoiceAmount: 1000.00,
-    bankAmount: 1000.00,
+    invoiceAmount: 1000.0,
+    bankAmount: 1000.0,
     difference: null as number | null,
     differenceReason: null as string | null,
     differenceAccountId: null,
@@ -187,7 +197,7 @@ export function buildLearnedPattern(overrides: Record<string, unknown> = {}): Le
     predictedAccount: null as string | null,
     occurrences: 5,
     correctPredictions: 4,
-    confidence: 0.80,
+    confidence: 0.8,
     supervisedApplyCount: 0,
     promotedToRuleId: null as string | null,
     reviewedAt: null as Date | null,

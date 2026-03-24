@@ -75,9 +75,7 @@ export async function findGroupedMatch(
 
   // Strategy 2: Try all combinations up to a reasonable limit
   const comboResult =
-    pendingInvoices.length <= 15
-      ? findSubsetSum(pendingInvoices, absAmount)
-      : null;
+    pendingInvoices.length <= 15 ? findSubsetSum(pendingInvoices, absAmount) : null;
 
   // Pick the best result (fewest invoices preferred)
   const result = pickBest(greedyResult, comboResult);

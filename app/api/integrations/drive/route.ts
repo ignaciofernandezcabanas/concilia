@@ -17,7 +17,7 @@ const updateSchema = z.object({
  * GET /api/integrations/drive
  */
 export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const integration = await db.integration.findUnique({
     where: {
       type_companyId: { type: "GOOGLE_DRIVE", companyId: ctx.company.id },
@@ -48,7 +48,7 @@ export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
  * Connect or update Google Drive integration.
  */
 export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const body = await req.json();
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
@@ -58,7 +58,14 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     );
   }
 
-  const { clientId, clientSecret, refreshToken, rootFolderId, separateIssuedReceived, folderFormat } = parsed.data;
+  const {
+    clientId,
+    clientSecret,
+    refreshToken,
+    rootFolderId,
+    separateIssuedReceived,
+    folderFormat,
+  } = parsed.data;
 
   // Verify credentials by listing Drive root
   try {
@@ -80,13 +87,27 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     create: {
       type: "GOOGLE_DRIVE",
       status: "CONNECTED",
-      config: { clientId, clientSecret, refreshToken, rootFolderId, separateIssuedReceived, folderFormat },
+      config: {
+        clientId,
+        clientSecret,
+        refreshToken,
+        rootFolderId,
+        separateIssuedReceived,
+        folderFormat,
+      },
       syncFrequency: "manual",
       companyId: ctx.company.id,
     },
     update: {
       status: "CONNECTED",
-      config: { clientId, clientSecret, refreshToken, rootFolderId, separateIssuedReceived, folderFormat },
+      config: {
+        clientId,
+        clientSecret,
+        refreshToken,
+        rootFolderId,
+        separateIssuedReceived,
+        folderFormat,
+      },
       error: null,
     },
   });
@@ -97,16 +118,21 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     entityType: "Integration",
     entityId: integration.id,
     details: {},
-  }).catch((err) => console.warn("[drive] Non-critical operation failed:", err instanceof Error ? err.message : err));
+  }).catch((err) =>
+    console.warn("[drive] Non-critical operation failed:", err instanceof Error ? err.message : err)
+  );
 
-  return NextResponse.json({ success: true, integration: { id: integration.id, status: integration.status } });
+  return NextResponse.json({
+    success: true,
+    integration: { id: integration.id, status: integration.status },
+  });
 }, "manage:integrations");
 
 /**
  * DELETE /api/integrations/drive
  */
 export const DELETE = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   await db.integration.updateMany({
     where: { type: "GOOGLE_DRIVE", companyId: ctx.company.id },
     data: { status: "DISCONNECTED", config: {}, error: null },

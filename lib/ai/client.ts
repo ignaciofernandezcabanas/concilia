@@ -7,10 +7,7 @@ import {
   RECONCILIATION_SYSTEM_PROMPT,
   buildReconciliationUserMessage,
 } from "./prompts/reconciliation";
-import {
-  CLASSIFIER_SYSTEM_PROMPT,
-  ANOMALY_SYSTEM_PROMPT,
-} from "./prompts/classifier";
+import { CLASSIFIER_SYSTEM_PROMPT, ANOMALY_SYSTEM_PROMPT } from "./prompts/classifier";
 import { prisma } from "../db"; // GLOBAL-PRISMA: audit logging for AI calls
 
 // ============================================================
@@ -200,9 +197,7 @@ export async function classifyTransactionWithLLM(params: {
     bankTransaction.counterpartName
       ? `Ordenante/Beneficiario: ${bankTransaction.counterpartName}`
       : null,
-    bankTransaction.counterpartIban
-      ? `IBAN: ${bankTransaction.counterpartIban}`
-      : null,
+    bankTransaction.counterpartIban ? `IBAN: ${bankTransaction.counterpartIban}` : null,
   ]
     .filter(Boolean)
     .join("\n");

@@ -33,9 +33,10 @@ export default function AsientosPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
-  const { data, loading, refetch } = useFetch<{ data: JournalEntry[]; pagination: { total: number } }>(
-    `/api/journal-entries${qs({ status: status || undefined, limit: 50 })}`
-  );
+  const { data, loading, refetch } = useFetch<{
+    data: JournalEntry[];
+    pagination: { total: number };
+  }>(`/api/journal-entries${qs({ status: status || undefined, limit: 50 })}`);
 
   const entries = data?.data ?? [];
 
@@ -52,7 +53,9 @@ export default function AsientosPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-[22px] font-semibold text-text-primary">Asientos</h1>
-            <span className="text-[12px] text-text-tertiary">{data?.pagination.total ?? 0} total</span>
+            <span className="text-[12px] text-text-tertiary">
+              {data?.pagination.total ?? 0} total
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <select
@@ -77,7 +80,11 @@ export default function AsientosPage() {
         {loading ? (
           <LoadingSpinner />
         ) : entries.length === 0 ? (
-          <EmptyState icon={BookOpen} title="Sin asientos" description="Crea un asiento manual o espera a que el agente AI genere propuestas." />
+          <EmptyState
+            icon={BookOpen}
+            title="Sin asientos"
+            description="Crea un asiento manual o espera a que el agente AI genere propuestas."
+          />
         ) : (
           <div className="bg-white rounded-lg border border-subtle overflow-hidden">
             {/* Header */}
@@ -97,7 +104,8 @@ export default function AsientosPage() {
               const expanded = expandedId === entry.id;
               const totalDebit = entry.lines.reduce((s, l) => s + l.debit, 0);
               const totalCredit = entry.lines.reduce((s, l) => s + l.credit, 0);
-              const isAI = entry.type === "AUTO_DEPRECIATION" || entry.type === "AUTO_RECONCILIATION";
+              const isAI =
+                entry.type === "AUTO_DEPRECIATION" || entry.type === "AUTO_RECONCILIATION";
 
               return (
                 <div key={entry.id}>
@@ -111,19 +119,28 @@ export default function AsientosPage() {
                       {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </span>
                     <span className="w-16 font-mono text-text-secondary">#{entry.number}</span>
-                    <span className="w-24 text-text-secondary">{new Date(entry.date).toLocaleDateString("es-ES")}</span>
+                    <span className="w-24 text-text-secondary">
+                      {new Date(entry.date).toLocaleDateString("es-ES")}
+                    </span>
                     <span className="flex-1 text-text-primary truncate flex items-center gap-1.5">
                       {isAI && <Bot size={12} className="text-accent shrink-0" />}
                       {entry.description}
                     </span>
-                    <span className="w-28"><Badge value={entry.type} /></span>
-                    <span className="w-24"><Badge value={entry.status} /></span>
+                    <span className="w-28">
+                      <Badge value={entry.type} />
+                    </span>
+                    <span className="w-24">
+                      <Badge value={entry.status} />
+                    </span>
                     <span className="w-24 text-right font-mono">{formatAmount(totalDebit)}</span>
                     <span className="w-24 text-right font-mono">{formatAmount(totalCredit)}</span>
                     <span className="w-20 flex justify-end gap-1">
                       {entry.status === "DRAFT" && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); handlePost(entry.id); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePost(entry.id);
+                          }}
                           className="p-1 rounded hover:bg-green-light text-green"
                           title="Contabilizar"
                         >
@@ -139,9 +156,16 @@ export default function AsientosPage() {
                       {entry.lines.map((line) => (
                         <div key={line.id} className="flex items-center h-9 px-5 pl-14 text-[12px]">
                           <span className="w-20 font-mono text-accent">{line.account.code}</span>
-                          <span className="flex-1 text-text-secondary">{line.account.name}{line.description ? ` — ${line.description}` : ""}</span>
-                          <span className="w-24 text-right font-mono">{line.debit > 0 ? formatAmount(line.debit) : ""}</span>
-                          <span className="w-24 text-right font-mono">{line.credit > 0 ? formatAmount(line.credit) : ""}</span>
+                          <span className="flex-1 text-text-secondary">
+                            {line.account.name}
+                            {line.description ? ` — ${line.description}` : ""}
+                          </span>
+                          <span className="w-24 text-right font-mono">
+                            {line.debit > 0 ? formatAmount(line.debit) : ""}
+                          </span>
+                          <span className="w-24 text-right font-mono">
+                            {line.credit > 0 ? formatAmount(line.credit) : ""}
+                          </span>
                           <span className="w-20" />
                         </div>
                       ))}
@@ -154,7 +178,15 @@ export default function AsientosPage() {
         )}
 
         {/* Create modal */}
-        {showCreate && <CreateEntryModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); refetch(); }} />}
+        {showCreate && (
+          <CreateEntryModal
+            onClose={() => setShowCreate(false)}
+            onCreated={() => {
+              setShowCreate(false);
+              refetch();
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -212,21 +244,42 @@ function CreateEntryModal({ onClose, onCreated }: { onClose: () => void; onCreat
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-white rounded-xl border border-subtle shadow-lg w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl border border-subtle shadow-lg w-full max-w-2xl p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-[16px] font-semibold text-text-primary">Nuevo asiento</h2>
-          <button onClick={onClose} className="text-text-tertiary hover:text-text-primary"><X size={18} /></button>
+          <button onClick={onClose} className="text-text-tertiary hover:text-text-primary">
+            <X size={18} />
+          </button>
         </div>
 
         <div className="flex gap-3 mb-4">
           <div className="flex-1">
             <label className="text-[11px] font-medium text-text-secondary block mb-1">Fecha</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full h-9 px-3 text-[13px] border border-subtle rounded-md" />
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full h-9 px-3 text-[13px] border border-subtle rounded-md"
+            />
           </div>
           <div className="flex-[2]">
-            <label className="text-[11px] font-medium text-text-secondary block mb-1">Descripción</label>
-            <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Concepto del asiento" className="w-full h-9 px-3 text-[13px] border border-subtle rounded-md" />
+            <label className="text-[11px] font-medium text-text-secondary block mb-1">
+              Descripción
+            </label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Concepto del asiento"
+              className="w-full h-9 px-3 text-[13px] border border-subtle rounded-md"
+            />
           </div>
         </div>
 
@@ -241,31 +294,86 @@ function CreateEntryModal({ onClose, onCreated }: { onClose: () => void; onCreat
           </div>
           {lines.map((line, i) => (
             <div key={i} className="flex items-center h-9 px-3 border-t border-border-light gap-1">
-              <input type="text" value={line.accountCode} onChange={(e) => updateLine(i, "accountCode", e.target.value)} placeholder="629" className="w-20 h-7 px-2 text-[12px] font-mono border border-subtle rounded" />
-              <input type="text" value={line.description} onChange={(e) => updateLine(i, "description", e.target.value)} placeholder="Concepto línea" className="flex-1 h-7 px-2 text-[12px] border border-subtle rounded" />
-              <input type="number" value={line.debit} onChange={(e) => updateLine(i, "debit", e.target.value)} placeholder="0.00" className="w-24 h-7 px-2 text-[12px] font-mono border border-subtle rounded text-right" />
-              <input type="number" value={line.credit} onChange={(e) => updateLine(i, "credit", e.target.value)} placeholder="0.00" className="w-24 h-7 px-2 text-[12px] font-mono border border-subtle rounded text-right" />
-              <button onClick={() => removeLine(i)} className="w-8 flex justify-center text-text-tertiary hover:text-red"><X size={12} /></button>
+              <input
+                type="text"
+                value={line.accountCode}
+                onChange={(e) => updateLine(i, "accountCode", e.target.value)}
+                placeholder="629"
+                className="w-20 h-7 px-2 text-[12px] font-mono border border-subtle rounded"
+              />
+              <input
+                type="text"
+                value={line.description}
+                onChange={(e) => updateLine(i, "description", e.target.value)}
+                placeholder="Concepto línea"
+                className="flex-1 h-7 px-2 text-[12px] border border-subtle rounded"
+              />
+              <input
+                type="number"
+                value={line.debit}
+                onChange={(e) => updateLine(i, "debit", e.target.value)}
+                placeholder="0.00"
+                className="w-24 h-7 px-2 text-[12px] font-mono border border-subtle rounded text-right"
+              />
+              <input
+                type="number"
+                value={line.credit}
+                onChange={(e) => updateLine(i, "credit", e.target.value)}
+                placeholder="0.00"
+                className="w-24 h-7 px-2 text-[12px] font-mono border border-subtle rounded text-right"
+              />
+              <button
+                onClick={() => removeLine(i)}
+                className="w-8 flex justify-center text-text-tertiary hover:text-red"
+              >
+                <X size={12} />
+              </button>
             </div>
           ))}
           <div className="flex items-center h-9 px-3 border-t border-subtle bg-page">
-            <button onClick={addLine} className="text-[11px] text-accent font-medium flex items-center gap-1"><Plus size={12} /> Línea</button>
+            <button
+              onClick={addLine}
+              className="text-[11px] text-accent font-medium flex items-center gap-1"
+            >
+              <Plus size={12} /> Línea
+            </button>
             <span className="flex-1" />
-            <span className={`w-24 text-right text-[12px] font-mono font-semibold ${balanced ? "text-green-text" : "text-red-text"}`}>{totalDebit.toFixed(2)}</span>
-            <span className={`w-24 text-right text-[12px] font-mono font-semibold ${balanced ? "text-green-text" : "text-red-text"}`}>{totalCredit.toFixed(2)}</span>
+            <span
+              className={`w-24 text-right text-[12px] font-mono font-semibold ${balanced ? "text-green-text" : "text-red-text"}`}
+            >
+              {totalDebit.toFixed(2)}
+            </span>
+            <span
+              className={`w-24 text-right text-[12px] font-mono font-semibold ${balanced ? "text-green-text" : "text-red-text"}`}
+            >
+              {totalCredit.toFixed(2)}
+            </span>
             <span className="w-8" />
           </div>
         </div>
 
         {!balanced && totalDebit > 0 && (
-          <p className="text-[11px] text-red-text mb-3">El asiento no cuadra: Debe ({totalDebit.toFixed(2)}) ≠ Haber ({totalCredit.toFixed(2)})</p>
+          <p className="text-[11px] text-red-text mb-3">
+            El asiento no cuadra: Debe ({totalDebit.toFixed(2)}) ≠ Haber ({totalCredit.toFixed(2)})
+          </p>
         )}
 
-        {error && <p className="text-[11px] text-red-text bg-red-light px-3 py-2 rounded mb-3">{error}</p>}
+        {error && (
+          <p className="text-[11px] text-red-text bg-red-light px-3 py-2 rounded mb-3">{error}</p>
+        )}
 
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="h-9 px-4 text-[13px] border border-subtle rounded-md text-text-secondary hover:bg-hover">Cancelar</button>
-          <button onClick={handleCreate} disabled={!balanced || !description || saving} className="h-9 px-4 text-[13px] bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50">
+          <button
+            onClick={onClose}
+            className="h-9 px-4 text-[13px] border border-subtle rounded-md text-text-secondary hover:bg-hover"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleCreate}
+            disabled={!balanced || !description || saving}
+            className="h-9 px-4 text-[13px] bg-accent text-white rounded-md hover:bg-accent-dark disabled:opacity-50"
+          >
             {saving ? "Creando..." : "Crear borrador"}
           </button>
         </div>

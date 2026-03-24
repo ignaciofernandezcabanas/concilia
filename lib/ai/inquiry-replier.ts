@@ -125,6 +125,9 @@ function generateTemplateReply(params: ReplyDraftParams): ReplyDraft {
 <p>Departamento de Administración<br/>${companyName}</p>`;
   }
 
-  const plainBody = body.replace(/<[^>]*>/g, "").replace(/\n\n+/g, "\n\n").trim();
+  const plainBody = body
+    .replace(/<[^>]*>/g, "")
+    .replace(/\n\n+/g, "\n\n")
+    .trim();
   return { subject: `Re: ${inquiry.subject}`, htmlBody: body, plainBody };
 }

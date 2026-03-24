@@ -12,7 +12,7 @@ import { PARSE_RULE_NL } from "@/lib/ai/prompt-registry";
  * Body: { text: string }
  */
 export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const { company } = ctx;
   const body = await req.json();
   const text = body.text as string;
@@ -63,18 +63,16 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   );
 
   if (!proposal) {
-    return NextResponse.json({
-      error: "No pude interpretar la regla. Intenta reformularla.",
-    }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: "No pude interpretar la regla. Intenta reformularla.",
+      },
+      { status: 400 }
+    );
   }
 
   // ── Enrich with historical data ──
-  const enrichment = await enrichWithHistory(
-    proposal,
-    recentTx,
-    contacts,
-    company.id
-  );
+  const enrichment = await enrichWithHistory(proposal, recentTx, contacts, company.id);
 
   return NextResponse.json({
     proposal: { ...proposal, ...enrichment.overrides },
@@ -88,7 +86,13 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
 
 async function enrichWithHistory(
   proposal: Record<string, unknown>,
-  recentTx: { concept: string | null; amount: number; counterpartName: string | null; counterpartIban: string | null; valueDate: Date }[],
+  recentTx: {
+    concept: string | null;
+    amount: number;
+    counterpartName: string | null;
+    counterpartIban: string | null;
+    valueDate: Date;
+  }[],
   contacts: { id: string; name: string; cif: string | null; iban: string | null }[],
   _companyId: string
 ): Promise<{ overrides: Record<string, unknown>; assumptions: string[]; suggestions: string[] }> {
@@ -102,9 +106,10 @@ async function enrichWithHistory(
   const counterpartName = conditions.counterpartName as string | null;
 
   if (counterpartName) {
-    const matchingTx = recentTx.filter((tx) =>
-      tx.counterpartName?.toLowerCase().includes(counterpartName.toLowerCase()) ||
-      tx.concept?.toLowerCase().includes(counterpartName.toLowerCase())
+    const matchingTx = recentTx.filter(
+      (tx) =>
+        tx.counterpartName?.toLowerCase().includes(counterpartName.toLowerCase()) ||
+        tx.concept?.toLowerCase().includes(counterpartName.toLowerCase())
     );
 
     if (matchingTx.length > 0) {
@@ -117,13 +122,19 @@ async function enrichWithHistory(
         const userMin = conditions.minAmount as number | null;
         const userMax = conditions.maxAmount as number | null;
         if (userMin && userMin < minHistorical * 0.8) {
-          suggestions.push(`El rango mínimo que has puesto (${userMin}€) es más bajo que el histórico (${minHistorical.toFixed(0)}€). ¿Quieres ajustarlo?`);
+          suggestions.push(
+            `El rango mínimo que has puesto (${userMin}€) es más bajo que el histórico (${minHistorical.toFixed(0)}€). ¿Quieres ajustarlo?`
+          );
         }
         if (userMax && userMax > maxHistorical * 1.2) {
-          suggestions.push(`El rango máximo (${userMax}€) es más alto que el histórico (${maxHistorical.toFixed(0)}€). ¿Quieres ajustarlo?`);
+          suggestions.push(
+            `El rango máximo (${userMax}€) es más alto que el histórico (${maxHistorical.toFixed(0)}€). ¿Quieres ajustarlo?`
+          );
         }
       } else {
-        suggestions.push(`Rango histórico de importes: ${minHistorical.toFixed(0)}€ - ${maxHistorical.toFixed(0)}€ (media: ${avgAmount.toFixed(0)}€)`);
+        suggestions.push(
+          `Rango histórico de importes: ${minHistorical.toFixed(0)}€ - ${maxHistorical.toFixed(0)}€ (media: ${avgAmount.toFixed(0)}€)`
+        );
       }
 
       if (!conditions.differencePercent) {
@@ -137,7 +148,9 @@ async function enrichWithHistory(
           const variations = diffs.map((d) => ((d - median) / median) * 100);
           const avgVariation = variations.reduce((s, v) => s + v, 0) / variations.length;
           if (Math.abs(avgVariation) > 0.5 && Math.abs(avgVariation) < 5) {
-            suggestions.push(`Detectado patrón de diferencia consistente: ~${avgVariation.toFixed(1)}% en cobros de ${counterpartName}`);
+            suggestions.push(
+              `Detectado patrón de diferencia consistente: ~${avgVariation.toFixed(1)}% en cobros de ${counterpartName}`
+            );
           }
         }
       }

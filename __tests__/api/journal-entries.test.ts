@@ -31,8 +31,14 @@ describe("Journal Entries API", () => {
     mockCtx.db.journalEntry.count.mockResolvedValue(0);
     mockCtx.db.journalEntry.findFirst.mockResolvedValue(null);
     mockCtx.db.journalEntry.create.mockResolvedValue({
-      id: "je_1", number: 1, status: "DRAFT", type: "MANUAL",
-      lines: [{ debit: 1000, credit: 0 }, { debit: 0, credit: 1000 }],
+      id: "je_1",
+      number: 1,
+      status: "DRAFT",
+      type: "MANUAL",
+      lines: [
+        { debit: 1000, credit: 0 },
+        { debit: 0, credit: 1000 },
+      ],
     });
     mockCtx.db.account.findFirst.mockResolvedValue({ id: "acc_1", code: "700" });
   });

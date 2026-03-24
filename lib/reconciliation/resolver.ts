@@ -98,12 +98,15 @@ export async function resolveItem(
   const { action } = payload;
 
   // Capture tx data before $transaction for calibration pattern key
-  let txForCalibration: { counterpartIban: string | null; concept: string | null; matchReason: string | null } | null = null;
+  let txForCalibration: {
+    counterpartIban: string | null;
+    concept: string | null;
+    matchReason: string | null;
+  } | null = null;
   if (payload.reconciliationId) {
     const reco = await prisma.reconciliation.findFirst({
       where: { id: payload.reconciliationId, companyId },
       include: { bankTransaction: { select: { counterpartIban: true, concept: true } } },
-
     });
     if (reco) {
       txForCalibration = {
@@ -118,7 +121,11 @@ export async function resolveItem(
       select: { counterpartIban: true, concept: true },
     });
     if (btx) {
-      txForCalibration = { counterpartIban: btx.counterpartIban, concept: btx.concept, matchReason: null };
+      txForCalibration = {
+        counterpartIban: btx.counterpartIban,
+        concept: btx.concept,
+        matchReason: null,
+      };
     }
   }
 
@@ -189,7 +196,14 @@ export async function resolveItem(
         if (reco.matchReason?.startsWith("rule:")) {
           const ruleId = reco.matchReason.split(":")[1];
           if (ruleId) {
-            await tx.matchingRule.update({ where: { id: ruleId }, data: { isActive: false } }).catch((err) => console.warn("[resolver] Non-critical operation failed:", err instanceof Error ? err.message : err));
+            await tx.matchingRule
+              .update({ where: { id: ruleId }, data: { isActive: false } })
+              .catch((err) =>
+                console.warn(
+                  "[resolver] Non-critical operation failed:",
+                  err instanceof Error ? err.message : err
+                )
+              );
           }
         }
 
@@ -208,13 +222,23 @@ export async function resolveItem(
 
         await tx.reconciliation.update({
           where: { id: reco.id },
-          data: { status: "REJECTED" as ReconciliationStatus, resolvedAt: new Date(), resolvedById: userId, resolution: payload.note ?? "Under investigation" },
+          data: {
+            status: "REJECTED" as ReconciliationStatus,
+            resolvedAt: new Date(),
+            resolvedById: userId,
+            resolution: payload.note ?? "Under investigation",
+          },
         });
 
         if (reco.bankTransactionId) {
           await tx.bankTransaction.update({
             where: { id: reco.bankTransactionId },
-            data: { status: "INVESTIGATING" as BankTransactionStatus, note: payload.note, noteAuthorId: userId, noteCreatedAt: new Date() },
+            data: {
+              status: "INVESTIGATING" as BankTransactionStatus,
+              note: payload.note,
+              noteAuthorId: userId,
+              noteCreatedAt: new Date(),
+            },
           });
         }
 
@@ -235,15 +259,24 @@ export async function resolveItem(
           });
         }
 
-        await createAuditLog(tx, userId, "reconciliation.investigate", "Reconciliation", reco.id, { note: payload.note });
+        await createAuditLog(tx, userId, "reconciliation.investigate", "Reconciliation", reco.id, {
+          note: payload.note,
+        });
 
-        return { success: true, action, reconciliationId: reco.id, message: "Flagged for investigation." };
+        return {
+          success: true,
+          action,
+          reconciliationId: reco.id,
+          message: "Flagged for investigation.",
+        };
       }
 
       // ─── MANUAL MATCH ───
       case "manual_match": {
         const [bankTx, invoice] = await Promise.all([
-          tx.bankTransaction.findFirstOrThrow({ where: { id: payload.bankTransactionId!, companyId } }),
+          tx.bankTransaction.findFirstOrThrow({
+            where: { id: payload.bankTransactionId!, companyId },
+          }),
           tx.invoice.findFirstOrThrow({ where: { id: payload.invoiceId!, companyId } }),
         ]);
 
@@ -280,7 +313,12 @@ export async function resolveItem(
           invoiceId: invoice.id,
         });
 
-        return { success: true, action, reconciliationId: reco.id, message: "Manual match created." };
+        return {
+          success: true,
+          action,
+          reconciliationId: reco.id,
+          message: "Manual match created.",
+        };
       }
 
       // ─── CLASSIFY ───
@@ -303,7 +341,11 @@ export async function resolveItem(
 
         await tx.bankTransaction.update({
           where: { id: bankTx.id },
-          data: { status: "CLASSIFIED", classificationId: classification.id, detectedType: "EXPENSE_NO_INVOICE" },
+          data: {
+            status: "CLASSIFIED",
+            classificationId: classification.id,
+            detectedType: "EXPENSE_NO_INVOICE",
+          },
         });
 
         // Create rule if requested
@@ -328,7 +370,12 @@ export async function resolveItem(
           cashflowType: payload.cashflowType,
         });
 
-        return { success: true, action, bankTransactionId: bankTx.id, message: `Classified as ${account.code}.` };
+        return {
+          success: true,
+          action,
+          bankTransactionId: bankTx.id,
+          message: `Classified as ${account.code}.`,
+        };
       }
 
       // ─── MARK INTERNAL ───
@@ -342,9 +389,21 @@ export async function resolveItem(
           data: { status: "INTERNAL", detectedType: "INTERNAL_TRANSFER", priority: "ROUTINE" },
         });
 
-        await createAuditLog(tx, userId, "reconciliation.mark_internal", "BankTransaction", bankTx.id, {});
+        await createAuditLog(
+          tx,
+          userId,
+          "reconciliation.mark_internal",
+          "BankTransaction",
+          bankTx.id,
+          {}
+        );
 
-        return { success: true, action, bankTransactionId: bankTx.id, message: "Marked as internal." };
+        return {
+          success: true,
+          action,
+          bankTransactionId: bankTx.id,
+          message: "Marked as internal.",
+        };
       }
 
       // ─── MARK INTERCOMPANY ───
@@ -397,18 +456,26 @@ export async function resolveItem(
           }
         }
 
-        await createAuditLog(tx, userId, `reconciliation.mark_intercompany.${newStatus.toLowerCase()}`, "IntercompanyLink", link.id, {
-          companyAId: link.companyAId,
-          companyBId: link.companyBId,
-          amount: link.amount,
-        });
+        await createAuditLog(
+          tx,
+          userId,
+          `reconciliation.mark_intercompany.${newStatus.toLowerCase()}`,
+          "IntercompanyLink",
+          link.id,
+          {
+            companyAId: link.companyAId,
+            companyBId: link.companyBId,
+            amount: link.amount,
+          }
+        );
 
         return {
           success: true,
           action,
-          message: newStatus === "CONFIRMED"
-            ? "Intercompany transfer confirmed."
-            : "Intercompany link eliminated — transaction returned to pending.",
+          message:
+            newStatus === "CONFIRMED"
+              ? "Intercompany transfer confirmed."
+              : "Intercompany link eliminated — transaction returned to pending.",
         };
       }
 
@@ -426,15 +493,31 @@ export async function resolveItem(
         if (bankTx.duplicateGroupId) {
           await tx.duplicateGroup.update({
             where: { id: bankTx.duplicateGroupId },
-            data: { status: "DUPLICATE", resolvedAt: new Date(), resolution: `Confirmed by ${userId}` },
+            data: {
+              status: "DUPLICATE",
+              resolvedAt: new Date(),
+              resolution: `Confirmed by ${userId}`,
+            },
           });
         }
 
-        await createAuditLog(tx, userId, "reconciliation.mark_duplicate", "BankTransaction", bankTx.id, {
-          duplicateOfId: payload.duplicateOfId,
-        });
+        await createAuditLog(
+          tx,
+          userId,
+          "reconciliation.mark_duplicate",
+          "BankTransaction",
+          bankTx.id,
+          {
+            duplicateOfId: payload.duplicateOfId,
+          }
+        );
 
-        return { success: true, action, bankTransactionId: bankTx.id, message: "Marked as duplicate." };
+        return {
+          success: true,
+          action,
+          bankTransactionId: bankTx.id,
+          message: "Marked as duplicate.",
+        };
       }
 
       // ─── MARK LEGITIMATE ───
@@ -450,7 +533,11 @@ export async function resolveItem(
 
         await tx.duplicateGroup.update({
           where: { id: group.id },
-          data: { status: "LEGITIMATE", resolvedAt: new Date(), resolution: `Legitimate by ${userId}` },
+          data: {
+            status: "LEGITIMATE",
+            resolvedAt: new Date(),
+            resolution: `Legitimate by ${userId}`,
+          },
         });
 
         await tx.bankTransaction.updateMany({
@@ -458,7 +545,14 @@ export async function resolveItem(
           data: { status: "PENDING", detectedType: null },
         });
 
-        await createAuditLog(tx, userId, "reconciliation.mark_legitimate", "DuplicateGroup", group.id, {});
+        await createAuditLog(
+          tx,
+          userId,
+          "reconciliation.mark_legitimate",
+          "DuplicateGroup",
+          group.id,
+          {}
+        );
 
         return { success: true, action, message: "Duplicate group marked as legitimate." };
       }
@@ -482,7 +576,14 @@ export async function resolveItem(
           });
         }
 
-        await createAuditLog(tx, userId, "reconciliation.mark_return", "Reconciliation", reco.id, {});
+        await createAuditLog(
+          tx,
+          userId,
+          "reconciliation.mark_return",
+          "Reconciliation",
+          reco.id,
+          {}
+        );
 
         return { success: true, action, reconciliationId: reco.id, message: "Marked as return." };
       }
@@ -495,14 +596,24 @@ export async function resolveItem(
 
         await tx.bankTransaction.update({
           where: { id: bankTx.id },
-          data: { status: "IGNORED", note: payload.reason, noteAuthorId: userId, noteCreatedAt: new Date() },
+          data: {
+            status: "IGNORED",
+            note: payload.reason,
+            noteAuthorId: userId,
+            noteCreatedAt: new Date(),
+          },
         });
 
         await createAuditLog(tx, userId, "reconciliation.ignore", "BankTransaction", bankTx.id, {
           reason: payload.reason,
         });
 
-        return { success: true, action, bankTransactionId: bankTx.id, message: "Transaction ignored." };
+        return {
+          success: true,
+          action,
+          bankTransactionId: bankTx.id,
+          message: "Transaction ignored.",
+        };
       }
 
       // ─── SPLIT FINANCIAL ───
@@ -529,12 +640,24 @@ export async function resolveItem(
           });
         }
 
-        await createAuditLog(tx, userId, "reconciliation.split_financial", "Reconciliation", reco.id, {
-          principalAmount: payload.principalAmount,
-          interestAmount: payload.interestAmount,
-        });
+        await createAuditLog(
+          tx,
+          userId,
+          "reconciliation.split_financial",
+          "Reconciliation",
+          reco.id,
+          {
+            principalAmount: payload.principalAmount,
+            interestAmount: payload.interestAmount,
+          }
+        );
 
-        return { success: true, action, reconciliationId: reco.id, message: "Financial split applied." };
+        return {
+          success: true,
+          action,
+          reconciliationId: reco.id,
+          message: "Financial split applied.",
+        };
       }
 
       default:
@@ -545,15 +668,21 @@ export async function resolveItem(
   // Post-transaction: track decision for feedback loop
   // Non-critical — must not break the resolve, but errors should be logged
   try {
-    await trackControllerDecision(db ?? prisma as any, {
+    await trackControllerDecision(db ?? (prisma as any), {
       reconciliationId: result.reconciliationId ?? payload.reconciliationId ?? "",
       bankTransactionId: result.bankTransactionId ?? payload.bankTransactionId ?? "",
       invoiceId: payload.invoiceId,
       userId,
       companyId,
       controllerAction: action,
-      correctedField: action === "reject" ? "action" : action === "classify" ? "accountCode" : undefined,
-      correctedTo: action === "reject" ? `rejected:${payload.reason}` : action === "classify" ? payload.accountCode : undefined,
+      correctedField:
+        action === "reject" ? "action" : action === "classify" ? "accountCode" : undefined,
+      correctedTo:
+        action === "reject"
+          ? `rejected:${payload.reason}`
+          : action === "classify"
+            ? payload.accountCode
+            : undefined,
       createdExplicitRule: payload.createRule,
     });
   } catch (err) {
@@ -569,11 +698,12 @@ export async function resolveItem(
         : "";
 
     if (patternKey) {
-      const wasModified = action === "reject"
-        || action === "manual_match"
-        || action === "classify"
-        || action === "mark_internal"
-        || action === "mark_intercompany";
+      const wasModified =
+        action === "reject" ||
+        action === "manual_match" ||
+        action === "classify" ||
+        action === "mark_internal" ||
+        action === "mark_intercompany";
 
       await calibrateFromDecision({
         wasAutoExecuted: false, // resolver is always called by controller action
@@ -618,6 +748,12 @@ async function createAuditLog(
   details: Record<string, unknown>
 ): Promise<void> {
   await tx.auditLog.create({
-    data: { userId, action, entityType, entityId, details: details as import("@prisma/client").Prisma.InputJsonValue },
+    data: {
+      userId,
+      action,
+      entityType,
+      entityId,
+      details: details as import("@prisma/client").Prisma.InputJsonValue,
+    },
   });
 }

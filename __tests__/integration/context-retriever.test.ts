@@ -5,7 +5,11 @@ const mockDb = {
   learnedPattern: { findMany: vi.fn() },
 };
 
-import { getRelevantContext, formatContextForPrompt, type RetrievedContext } from "@/lib/ai/context-retriever";
+import {
+  getRelevantContext,
+  formatContextForPrompt,
+  type RetrievedContext,
+} from "@/lib/ai/context-retriever";
 
 describe("Context Retriever", () => {
   beforeEach(() => {
@@ -31,7 +35,12 @@ describe("Context Retriever", () => {
       .mockResolvedValueOnce([]);
 
     const ctx = await getRelevantContext(
-      { counterpartIban: "ES1234", counterpartName: "TECH SOLUTIONS", concept: "PAGO TECH", amount: -1200 },
+      {
+        counterpartIban: "ES1234",
+        counterpartName: "TECH SOLUTIONS",
+        concept: "PAGO TECH",
+        amount: -1200,
+      },
       mockDb as any
     );
 
@@ -73,7 +82,12 @@ describe("Context Retriever", () => {
       ]);
 
     const ctx = await getRelevantContext(
-      { counterpartIban: null, counterpartName: null, concept: "PAGO SERVICIOS CLOUD AWS", amount: -200 },
+      {
+        counterpartIban: null,
+        counterpartName: null,
+        concept: "PAGO SERVICIOS CLOUD AWS",
+        amount: -200,
+      },
       mockDb as any
     );
 
@@ -82,17 +96,16 @@ describe("Context Retriever", () => {
   });
 
   it("tx con concepto único → similarConcept vacío", async () => {
-    mockDb.controllerDecision.findMany
-      .mockResolvedValueOnce([
-        {
-          createdAt: new Date("2026-01-01"),
-          bankConcept: "NOMINA EMPLEADO GARCIA",
-          controllerAction: "classify:640",
-          systemProposal: "classify:640",
-          wasModified: false,
-          amountRange: "500-5000",
-        },
-      ]);
+    mockDb.controllerDecision.findMany.mockResolvedValueOnce([
+      {
+        createdAt: new Date("2026-01-01"),
+        bankConcept: "NOMINA EMPLEADO GARCIA",
+        controllerAction: "classify:640",
+        systemProposal: "classify:640",
+        wasModified: false,
+        amountRange: "500-5000",
+      },
+    ]);
 
     const ctx = await getRelevantContext(
       { counterpartIban: null, counterpartName: null, concept: "XYZABCDEF123UNIQUE", amount: -50 },
@@ -137,21 +150,28 @@ describe("Context Retriever", () => {
   });
 
   it("formatContextForPrompt sin resultados → vacío", () => {
-    const ctx: RetrievedContext = { sameCounterpart: [], similarConcept: [], activePatterns: [], totalFound: 0 };
+    const ctx: RetrievedContext = {
+      sameCounterpart: [],
+      similarConcept: [],
+      activePatterns: [],
+      totalFound: 0,
+    };
     expect(formatContextForPrompt(ctx)).toBe("");
   });
 
   it("formatContextForPrompt con resultados → contiene <controller_decisions>", () => {
     const ctx: RetrievedContext = {
-      sameCounterpart: [{
-        date: "2026-03-01",
-        concept: "PAGO TECH",
-        amount: -1200,
-        systemProposal: "classify:623",
-        controllerAction: "classify:629",
-        wasModified: true,
-        accountCode: "629",
-      }],
+      sameCounterpart: [
+        {
+          date: "2026-03-01",
+          concept: "PAGO TECH",
+          amount: -1200,
+          systemProposal: "classify:623",
+          controllerAction: "classify:629",
+          wasModified: true,
+          accountCode: "629",
+        },
+      ],
       similarConcept: [],
       activePatterns: [],
       totalFound: 1,

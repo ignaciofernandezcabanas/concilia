@@ -8,7 +8,7 @@ import { withAuth, type AuthContext } from "@/lib/auth/middleware";
  * Triggers when the controller has resolved 3+ similar transactions the same way.
  */
 export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const { company } = ctx;
 
   // Find patterns in definitive decisions: same counterpartIban + same action, 3+ times

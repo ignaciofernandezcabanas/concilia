@@ -8,36 +8,35 @@ import { withAuth, type AuthContext } from "@/lib/auth/middleware";
  * - vat: IVA repercutido vs soportado (Modelo 303)
  * - withholdings: retenciones IRPF (Modelo 111/115)
  */
-export const GET = withAuth(
-  async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
-    const url = req.nextUrl;
-    const type = url.searchParams.get("type") ?? "vat";
-    const from = url.searchParams.get("from");
-    const to = url.searchParams.get("to");
+export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+  const db = ctx.db;
+  const url = req.nextUrl;
+  const type = url.searchParams.get("type") ?? "vat";
+  const from = url.searchParams.get("from");
+  const to = url.searchParams.get("to");
 
-    if (!from || !to) {
-      return NextResponse.json(
-        { error: 'Query parameters "from" and "to" are required.' },
-        { status: 400 }
-      );
-    }
+  if (!from || !to) {
+    return NextResponse.json(
+      { error: 'Query parameters "from" and "to" are required.' },
+      { status: 400 }
+    );
+  }
 
-    const dateFrom = new Date(from);
-    const dateTo = new Date(to);
+  const dateFrom = new Date(from);
+  const dateTo = new Date(to);
 
-    if (type === "vat") {
-      return NextResponse.json(await generateVatReport(db, ctx.company.id, dateFrom, dateTo));
-    }
+  if (type === "vat") {
+    return NextResponse.json(await generateVatReport(db, ctx.company.id, dateFrom, dateTo));
+  }
 
-    if (type === "withholdings") {
-      return NextResponse.json(await generateWithholdingsReport(db, ctx.company.id, dateFrom, dateTo));
-    }
+  if (type === "withholdings") {
+    return NextResponse.json(
+      await generateWithholdingsReport(db, ctx.company.id, dateFrom, dateTo)
+    );
+  }
 
-    return NextResponse.json({ error: "Type must be 'vat' or 'withholdings'." }, { status: 400 });
-  },
-  "read:reports"
-);
+  return NextResponse.json({ error: "Type must be 'vat' or 'withholdings'." }, { status: 400 });
+}, "read:reports");
 
 /**
  * IVA Report (Modelo 303).
@@ -58,7 +57,15 @@ async function generateVatReport(db: any, companyId: string, from: Date, to: Dat
       },
     },
     include: {
-      invoice: { select: { number: true, issueDate: true, type: true, totalAmount: true, contact: { select: { name: true, cif: true } } } },
+      invoice: {
+        select: {
+          number: true,
+          issueDate: true,
+          type: true,
+          totalAmount: true,
+          contact: { select: { name: true, cif: true } },
+        },
+      },
     },
   });
 
@@ -73,7 +80,15 @@ async function generateVatReport(db: any, companyId: string, from: Date, to: Dat
       },
     },
     include: {
-      invoice: { select: { number: true, issueDate: true, type: true, totalAmount: true, contact: { select: { name: true, cif: true } } } },
+      invoice: {
+        select: {
+          number: true,
+          issueDate: true,
+          type: true,
+          totalAmount: true,
+          contact: { select: { name: true, cif: true } },
+        },
+      },
     },
   });
 
@@ -169,9 +184,7 @@ async function generateWithholdingsReport(db: any, companyId: string, from: Date
     // Estimate: if netAmount < totalAmount - vatAmount, the difference is withholding
     const netAmt = inv.netAmount ?? 0;
     const vatAmt = inv.vatAmount ?? 0;
-    const estimatedWithholding = netAmt > 0
-      ? Math.max(0, (inv.totalAmount - vatAmt) - netAmt)
-      : 0;
+    const estimatedWithholding = netAmt > 0 ? Math.max(0, inv.totalAmount - vatAmt - netAmt) : 0;
 
     if (estimatedWithholding > 0.01) {
       const base = inv.totalAmount - vatAmt;

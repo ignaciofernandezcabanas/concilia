@@ -56,19 +56,29 @@ export default function ConsolidadoPage() {
 
         {/* Tabs */}
         <div className="flex items-center gap-1 border-b border-subtle">
-          <button onClick={() => setTab("pyg")} className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-colors ${tab === "pyg" ? "border-accent text-accent" : "border-transparent text-text-secondary"}`}>
+          <button
+            onClick={() => setTab("pyg")}
+            className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-colors ${tab === "pyg" ? "border-accent text-accent" : "border-transparent text-text-secondary"}`}
+          >
             PyG consolidada
           </button>
-          <button onClick={() => setTab("balance")} className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-colors ${tab === "balance" ? "border-accent text-accent" : "border-transparent text-text-secondary"}`}>
+          <button
+            onClick={() => setTab("balance")}
+            className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-colors ${tab === "balance" ? "border-accent text-accent" : "border-transparent text-text-secondary"}`}
+          >
             Balance consolidado
           </button>
         </div>
 
-        {loading ? <LoadingSpinner /> : companies.length === 0 ? (
+        {loading ? (
+          <LoadingSpinner />
+        ) : companies.length === 0 ? (
           <div className="flex flex-col items-center py-16">
             <Layers size={40} className="text-text-tertiary mb-3" />
             <p className="text-[13px] text-text-secondary">No hay datos de consolidación.</p>
-            <p className="text-[11px] text-text-tertiary mt-1">Necesitas al menos 2 sociedades en la organización.</p>
+            <p className="text-[11px] text-text-tertiary mt-1">
+              Necesitas al menos 2 sociedades en la organización.
+            </p>
           </div>
         ) : (
           <div className="bg-white rounded-lg border border-subtle overflow-hidden">
@@ -87,14 +97,23 @@ export default function ConsolidadoPage() {
               // Try to extract income/expenses from PyG results
               const income = results?.ingresoExplotacion ?? 0;
               const expenses = results?.gastosExplotacion ?? 0;
-              const result = results?.resultadoEjercicio ?? (income - expenses);
+              const result = results?.resultadoEjercicio ?? income - expenses;
 
               return (
-                <div key={cr.company.id} className="flex items-center h-11 px-5 border-b border-border-light text-[13px]">
-                  <span className="flex-1 font-medium text-text-primary">{cr.company.shortName ?? cr.company.name}</span>
+                <div
+                  key={cr.company.id}
+                  className="flex items-center h-11 px-5 border-b border-border-light text-[13px]"
+                >
+                  <span className="flex-1 font-medium text-text-primary">
+                    {cr.company.shortName ?? cr.company.name}
+                  </span>
                   <span className="w-24 text-right font-mono">{formatAmount(Number(income))}</span>
-                  <span className="w-24 text-right font-mono">{formatAmount(Number(expenses))}</span>
-                  <span className={`w-28 text-right font-mono font-semibold ${Number(result) >= 0 ? "text-green-text" : "text-red-text"}`}>
+                  <span className="w-24 text-right font-mono">
+                    {formatAmount(Number(expenses))}
+                  </span>
+                  <span
+                    className={`w-28 text-right font-mono font-semibold ${Number(result) >= 0 ? "text-green-text" : "text-red-text"}`}
+                  >
                     {formatAmount(Number(result))}
                   </span>
                 </div>
@@ -106,22 +125,28 @@ export default function ConsolidadoPage() {
               <div className="flex items-center h-11 px-5 bg-page text-[13px] font-semibold">
                 <span className="flex-1 text-text-primary">Consolidado</span>
                 <span className="w-24 text-right font-mono">
-                  {formatAmount(perCompany.reduce((s, cr) => {
-                    const r = (cr.report as { results?: Record<string, number> })?.results;
-                    return s + Number(r?.ingresoExplotacion ?? 0);
-                  }, 0))}
+                  {formatAmount(
+                    perCompany.reduce((s, cr) => {
+                      const r = (cr.report as { results?: Record<string, number> })?.results;
+                      return s + Number(r?.ingresoExplotacion ?? 0);
+                    }, 0)
+                  )}
                 </span>
                 <span className="w-24 text-right font-mono">
-                  {formatAmount(perCompany.reduce((s, cr) => {
-                    const r = (cr.report as { results?: Record<string, number> })?.results;
-                    return s + Number(r?.gastosExplotacion ?? 0);
-                  }, 0))}
+                  {formatAmount(
+                    perCompany.reduce((s, cr) => {
+                      const r = (cr.report as { results?: Record<string, number> })?.results;
+                      return s + Number(r?.gastosExplotacion ?? 0);
+                    }, 0)
+                  )}
                 </span>
                 <span className="w-28 text-right font-mono text-accent">
-                  {formatAmount(perCompany.reduce((s, cr) => {
-                    const r = (cr.report as { results?: Record<string, number> })?.results;
-                    return s + Number(r?.resultadoEjercicio ?? 0);
-                  }, 0))}
+                  {formatAmount(
+                    perCompany.reduce((s, cr) => {
+                      const r = (cr.report as { results?: Record<string, number> })?.results;
+                      return s + Number(r?.resultadoEjercicio ?? 0);
+                    }, 0)
+                  )}
                 </span>
               </div>
             )}

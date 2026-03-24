@@ -19,10 +19,7 @@ import { findFuzzyMatch } from "./matchers/fuzzy-match";
 import { findLlmMatch } from "./matchers/llm-match";
 
 import { classifyByRules } from "./classifiers/rule-classifier";
-import {
-  classifyByLlm,
-  type HistoricalClassification,
-} from "./classifiers/llm-classifier";
+import { classifyByLlm, type HistoricalClassification } from "./classifiers/llm-classifier";
 
 import { assignPriority } from "./prioritizer";
 import { CONCEPT_MAX_LENGTH } from "./constants";
@@ -87,19 +84,13 @@ export async function runReconciliation(
     where: { id: companyId },
   });
 
-  const {
-    autoApproveThreshold,
-    materialityThreshold,
-    materialityMinor,
-  } = company;
+  const { autoApproveThreshold, materialityThreshold, materialityMinor } = company;
 
   // Load per-category thresholds (fallback to global)
   const categoryThresholds = await db.categoryThreshold.findMany({
     where: { companyId },
   });
-  const categoryThresholdMap = new Map(
-    categoryThresholds.map((ct) => [ct.category, ct.threshold])
-  );
+  const categoryThresholdMap = new Map(categoryThresholds.map((ct) => [ct.category, ct.threshold]));
   const getThreshold = (category: string) =>
     categoryThresholdMap.get(category) ?? autoApproveThreshold;
 
@@ -135,7 +126,8 @@ export async function runReconciliation(
   // Process each transaction
   for (const tx of pendingTx) {
     try {
-      await processTransaction(db, 
+      await processTransaction(
+        db,
         tx,
         companyId,
         contacts,
@@ -149,12 +141,8 @@ export async function runReconciliation(
       );
       result.processed++;
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unknown error";
-      console.error(
-        `[reconciliation] Error processing tx ${tx.id}:`,
-        message
-      );
+      const message = error instanceof Error ? error.message : "Unknown error";
+      console.error(`[reconciliation] Error processing tx ${tx.id}:`, message);
       result.errors.push({ txId: tx.id, error: message });
       result.processed++;
     }
@@ -247,7 +235,7 @@ async function processTransaction(
   if (duplicateResult.isDuplicate) {
     await createReconciliation(db, tx, companyId, {
       type: "MANUAL",
-      confidence: 0.90,
+      confidence: 0.9,
       matchReason: `possible_duplicate:group_${duplicateResult.groupId}`,
       detectedType: "POSSIBLE_DUPLICATE",
       autoApprove: false,
@@ -279,9 +267,7 @@ async function processTransaction(
   if (tx.amount > 0) {
     // Positive amount could be a credit note refund — check for CREDIT_ISSUED invoices
     const creditNotes = pendingInvoices.filter(
-      (inv) =>
-        inv.type === "CREDIT_ISSUED" &&
-        Math.abs(inv.totalAmount - tx.amount) < 0.01
+      (inv) => inv.type === "CREDIT_ISSUED" && Math.abs(inv.totalAmount - tx.amount) < 0.01
     );
     if (creditNotes.length === 1) {
       const cn = creditNotes[0];
@@ -291,14 +277,12 @@ async function processTransaction(
         matchReason: `credit_note:${cn.number}:exact_amount`,
         detectedType: "CREDIT_NOTE",
         invoiceId: cn.id,
-        autoApprove:
-          0.95 >= autoApproveThreshold &&
-          Math.abs(tx.amount) <= materialityThreshold,
+        autoApprove: 0.95 >= autoApproveThreshold && Math.abs(tx.amount) <= materialityThreshold,
       });
       const shouldAuto =
-        0.95 >= autoApproveThreshold &&
-        Math.abs(tx.amount) <= materialityThreshold;
-      await updateTxStatus(db, 
+        0.95 >= autoApproveThreshold && Math.abs(tx.amount) <= materialityThreshold;
+      await updateTxStatus(
+        db,
         tx.id,
         shouldAuto ? "RECONCILED" : "PENDING",
         "CREDIT_NOTE",
@@ -322,8 +306,7 @@ async function processTransaction(
   if (tx.amount < 0) {
     const creditNotes = pendingInvoices.filter(
       (inv) =>
-        inv.type === "CREDIT_RECEIVED" &&
-        Math.abs(inv.totalAmount - Math.abs(tx.amount)) < 0.01
+        inv.type === "CREDIT_RECEIVED" && Math.abs(inv.totalAmount - Math.abs(tx.amount)) < 0.01
     );
     if (creditNotes.length === 1) {
       const cn = creditNotes[0];
@@ -333,14 +316,12 @@ async function processTransaction(
         matchReason: `credit_note:${cn.number}:exact_amount`,
         detectedType: "CREDIT_NOTE",
         invoiceId: cn.id,
-        autoApprove:
-          0.95 >= autoApproveThreshold &&
-          Math.abs(tx.amount) <= materialityThreshold,
+        autoApprove: 0.95 >= autoApproveThreshold && Math.abs(tx.amount) <= materialityThreshold,
       });
       const shouldAuto =
-        0.95 >= autoApproveThreshold &&
-        Math.abs(tx.amount) <= materialityThreshold;
-      await updateTxStatus(db, 
+        0.95 >= autoApproveThreshold && Math.abs(tx.amount) <= materialityThreshold;
+      await updateTxStatus(
+        db,
         tx.id,
         shouldAuto ? "RECONCILED" : "PENDING",
         "CREDIT_NOTE",
@@ -384,8 +365,8 @@ async function processTransaction(
     const isIncome = tx.amount > 0;
     const partialCandidates = pendingInvoices.filter((inv) => {
       const matchType = isIncome
-        ? (inv.type === "ISSUED" || inv.type === "CREDIT_RECEIVED")
-        : (inv.type === "RECEIVED" || inv.type === "CREDIT_ISSUED");
+        ? inv.type === "ISSUED" || inv.type === "CREDIT_RECEIVED"
+        : inv.type === "RECEIVED" || inv.type === "CREDIT_ISSUED";
       if (!matchType) return false;
       // Amount must be less than invoice but > 10% of it
       const pending = inv.amountPending ?? inv.totalAmount;
@@ -396,10 +377,12 @@ async function processTransaction(
     for (const inv of partialCandidates) {
       const contact = inv.contact;
       if (!contact) continue;
-      const ibanMatch = contact.iban && tx.counterpartIban &&
+      const ibanMatch =
+        contact.iban &&
+        tx.counterpartIban &&
         contact.iban.replace(/\s/g, "") === tx.counterpartIban.replace(/\s/g, "");
-      const cifMatch = contact.cif && tx.concept &&
-        tx.concept.toUpperCase().includes(contact.cif.toUpperCase());
+      const cifMatch =
+        contact.cif && tx.concept && tx.concept.toUpperCase().includes(contact.cif.toUpperCase());
       if (ibanMatch || cifMatch) {
         matchOutcome = {
           type: "PARTIAL_MATCH",
@@ -440,7 +423,7 @@ async function processTransaction(
         companyId,
         isActive: true,
         counterpartIban: tx.counterpartIban ?? "none",
-        confidence: { gte: 0.80 },
+        confidence: { gte: 0.8 },
       },
       orderBy: { confidence: "desc" },
       take: 1,
@@ -450,21 +433,22 @@ async function processTransaction(
       const pattern = learnedPatterns[0];
       // Find the matching invoice using the pattern's predicted action
       const candidates = pendingInvoices.filter((inv) => {
-        const isMatch = tx.amount > 0
-          ? (inv.type === "ISSUED" || inv.type === "CREDIT_RECEIVED")
-          : (inv.type === "RECEIVED" || inv.type === "CREDIT_ISSUED");
+        const isMatch =
+          tx.amount > 0
+            ? inv.type === "ISSUED" || inv.type === "CREDIT_RECEIVED"
+            : inv.type === "RECEIVED" || inv.type === "CREDIT_ISSUED";
         return isMatch && inv.contact?.iban === tx.counterpartIban;
       });
 
       if (candidates.length > 0) {
         const best = candidates[0];
         const diff = Math.abs(tx.amount) - best.totalAmount;
-        if (Math.abs(diff) < best.totalAmount * 0.10) {
+        if (Math.abs(diff) < best.totalAmount * 0.1) {
           matchOutcome = {
             type: "DIFFERENCE_MATCH",
             invoiceId: best.id,
             invoiceIds: [best.id],
-            confidence: Math.min(pattern.confidence, 0.90),
+            confidence: Math.min(pattern.confidence, 0.9),
             matchReason: `learned_pattern:${pattern.id}:${pattern.predictedReason}`,
             difference: diff,
             differenceReason: pattern.predictedReason,
@@ -476,7 +460,10 @@ async function processTransaction(
               data: { occurrences: { increment: 1 }, supervisedApplyCount: { increment: 1 } },
             });
           } catch (err) {
-            console.warn("[learning] Failed to increment pattern usage:", err instanceof Error ? err.message : err);
+            console.warn(
+              "[learning] Failed to increment pattern usage:",
+              err instanceof Error ? err.message : err
+            );
           }
         }
       }
@@ -537,17 +524,15 @@ async function processTransaction(
     const isSmallDiff =
       matchOutcome.difference != null &&
       Math.abs(matchOutcome.difference) <= materialityMinor &&
-      matchOutcome.confidence >= 0.70;
+      matchOutcome.confidence >= 0.7;
 
     const isUnidentifiedIncome = !matchOutcome.invoiceId && tx.amount > 0;
 
     const shouldAutoApprove =
       !isUnidentifiedIncome &&
-      (
-        (matchOutcome.confidence >= categoryThreshold &&
-          Math.abs(tx.amount) <= materialityThreshold) ||
-        isSmallDiff
-      );
+      ((matchOutcome.confidence >= categoryThreshold &&
+        Math.abs(tx.amount) <= materialityThreshold) ||
+        isSmallDiff);
 
     // For grouped matches, create a reconciliation per invoice
     if (matchOutcome.type === "GROUPED_MATCH" && matchOutcome.invoiceIds.length > 1) {
@@ -597,7 +582,7 @@ async function processTransaction(
 
       // Generate explanation for bandeja (fire-and-forget — non-blocking)
       const invoiceForExplain = matchOutcome.invoiceId
-        ? pendingInvoices.find((i) => i.id === matchOutcome!.invoiceId) ?? null
+        ? (pendingInvoices.find((i) => i.id === matchOutcome!.invoiceId) ?? null)
         : null;
       generateExplanation({
         tx,
@@ -608,12 +593,14 @@ async function processTransaction(
           difference: matchOutcome.difference,
           differenceReason: matchOutcome.differenceReason,
         },
-        invoice: invoiceForExplain ? {
-          number: invoiceForExplain.number,
-          totalAmount: invoiceForExplain.totalAmount,
-          contactName: invoiceForExplain.contact?.name ?? "Desconocido",
-          dueDate: invoiceForExplain.dueDate?.toISOString().slice(0, 10) ?? null,
-        } : null,
+        invoice: invoiceForExplain
+          ? {
+              number: invoiceForExplain.number,
+              totalAmount: invoiceForExplain.totalAmount,
+              contactName: invoiceForExplain.contact?.name ?? "Desconocido",
+              dueDate: invoiceForExplain.dueDate?.toISOString().slice(0, 10) ?? null,
+            }
+          : null,
         threshold: categoryThreshold,
         materialityThreshold,
       })
@@ -759,12 +746,7 @@ async function processTransaction(
   // PHASE 4: UNIDENTIFIED
   // =====================================================================
 
-  const priority = assignPriority(
-    tx,
-    "UNIDENTIFIED",
-    0,
-    materialityThreshold
-  );
+  const priority = assignPriority(tx, "UNIDENTIFIED", 0, materialityThreshold);
 
   await updateTxStatus(db, tx.id, "PENDING", "UNIDENTIFIED", priority);
 
@@ -781,7 +763,13 @@ async function processTransaction(
   // Generate explanation for unidentified items (fire-and-forget)
   generateExplanation({
     tx,
-    reconciliation: { type: "MANUAL", confidenceScore: 0, matchReason: "unidentified", difference: null, differenceReason: null },
+    reconciliation: {
+      type: "MANUAL",
+      confidenceScore: 0,
+      matchReason: "unidentified",
+      difference: null,
+      differenceReason: null,
+    },
     invoice: null,
     threshold: autoApproveThreshold,
     materialityThreshold,
@@ -821,12 +809,12 @@ async function createReconciliation(
   params: CreateRecoParams
 ): Promise<void> {
   const invoiceAmount = params.invoiceId
-    ? (
+    ? ((
         await db.invoice.findUnique({
           where: { id: params.invoiceId },
           select: { totalAmount: true },
         })
-      )?.totalAmount ?? null
+      )?.totalAmount ?? null)
     : null;
 
   await db.reconciliation.create({
@@ -841,7 +829,8 @@ async function createReconciliation(
       invoiceAmount,
       bankAmount: Math.abs(tx.amount),
       difference: params.difference ?? null,
-      differenceReason: (params.differenceReason as import("@prisma/client").DifferenceReason | null) ?? null,
+      differenceReason:
+        (params.differenceReason as import("@prisma/client").DifferenceReason | null) ?? null,
       ...(params.autoApprove ? { resolvedAt: new Date() } : {}),
     },
   });
@@ -886,7 +875,10 @@ function resolveDetectedType(match: MatchOutcome): DetectedType {
  * Uses the unified function but wraps it for non-transactional context.
  */
 async function markInvoicePaid(
-  db: ScopedPrisma,invoiceId: string, paidAmount: number): Promise<void> {
+  db: ScopedPrisma,
+  invoiceId: string,
+  paidAmount: number
+): Promise<void> {
   const { updateInvoicePaymentStatus } = await import("./invoice-payments");
   // In the engine, we're not inside a $transaction, so we pass prisma directly
   // The unified function accepts any Prisma-like client
@@ -935,7 +927,10 @@ async function learnFromApproval(
       });
     }
   } catch (err) {
-    console.warn("[learning] Failed to learn from approval:", err instanceof Error ? err.message : err);
+    console.warn(
+      "[learning] Failed to learn from approval:",
+      err instanceof Error ? err.message : err
+    );
   }
 }
 

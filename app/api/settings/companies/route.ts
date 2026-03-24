@@ -16,7 +16,9 @@ const createCompanySchema = z.object({
   functionalCurrency: z.string().length(3).default("EUR"),
   presentationCurrency: z.string().length(3).optional(),
   parentCompanyId: z.string().optional().nullable(),
-  consolidationMethod: z.enum(["FULL", "EQUITY", "PROPORTIONAL", "NOT_CONSOLIDATED"]).default("FULL"),
+  consolidationMethod: z
+    .enum(["FULL", "EQUITY", "PROPORTIONAL", "NOT_CONSOLIDATED"])
+    .default("FULL"),
   ownershipPercentage: z.number().min(0).max(100).default(100),
   nciMethod: z.enum(["FAIR_VALUE", "PROPORTIONATE"]).optional().nullable(),
   acquisitionDate: z.string().optional().nullable(),
@@ -24,11 +26,15 @@ const createCompanySchema = z.object({
   firstConsolidationPeriod: z.string().optional().nullable(),
   segment: z.string().optional().nullable(),
   geographicRegion: z.string().optional().nullable(),
-  bankAccounts: z.array(z.object({
-    iban: z.string().min(1),
-    bankName: z.string().optional(),
-    alias: z.string().optional(),
-  })).optional(),
+  bankAccounts: z
+    .array(
+      z.object({
+        iban: z.string().min(1),
+        bankName: z.string().optional(),
+        alias: z.string().optional(),
+      })
+    )
+    .optional(),
 });
 
 /**
@@ -109,7 +115,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         parentCompanyId: data.parentCompanyId,
         consolidationMethod: data.consolidationMethod as any,
         ownershipPercentage: data.ownershipPercentage,
-        nciMethod: data.nciMethod as any ?? undefined,
+        nciMethod: (data.nciMethod as any) ?? undefined,
         acquisitionDate: data.acquisitionDate ? new Date(data.acquisitionDate) : undefined,
         fiscalYearEndMonth: data.fiscalYearEndMonth,
         firstConsolidationPeriod: data.firstConsolidationPeriod,

@@ -25,8 +25,20 @@ describe("GET /api/transactions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCtx.db.bankTransaction.findMany.mockResolvedValue([
-      { id: "tx_1", amount: -1200, concept: "PAGO PROVEEDOR", status: "PENDING", valueDate: new Date() },
-      { id: "tx_2", amount: 5000, concept: "COBRO CLIENTE", status: "RECONCILED", valueDate: new Date() },
+      {
+        id: "tx_1",
+        amount: -1200,
+        concept: "PAGO PROVEEDOR",
+        status: "PENDING",
+        valueDate: new Date(),
+      },
+      {
+        id: "tx_2",
+        amount: 5000,
+        concept: "COBRO CLIENTE",
+        status: "RECONCILED",
+        valueDate: new Date(),
+      },
     ]);
     mockCtx.db.bankTransaction.count.mockResolvedValue(2);
   });

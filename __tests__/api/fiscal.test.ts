@@ -29,7 +29,9 @@ describe("GET /api/fiscal", () => {
   });
 
   it("devuelve datos de IVA con type=vat", async () => {
-    const req = new NextRequest("http://localhost/api/fiscal?type=vat&from=2026-01-01&to=2026-03-31");
+    const req = new NextRequest(
+      "http://localhost/api/fiscal?type=vat&from=2026-01-01&to=2026-03-31"
+    );
     const res = await GET(req);
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -40,7 +42,9 @@ describe("GET /api/fiscal", () => {
   });
 
   it("devuelve datos de retenciones con type=withholdings", async () => {
-    const req = new NextRequest("http://localhost/api/fiscal?type=withholdings&from=2026-01-01&to=2026-03-31");
+    const req = new NextRequest(
+      "http://localhost/api/fiscal?type=withholdings&from=2026-01-01&to=2026-03-31"
+    );
     const res = await GET(req);
     expect(res.status).toBe(200);
     const body = await res.json();

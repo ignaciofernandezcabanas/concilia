@@ -19,13 +19,20 @@ function buildLine(type: string, fills: Array<[number, string]>): string {
 // Header: bank=0049, branch=2345, account=0123456789
 // sign=2 (credit=positive), balance=5000000 cents=50000.00€, currency=978
 const HEADER = buildLine("11", [
-  [2, "0049"], [6, "2345"], [10, "0123456789"],
-  [32, "2"], [33, "00000005000000"], [47, "978"],
+  [2, "0049"],
+  [6, "2345"],
+  [10, "0123456789"],
+  [32, "2"],
+  [33, "00000005000000"],
+  [47, "978"],
 ]);
 
 // TX1: date=150326, sign=1 (debit), amount=120000 cents=1200.00€
 const TX1 = buildLine("22", [
-  [10, "150326"], [27, "1"], [28, "00000000120000"], [42, "1234"],
+  [10, "150326"],
+  [27, "1"],
+  [28, "00000000120000"],
+  [42, "1234"],
   [46, "PAGO PROVEEDOR TEST SL"],
 ]);
 
@@ -34,12 +41,17 @@ const TX1_SUPP = buildLine("23", [[16, "FACTURA FRA-2026-001"]]);
 
 // TX2: date=160326, sign=2 (credit), amount=50000 cents=500.00€
 const TX2 = buildLine("22", [
-  [10, "160326"], [27, "2"], [28, "00000000050000"],
+  [10, "160326"],
+  [27, "2"],
+  [28, "00000000050000"],
   [46, "COBRO CLIENTE ABC"],
 ]);
 
 // Footer: sign=2, balance=4930000 cents=49300.00€
-const FOOTER = buildLine("33", [[20, "2"], [21, "00000004930000"]]);
+const FOOTER = buildLine("33", [
+  [20, "2"],
+  [21, "00000004930000"],
+]);
 
 const END = buildLine("88", []);
 
@@ -60,23 +72,23 @@ describe("Norma43 Parser", () => {
   });
 
   it("saldo inicial: céntimos → euros", () => {
-    expect(parseNorma43(SAMPLE_N43).initialBalance).toBe(50000.00);
+    expect(parseNorma43(SAMPLE_N43).initialBalance).toBe(50000.0);
   });
 
   it("saldo final: céntimos → euros", () => {
-    expect(parseNorma43(SAMPLE_N43).finalBalance).toBe(49300.00);
+    expect(parseNorma43(SAMPLE_N43).finalBalance).toBe(49300.0);
   });
 
   it("cargo (signo 1) → amount negativo", () => {
     const cargo = parseNorma43(SAMPLE_N43).transactions.find((t) => t.amount < 0);
     expect(cargo).toBeDefined();
-    expect(cargo!.amount).toBe(-1200.00);
+    expect(cargo!.amount).toBe(-1200.0);
   });
 
   it("abono (signo 2) → amount positivo", () => {
     const abono = parseNorma43(SAMPLE_N43).transactions.find((t) => t.amount > 0);
     expect(abono).toBeDefined();
-    expect(abono!.amount).toBe(500.00);
+    expect(abono!.amount).toBe(500.0);
   });
 
   it("concepto + complemento tipo 23 concatenados", () => {

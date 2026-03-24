@@ -10,8 +10,16 @@ import { useFetch } from "@/hooks/useApi";
 import { qs } from "@/lib/api-client";
 import { Download } from "lucide-react";
 
-interface PyGLine { code: string; amount: number; percentOverRevenue: number | null; children?: PyGLine[]; }
-interface PyGReport { lines: PyGLine[]; results: { ebitda: number | null }; }
+interface PyGLine {
+  code: string;
+  amount: number;
+  percentOverRevenue: number | null;
+  children?: PyGLine[];
+}
+interface PyGReport {
+  lines: PyGLine[];
+  results: { ebitda: number | null };
+}
 
 export default function PyGPage() {
   const [periodType, setPeriodType] = useState<PeriodType>("quarter");
@@ -21,7 +29,9 @@ export default function PyGPage() {
   // Fetch one report per month for monthly columns
   const monthPaths = period.months.map((m) => {
     const from = `${m.key}-01`;
-    const to = new Date(parseInt(m.key.slice(0, 4)), parseInt(m.key.slice(5, 7)), 0).toISOString().slice(0, 10);
+    const to = new Date(parseInt(m.key.slice(0, 4)), parseInt(m.key.slice(5, 7)), 0)
+      .toISOString()
+      .slice(0, 10);
     return `/api/reports/pyg${qs({ from, to, level: 4, includeEbitda: true })}`;
   });
 
@@ -85,7 +95,10 @@ export default function PyGPage() {
           <div className="flex items-center gap-2.5">
             <PeriodSelector
               periodType={periodType}
-              setPeriodType={(pt) => { setPeriodType(pt); setOffset(0); }}
+              setPeriodType={(pt) => {
+                setPeriodType(pt);
+                setOffset(0);
+              }}
               label={period.label}
               onPrev={() => setOffset((o) => o - 1)}
               onNext={() => setOffset((o) => o + 1)}

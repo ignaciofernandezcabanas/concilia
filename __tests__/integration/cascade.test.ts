@@ -16,7 +16,9 @@ vi.mock("@/lib/ai/model-router", () => ({
 // Mock confidence engine — use real calculateConfidence but mock runSystemChecks
 const mockRunSystemChecks = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/ai/confidence-engine", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/ai/confidence-engine")>("@/lib/ai/confidence-engine");
+  const actual = await vi.importActual<typeof import("@/lib/ai/confidence-engine")>(
+    "@/lib/ai/confidence-engine"
+  );
   return {
     ...actual,
     runSystemChecks: mockRunSystemChecks,
@@ -25,7 +27,14 @@ vi.mock("@/lib/ai/confidence-engine", async () => {
 
 // Mock context retriever
 vi.mock("@/lib/ai/context-retriever", () => ({
-  getRelevantContext: vi.fn().mockResolvedValue({ sameCounterpart: [], similarConcept: [], activePatterns: [], totalFound: 0 }),
+  getRelevantContext: vi
+    .fn()
+    .mockResolvedValue({
+      sameCounterpart: [],
+      similarConcept: [],
+      activePatterns: [],
+      totalFound: 0,
+    }),
   formatContextForPrompt: vi.fn().mockReturnValue(""),
 }));
 
@@ -57,7 +66,7 @@ describe("Classification Cascade", () => {
       ruleName: "IBAN_CLASSIFY:ES...",
     });
 
-    const result = await classifyWithCascade(tx, mockDb as any, 0.90);
+    const result = await classifyWithCascade(tx, mockDb as any, 0.9);
 
     expect(result.resolvedBy).toBe("deterministic");
     expect(result.accountCode).toBe("628");
@@ -70,7 +79,7 @@ describe("Classification Cascade", () => {
       accountCode: "628",
       accountName: "Suministros",
       cashflowType: "OPERATING",
-      confidence: 0.90,
+      confidence: 0.9,
       reasoning: "Suministro eléctrico",
     });
 
@@ -102,7 +111,7 @@ describe("Classification Cascade", () => {
       reasoning: "Suministro eléctrico Endesa",
     });
 
-    const result = await classifyWithCascade(tx, mockDb as any, 0.80);
+    const result = await classifyWithCascade(tx, mockDb as any, 0.8);
 
     expect(result.resolvedBy).toBe("sonnet");
     expect(result.accountCode).toBe("628");
@@ -117,7 +126,7 @@ describe("Classification Cascade", () => {
       accountCode: "999",
       accountName: "Inventada",
       cashflowType: "OPERATING",
-      confidence: 0.90,
+      confidence: 0.9,
       reasoning: "test",
     });
     // System checks fail for Haiku
@@ -134,7 +143,7 @@ describe("Classification Cascade", () => {
       reasoning: "Correcto",
     });
 
-    const result = await classifyWithCascade(tx, mockDb as any, 0.80);
+    const result = await classifyWithCascade(tx, mockDb as any, 0.8);
 
     expect(result.resolvedBy).toBe("sonnet");
     expect(mockCallAIJson).toHaveBeenCalledTimes(2);
@@ -148,7 +157,7 @@ describe("Classification Cascade", () => {
     // Sonnet: null
     mockCallAIJson.mockResolvedValueOnce(null);
 
-    const result = await classifyWithCascade(tx, mockDb as any, 0.90);
+    const result = await classifyWithCascade(tx, mockDb as any, 0.9);
 
     expect(result.resolvedBy).toBe("unresolved");
     expect(result.accountCode).toBeNull();
@@ -163,7 +172,7 @@ describe("Classification Cascade", () => {
       ruleName: "test",
     });
 
-    await classifyWithCascade(tx, mockDb as any, 0.90);
+    await classifyWithCascade(tx, mockDb as any, 0.9);
 
     expect(mockCallAIJson).not.toHaveBeenCalled();
     expect(mockDb.bankTransaction.findMany).not.toHaveBeenCalled();
@@ -179,7 +188,7 @@ describe("Classification Cascade", () => {
       reasoning: "Seguro",
     });
 
-    const result = await classifyWithCascade(tx, mockDb as any, 0.80);
+    const result = await classifyWithCascade(tx, mockDb as any, 0.8);
 
     expect(result.resolvedBy).toBe("haiku");
     // Only 1 call (Haiku), not 2

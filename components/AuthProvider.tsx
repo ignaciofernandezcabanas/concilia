@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  useCallback,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import { auth, api, getSupabase } from "@/lib/api-client";
 import type { Session, User as SupabaseUser } from "@supabase/supabase-js";
 
@@ -63,14 +56,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const sb = getSupabase();
-    if (!sb) { setLoading(false); return; }
+    if (!sb) {
+      setLoading(false);
+      return;
+    }
 
     sb.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setLoading(false);
     });
 
-    const { data: { subscription } } = sb.auth.onAuthStateChange((_event, s) => {
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setLoading(false);
     });
@@ -85,7 +83,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     api
-      .get<{ user: { id: string; activeOrgId: string | null; activeCompanyId: string | null; name: string | null } }>("/api/auth/context")
+      .get<{
+        user: {
+          id: string;
+          activeOrgId: string | null;
+          activeCompanyId: string | null;
+          name: string | null;
+        };
+      }>("/api/auth/context")
       .then((res) => {
         setOrg({
           activeOrgId: res.user.activeOrgId,

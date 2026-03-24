@@ -24,7 +24,12 @@ export const DELETE = withAuth(
       entityType: "BankTransaction",
       entityId: id,
       details: { concept: tx.concept, amount: tx.amount },
-    }).catch((err) => console.warn("[[id]] Non-critical operation failed:", err instanceof Error ? err.message : err));
+    }).catch((err) =>
+      console.warn(
+        "[[id]] Non-critical operation failed:",
+        err instanceof Error ? err.message : err
+      )
+    );
 
     return NextResponse.json({ success: true });
   },

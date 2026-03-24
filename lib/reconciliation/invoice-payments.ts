@@ -26,7 +26,11 @@ export async function updateInvoicePaymentStatus(
   invoiceId: string,
   paidAmount: number,
   tx: PrismaTransaction
-): Promise<{ newStatus: "PAID" | "PARTIAL" | "PENDING"; newAmountPaid: number; newAmountPending: number }> {
+): Promise<{
+  newStatus: "PAID" | "PARTIAL" | "PENDING";
+  newAmountPaid: number;
+  newAmountPending: number;
+}> {
   const invoice = await tx.invoice.findUniqueOrThrow({
     where: { id: invoiceId },
   });

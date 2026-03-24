@@ -13,28 +13,40 @@ describe("Validation Edge Cases", () => {
 
   it("factura con amount 0 → error validation", () => {
     const result = invoiceSchema.safeParse({
-      number: "FRA-001", totalAmount: 0, type: "ISSUED", issueDate: "2026-03-01",
+      number: "FRA-001",
+      totalAmount: 0,
+      type: "ISSUED",
+      issueDate: "2026-03-01",
     });
     expect(result.success).toBe(false);
   });
 
   it("factura con amount negativo → error validation", () => {
     const result = invoiceSchema.safeParse({
-      number: "FRA-001", totalAmount: -500, type: "ISSUED", issueDate: "2026-03-01",
+      number: "FRA-001",
+      totalAmount: -500,
+      type: "ISSUED",
+      issueDate: "2026-03-01",
     });
     expect(result.success).toBe(false);
   });
 
   it("factura sin número → error validation", () => {
     const result = invoiceSchema.safeParse({
-      number: "", totalAmount: 1000, type: "ISSUED", issueDate: "2026-03-01",
+      number: "",
+      totalAmount: 1000,
+      type: "ISSUED",
+      issueDate: "2026-03-01",
     });
     expect(result.success).toBe(false);
   });
 
   it("factura válida → pasa validation", () => {
     const result = invoiceSchema.safeParse({
-      number: "FRA-001", totalAmount: 1000, type: "ISSUED", issueDate: "2026-03-01",
+      number: "FRA-001",
+      totalAmount: 1000,
+      type: "ISSUED",
+      issueDate: "2026-03-01",
     });
     expect(result.success).toBe(true);
   });
@@ -52,7 +64,7 @@ describe("Number Rounding (financial precision)", () => {
   });
 
   it("difference tolerance 0.01€", () => {
-    const a = 1200.00;
+    const a = 1200.0;
     const b = 1199.99;
     const diff = Math.abs(a - b);
     expect(diff).toBeLessThanOrEqual(0.01);

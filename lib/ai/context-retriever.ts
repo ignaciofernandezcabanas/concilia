@@ -92,15 +92,31 @@ export async function getRelevantContext(
       where: {
         isActive: true,
         status: { in: ["ACTIVE_SUPERVISED", "PROMOTED"] },
-        OR: [
-          ...(tx.counterpartIban ? [{ counterpartIban: tx.counterpartIban }] : []),
-          ...(tx.counterpartName ? [{ counterpartName: { contains: tx.counterpartName, mode: "insensitive" as const } }] : []),
-        ].length > 0
-          ? [
-              ...(tx.counterpartIban ? [{ counterpartIban: tx.counterpartIban }] : []),
-              ...(tx.counterpartName ? [{ counterpartName: { contains: tx.counterpartName, mode: "insensitive" as const } }] : []),
-            ]
-          : [{ id: "__never_match__" }], // no IBAN or name → skip
+        OR:
+          [
+            ...(tx.counterpartIban ? [{ counterpartIban: tx.counterpartIban }] : []),
+            ...(tx.counterpartName
+              ? [
+                  {
+                    counterpartName: { contains: tx.counterpartName, mode: "insensitive" as const },
+                  },
+                ]
+              : []),
+          ].length > 0
+            ? [
+                ...(tx.counterpartIban ? [{ counterpartIban: tx.counterpartIban }] : []),
+                ...(tx.counterpartName
+                  ? [
+                      {
+                        counterpartName: {
+                          contains: tx.counterpartName,
+                          mode: "insensitive" as const,
+                        },
+                      },
+                    ]
+                  : []),
+              ]
+            : [{ id: "__never_match__" }], // no IBAN or name → skip
       },
       take: 5,
       select: {
@@ -152,7 +168,8 @@ export async function getRelevantContext(
     occurrences: p.occurrences,
   }));
 
-  const totalFound = sameCounterpartDecisions.length + similarConceptDecisions.length + patterns.length;
+  const totalFound =
+    sameCounterpartDecisions.length + similarConceptDecisions.length + patterns.length;
 
   return {
     sameCounterpart: sameCounterpartDecisions,
@@ -167,7 +184,10 @@ export async function getRelevantContext(
 export function formatContextForPrompt(context: RetrievedContext): string {
   if (context.totalFound === 0) return "";
 
-  const parts: string[] = ["<controller_decisions>", "Decisiones previas del controller para transacciones similares:"];
+  const parts: string[] = [
+    "<controller_decisions>",
+    "Decisiones previas del controller para transacciones similares:",
+  ];
 
   if (context.sameCounterpart.length > 0) {
     parts.push("\nMismo proveedor/cliente (IBAN):");
@@ -193,7 +213,9 @@ export function formatContextForPrompt(context: RetrievedContext): string {
     parts.push("\nPatrones aprendidos:");
     for (const p of context.activePatterns) {
       const account = p.predictedAccount ? ` (${p.predictedAccount})` : "";
-      parts.push(`- ${p.predictedAction}${account} | confianza ${Math.round(p.confidence * 100)}% | ${p.occurrences} ocurrencias`);
+      parts.push(
+        `- ${p.predictedAction}${account} | confianza ${Math.round(p.confidence * 100)}% | ${p.occurrences} ocurrencias`
+      );
     }
   }
 

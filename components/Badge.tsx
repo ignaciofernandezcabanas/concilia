@@ -82,18 +82,8 @@ const LABELS: Record<string, string> = {
   CREDIT_NOTE: "Abono",
 };
 
-export default function Badge({
-  value,
-  label,
-}: {
-  value: string;
-  label?: string;
-}) {
+export default function Badge({ value, label }: { value: string; label?: string }) {
   const style = STATUS_STYLES[value] || "bg-hover text-text-secondary";
   const text = label || LABELS[value] || value;
-  return (
-    <span className={`text-xs font-medium px-2 py-0.5 rounded ${style}`}>
-      {text}
-    </span>
-  );
+  return <span className={`text-xs font-medium px-2 py-0.5 rounded ${style}`}>{text}</span>;
 }

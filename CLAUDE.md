@@ -139,7 +139,12 @@ import { prisma } from "@/lib/db"; // PROHIBIDO excepto GLOBAL-PRISMA
 ```typescript
 // ✅ Siempre via model-router
 import { callAI, callAIJson } from "@/lib/ai/model-router";
-const result = await callAIJson("classify_quick", PROMPT.system, PROMPT.buildUser(data), PROMPT.schema);
+const result = await callAIJson(
+  "classify_quick",
+  PROMPT.system,
+  PROMPT.buildUser(data),
+  PROMPT.schema
+);
 
 // ❌ Nunca SDK directamente (solo en model-router.ts y client.ts)
 ```
@@ -147,6 +152,7 @@ const result = await callAIJson("classify_quick", PROMPT.system, PROMPT.buildUse
 ### Prompts — XML Tags (seguridad)
 
 Datos financieros del usuario van SIEMPRE entre XML tags:
+
 ```
 <bank_transaction>...</bank_transaction>
 <pending_invoices>...</pending_invoices>
@@ -157,6 +163,7 @@ Datos financieros del usuario van SIEMPRE entre XML tags:
 ### GLOBAL-PRISMA (11 excepciones)
 
 Archivos que usan `prisma` global con `// GLOBAL-PRISMA: <razón>`:
+
 - `lib/auth/middleware.ts` — user lookup before company scoping
 - `lib/reconciliation/resolver.ts` — $transaction requires raw Prisma
 - `lib/reconciliation/detectors/intercompany-detector.ts` — cross-company lookup
@@ -169,11 +176,11 @@ Archivos que usan `prisma` global con `// GLOBAL-PRISMA: <razón>`:
 
 ### Model Router (`lib/ai/model-router.ts`)
 
-| Modelo | Tareas | Max tokens |
-|--------|--------|-----------|
-| Haiku | parse_concept, extract_invoice_pdf, explain_bandeja, classify_quick | 150-300 |
-| Sonnet | match_llm, classify_llm, parse_rule_nl, draft_reminder, explain_anomaly, treasury_advice | 500-1200 |
-| Opus | daily_briefing, weekly_briefing, close_proposal, risk_analysis | 800-2000 |
+| Modelo | Tareas                                                                                   | Max tokens |
+| ------ | ---------------------------------------------------------------------------------------- | ---------- |
+| Haiku  | parse_concept, extract_invoice_pdf, explain_bandeja, classify_quick                      | 150-300    |
+| Sonnet | match_llm, classify_llm, parse_rule_nl, draft_reminder, explain_anomaly, treasury_advice | 500-1200   |
+| Opus   | daily_briefing, weekly_briefing, close_proposal, risk_analysis                           | 800-2000   |
 
 ### Classification Cascade (`lib/ai/cascade.ts`)
 
@@ -195,6 +202,7 @@ System checks para LLM outputs: `account_exists`, `group_coherent`, `amount_in_r
 ### Context Retriever (`lib/ai/context-retriever.ts`)
 
 Inyecta decisiones previas del controller en los prompts LLM:
+
 1. Mismo IBAN → ControllerDecision
 2. Concepto similar → Fuse.js threshold 0.5
 3. Patrones activos → LearnedPattern (ACTIVE_SUPERVISED/PROMOTED)
@@ -234,18 +242,18 @@ Auto-aprobación: `confidence >= categoryThreshold AND amount <= materialityThre
 2. Cobro parcial
 3. Cobro agrupado (multiple invoices)
 4. Cobro con diferencia pequeña (commission, discount)
-5-6. Pagos (symmetric to cobros)
-7. Gasto recurrente sin match
-8. Ingreso no identificado (ALWAYS bandeja)
-9. Devolución de cobro
-10. Devolución de pago
-11. Transferencia interna
-12. Posible duplicado (ALWAYS bandeja)
-13. Factura emitida sin cobro, dentro de plazo
-14. Factura vencida (overdue alert)
-15-16. Facturas recibidas sin pago
-17. Nota de crédito
-18. Factura sin match (ALWAYS bandeja)
+   5-6. Pagos (symmetric to cobros)
+5. Gasto recurrente sin match
+6. Ingreso no identificado (ALWAYS bandeja)
+7. Devolución de cobro
+8. Devolución de pago
+9. Transferencia interna
+10. Posible duplicado (ALWAYS bandeja)
+11. Factura emitida sin cobro, dentro de plazo
+12. Factura vencida (overdue alert)
+    15-16. Facturas recibidas sin pago
+13. Nota de crédito
+14. Factura sin match (ALWAYS bandeja)
 
 ## Learning System
 
@@ -292,50 +300,55 @@ ContextSwitcher en sidebar. Vista consolidada (read-only) para OWNER/ADMIN. Dete
 ## Endpoints (59 total)
 
 ### Core
-| Method | Path | Description |
-|--------|------|-------------|
-| GET/POST | /api/invoices | CRUD facturas |
-| POST | /api/invoices/import | Importar PDFs |
-| GET/POST | /api/transactions | CRUD movimientos |
-| POST | /api/transactions/import | Importar CSV |
-| POST | /api/transactions/[id]/action | Acción sobre tx |
-| POST | /api/reconciliation/run | Motor de conciliación |
-| POST | /api/reconciliation/[id]/resolve | Resolver (12 acciones) |
-| POST | /api/reconciliation/batch-resolve | Resolver múltiples |
+
+| Method   | Path                              | Description            |
+| -------- | --------------------------------- | ---------------------- |
+| GET/POST | /api/invoices                     | CRUD facturas          |
+| POST     | /api/invoices/import              | Importar PDFs          |
+| GET/POST | /api/transactions                 | CRUD movimientos       |
+| POST     | /api/transactions/import          | Importar CSV           |
+| POST     | /api/transactions/[id]/action     | Acción sobre tx        |
+| POST     | /api/reconciliation/run           | Motor de conciliación  |
+| POST     | /api/reconciliation/[id]/resolve  | Resolver (12 acciones) |
+| POST     | /api/reconciliation/batch-resolve | Resolver múltiples     |
 
 ### Reportes
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | /api/reports/pyg | PyG |
-| GET | /api/reports/balance | Balance |
-| GET | /api/reports/cashflow | EFE / Tesorería |
-| GET | /api/reports/forecast | Previsión tesorería |
-| GET | /api/reports/aging | Antigüedad AR/AP |
-| GET | /api/reports/ledger | Libro Mayor |
-| GET | /api/reports/trial-balance | Sumas y Saldos |
-| GET | /api/reports/consolidated | Consolidado |
-| GET | /api/fiscal | IVA + Retenciones |
+
+| Method | Path                       | Description         |
+| ------ | -------------------------- | ------------------- |
+| GET    | /api/reports/pyg           | PyG                 |
+| GET    | /api/reports/balance       | Balance             |
+| GET    | /api/reports/cashflow      | EFE / Tesorería     |
+| GET    | /api/reports/forecast      | Previsión tesorería |
+| GET    | /api/reports/aging         | Antigüedad AR/AP    |
+| GET    | /api/reports/ledger        | Libro Mayor         |
+| GET    | /api/reports/trial-balance | Sumas y Saldos      |
+| GET    | /api/reports/consolidated  | Consolidado         |
+| GET    | /api/fiscal                | IVA + Retenciones   |
 
 ### Contabilidad
-| Method | Path | Description |
-|--------|------|-------------|
-| GET/POST | /api/journal-entries | Asientos |
-| POST/DELETE | /api/journal-entries/[id] | Post/reverse/delete |
-| GET/POST | /api/fixed-assets | Activos fijos |
-| GET/POST/PUT | /api/budgets | Presupuestos |
+
+| Method       | Path                      | Description         |
+| ------------ | ------------------------- | ------------------- |
+| GET/POST     | /api/journal-entries      | Asientos            |
+| POST/DELETE  | /api/journal-entries/[id] | Post/reverse/delete |
+| GET/POST     | /api/fixed-assets         | Activos fijos       |
+| GET/POST/PUT | /api/budgets              | Presupuestos        |
 
 ### AI Agent
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | /api/cron/daily-agent | Agente diario (cron) |
-| GET | /api/agent-runs | Historial runs |
-| GET/PUT | /api/settings/automation | Config automatización |
-| GET | /api/settings/automation/learning | Métricas aprendizaje |
+
+| Method  | Path                              | Description           |
+| ------- | --------------------------------- | --------------------- |
+| POST    | /api/cron/daily-agent             | Agente diario (cron)  |
+| GET     | /api/agent-runs                   | Historial runs        |
+| GET/PUT | /api/settings/automation          | Config automatización |
+| GET     | /api/settings/automation/learning | Métricas aprendizaje  |
 
 ### Settings
-| Method | Path | Description |
-|--------|------|-------------|
-| GET/POST/PUT | /api/settings/accounts | Cuentas PGC |
-| GET/PUT | /api/settings/periods | Periodos contables |
-| POST | /api/settings/rules/parse | NL rule → structured |
-| GET/PUT | /api/auth/context | Context switching |
+
+| Method       | Path                      | Description          |
+| ------------ | ------------------------- | -------------------- |
+| GET/POST/PUT | /api/settings/accounts    | Cuentas PGC          |
+| GET/PUT      | /api/settings/periods     | Periodos contables   |
+| POST         | /api/settings/rules/parse | NL rule → structured |
+| GET/PUT      | /api/auth/context         | Context switching    |

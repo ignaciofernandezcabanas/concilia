@@ -22,8 +22,13 @@ export interface InvoiceParseResult {
 }
 
 const TYPE_MAP: Record<string, "ISSUED" | "RECEIVED"> = {
-  emitida: "ISSUED", issued: "ISSUED", venta: "ISSUED",
-  recibida: "RECEIVED", received: "RECEIVED", compra: "RECEIVED", gasto: "RECEIVED",
+  emitida: "ISSUED",
+  issued: "ISSUED",
+  venta: "ISSUED",
+  recibida: "RECEIVED",
+  received: "RECEIVED",
+  compra: "RECEIVED",
+  gasto: "RECEIVED",
 };
 
 export async function parseInvoiceExcel(buffer: Buffer): Promise<InvoiceParseResult> {
@@ -40,7 +45,9 @@ export async function parseInvoiceExcel(buffer: Buffer): Promise<InvoiceParseRes
 
     const vals = (row.values as unknown[]).slice(1); // exceljs is 1-indexed
     const numero = String(vals[0] ?? "").trim();
-    const tipo = String(vals[1] ?? "").trim().toLowerCase();
+    const tipo = String(vals[1] ?? "")
+      .trim()
+      .toLowerCase();
     const fechaRaw = vals[2];
     const importe = parseFloat(String(vals[3] ?? ""));
     const base = vals[4] != null ? parseFloat(String(vals[4])) : null;

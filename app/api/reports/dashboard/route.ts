@@ -7,7 +7,7 @@ import { withAuth, type AuthContext } from "@/lib/auth/middleware";
  * Returns pre-aggregated KPIs for the dashboard. All sums are done in the DB.
  */
 export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const { company } = ctx;
   const { searchParams } = req.nextUrl;
 
@@ -21,17 +21,39 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   const from = new Date(fromParam);
   const to = new Date(toParam);
 
-  const [incomeAgg, expenseAgg, cashflowAgg, pendingCount, reconciledAgg, pendingMatchAgg, unclassifiedAgg] = await Promise.all([
+  const [
+    incomeAgg,
+    expenseAgg,
+    cashflowAgg,
+    pendingCount,
+    reconciledAgg,
+    pendingMatchAgg,
+    unclassifiedAgg,
+  ] = await Promise.all([
     db.invoice.aggregate({
-      where: { companyId: company.id, issueDate: { gte: from, lte: to }, type: { in: ["ISSUED", "CREDIT_RECEIVED"] }, status: { not: "CANCELLED" } },
+      where: {
+        companyId: company.id,
+        issueDate: { gte: from, lte: to },
+        type: { in: ["ISSUED", "CREDIT_RECEIVED"] },
+        status: { not: "CANCELLED" },
+      },
       _sum: { totalAmount: true },
     }),
     db.invoice.aggregate({
-      where: { companyId: company.id, issueDate: { gte: from, lte: to }, type: { in: ["RECEIVED", "CREDIT_ISSUED"] }, status: { not: "CANCELLED" } },
+      where: {
+        companyId: company.id,
+        issueDate: { gte: from, lte: to },
+        type: { in: ["RECEIVED", "CREDIT_ISSUED"] },
+        status: { not: "CANCELLED" },
+      },
       _sum: { totalAmount: true },
     }),
     db.bankTransaction.aggregate({
-      where: { companyId: company.id, valueDate: { gte: from, lte: to }, status: { notIn: ["DUPLICATE", "IGNORED"] } },
+      where: {
+        companyId: company.id,
+        valueDate: { gte: from, lte: to },
+        status: { notIn: ["DUPLICATE", "IGNORED"] },
+      },
       _sum: { amount: true },
     }),
     db.bankTransaction.count({
@@ -48,7 +70,13 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       _count: true,
     }),
     db.bankTransaction.aggregate({
-      where: { companyId: company.id, valueDate: { gte: from, lte: to }, status: { notIn: ["RECONCILED", "CLASSIFIED", "PENDING", "DUPLICATE", "IGNORED", "INTERNAL"] } },
+      where: {
+        companyId: company.id,
+        valueDate: { gte: from, lte: to },
+        status: {
+          notIn: ["RECONCILED", "CLASSIFIED", "PENDING", "DUPLICATE", "IGNORED", "INTERNAL"],
+        },
+      },
       _sum: { amount: true },
       _count: true,
     }),

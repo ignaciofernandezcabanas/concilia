@@ -1,6 +1,12 @@
 "use client";
 
-export default function ConfidenceBar({ score, showLabel = false }: { score: number; showLabel?: boolean }) {
+export default function ConfidenceBar({
+  score,
+  showLabel = false,
+}: {
+  score: number;
+  showLabel?: boolean;
+}) {
   const pct = Math.round(score * 100);
   const color = pct >= 90 ? "bg-green" : pct >= 70 ? "bg-amber" : "bg-red";
   return (

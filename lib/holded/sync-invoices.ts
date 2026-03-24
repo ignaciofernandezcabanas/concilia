@@ -27,7 +27,7 @@ export interface SyncInvoicesResult {
 export async function syncInvoices(
   db: ScopedPrisma,
   companyId: string,
-  apiKey: string,
+  apiKey: string
 ): Promise<SyncInvoicesResult> {
   const client = new HoldedClient(apiKey);
   const result: SyncInvoicesResult = { created: 0, updated: 0, errors: [] };
@@ -69,9 +69,7 @@ export async function syncInvoices(
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(
-        `[syncInvoices] Error processing invoice ${doc.id}: ${message}`,
-      );
+      console.error(`[syncInvoices] Error processing invoice ${doc.id}: ${message}`);
       result.errors.push({ holdedId: doc.id, error: message });
     }
   }
@@ -92,7 +90,7 @@ export async function syncInvoices(
   });
 
   console.log(
-    `[syncInvoices] company=${companyId} created=${result.created} updated=${result.updated} errors=${result.errors.length}`,
+    `[syncInvoices] company=${companyId} created=${result.created} updated=${result.updated} errors=${result.errors.length}`
   );
 
   return result;
@@ -102,11 +100,7 @@ export async function syncInvoices(
 // Mapping helpers
 // ---------------------------------------------------------------------------
 
-function mapHoldedInvoice(
-  doc: HoldedInvoice,
-  type: InvoiceType,
-  companyId: string,
-) {
+function mapHoldedInvoice(doc: HoldedInvoice, type: InvoiceType, companyId: string) {
   return {
     holdedId: doc.id,
     number: doc.docNumber,
@@ -155,11 +149,7 @@ function mapHoldedInvoice(
  *
  * Holded statuses: 0 = draft, 1 = pending, 2 = paid, 3 = overdue, 4 = cancelled
  */
-function mapHoldedStatus(
-  holdedStatus: number,
-  total: number,
-  paid: number,
-): InvoiceStatus {
+function mapHoldedStatus(holdedStatus: number, total: number, paid: number): InvoiceStatus {
   switch (holdedStatus) {
     case 2:
       return "PAID";

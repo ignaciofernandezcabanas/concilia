@@ -3,9 +3,11 @@
 ## Matching Pipeline (execute in order, stop when resolved)
 
 ### Stage 1 — Special Detections (before any matching)
+
 Run these detectors on every new bank transaction FIRST:
 
 **Internal transfer detector:**
+
 ```
 IF bankTransaction.counterpartIban IN company.ownBankAccounts.map(a => a.iban)
 THEN classify as INTERNAL, no invoice match needed
@@ -14,6 +16,7 @@ THEN classify as INTERNAL, no invoice match needed
 ```
 
 **Bank fee detector:**
+
 ```
 IF bankTransaction.amount < 0
    AND (concept matches /comisi[oó]n|mantenimiento|liquidaci|intereses.*(deudor|negativ)/i
@@ -24,6 +27,7 @@ THEN classify as BANK_FEE
 ```
 
 **Tax payment detector:**
+
 ```
 IF bankTransaction.concept matches /modelo\s*(303|111|115|200|202|349)/i
    OR counterpartIban matches AEAT known IBANs
@@ -36,6 +40,7 @@ THEN classify as TAX_PAYMENT
 ```
 
 **Payroll detector:**
+
 ```
 IF bankTransaction.concept matches /n[oó]mina|salario|paga\s*extra|ss\s*empresa/i
    AND amount pattern is negative, round-ish, recurring monthly
@@ -46,6 +51,7 @@ THEN classify as PAYROLL
 ```
 
 **Loan installment detector:**
+
 ```
 IF bankTransaction.concept matches /pr[eé]stamo|cuota|amortizaci|hipoteca/i
    AND recurring pattern (same amount ±1% for 3+ months)
@@ -56,6 +62,7 @@ THEN classify as LOAN_PAYMENT, flag for SPLIT
 ```
 
 **Duplicate detector:**
+
 ```
 IF EXISTS bankTransaction B2 WHERE
    B2.amount = B1.amount
@@ -69,6 +76,7 @@ THEN flag both as POSSIBLE_DUPLICATE
 ```
 
 ### Stage 2 — Exact Match
+
 ```typescript
 // Find invoices where:
 // - invoice.contact.iban === bankTransaction.counterpartIban
@@ -87,6 +95,7 @@ THEN flag both as POSSIBLE_DUPLICATE
 ```
 
 ### Stage 3 — Grouped Match
+
 ```typescript
 // Find combinations of 2-5 invoices from SAME contact where:
 // - SUM(invoices.totalAmount) === ABS(bankTransaction.amount) within ±0.01
@@ -102,6 +111,7 @@ THEN flag both as POSSIBLE_DUPLICATE
 ```
 
 ### Stage 4 — Fuzzy Match
+
 ```typescript
 // Relax constraints:
 // - Amount within ±2% (covers rounding, small discounts, bank charges absorbed)
@@ -113,6 +123,7 @@ THEN flag both as POSSIBLE_DUPLICATE
 ```
 
 ### Stage 5 — LLM Match (Claude API)
+
 ```typescript
 // When stages 1-4 produce no result OR confidence < 0.65:
 // Send to Claude with:
@@ -126,6 +137,7 @@ THEN flag both as POSSIBLE_DUPLICATE
 ```
 
 ### Stage 6 — Unmatched Classification
+
 ```typescript
 // If no invoice match found at any stage:
 // Classify the transaction by type using rules + LLM:
@@ -141,17 +153,26 @@ When the controller takes action on a reconciliation item, execute exactly this:
 
 ```typescript
 type ResolverAction =
-  | { type: 'APPROVE_MATCH'; reconciliationId: string }
-  | { type: 'REJECT_MATCH'; reconciliationId: string; reason: string }
-  | { type: 'MANUAL_MATCH'; bankTransactionId: string; invoiceId: string }
-  | { type: 'PARTIAL_PAYMENT'; bankTransactionId: string; invoiceId: string; amount: number }
-  | { type: 'GROUPED_PAYMENT'; bankTransactionId: string; invoiceIds: string[] }
-  | { type: 'SPLIT_TRANSACTION'; bankTransactionId: string; splits: Array<{ accountCode: string; amount: number; description: string }> }
-  | { type: 'CLASSIFY_NO_INVOICE'; bankTransactionId: string; accountCode: string; cashflowType: CashflowType }
-  | { type: 'MARK_DUPLICATE'; duplicateGroupId: string; keepTransactionId: string }
-  | { type: 'CONFIRM_BOTH_LEGITIMATE'; duplicateGroupId: string }
-  | { type: 'INVESTIGATE'; bankTransactionId: string; note: string }
-  | { type: 'REOPEN'; reconciliationId: string }
+  | { type: "APPROVE_MATCH"; reconciliationId: string }
+  | { type: "REJECT_MATCH"; reconciliationId: string; reason: string }
+  | { type: "MANUAL_MATCH"; bankTransactionId: string; invoiceId: string }
+  | { type: "PARTIAL_PAYMENT"; bankTransactionId: string; invoiceId: string; amount: number }
+  | { type: "GROUPED_PAYMENT"; bankTransactionId: string; invoiceIds: string[] }
+  | {
+      type: "SPLIT_TRANSACTION";
+      bankTransactionId: string;
+      splits: Array<{ accountCode: string; amount: number; description: string }>;
+    }
+  | {
+      type: "CLASSIFY_NO_INVOICE";
+      bankTransactionId: string;
+      accountCode: string;
+      cashflowType: CashflowType;
+    }
+  | { type: "MARK_DUPLICATE"; duplicateGroupId: string; keepTransactionId: string }
+  | { type: "CONFIRM_BOTH_LEGITIMATE"; duplicateGroupId: string }
+  | { type: "INVESTIGATE"; bankTransactionId: string; note: string }
+  | { type: "REOPEN"; reconciliationId: string };
 
 // APPROVE_MATCH:
 //   1. Set reconciliation.status = APPROVED, reconciliation.resolvedAt = now()
@@ -178,19 +199,18 @@ After matching, assign priority for the controller's triage queue:
 ```typescript
 function assignPriority(tx: BankTransaction, match: MatchResult | null): Priority {
   // CRITICAL: large unmatched amounts
-  if (!match && Math.abs(tx.amount) > company.materialityThreshold * 5)
-    return 'CRITICAL';
+  if (!match && Math.abs(tx.amount) > company.materialityThreshold * 5) return "CRITICAL";
 
   // HIGH: duplicates, partial payments, large amounts
-  if (tx.isDuplicate) return 'HIGH';
-  if (match?.type === 'PARTIAL') return 'HIGH';
-  if (Math.abs(tx.amount) > company.materialityThreshold) return 'HIGH';
+  if (tx.isDuplicate) return "HIGH";
+  if (match?.type === "PARTIAL") return "HIGH";
+  if (Math.abs(tx.amount) > company.materialityThreshold) return "HIGH";
 
   // MEDIUM: low-confidence matches, amounts near materiality
-  if (match && match.confidence < 0.80) return 'MEDIUM';
-  if (Math.abs(tx.amount) > company.materialityThreshold * 0.5) return 'MEDIUM';
+  if (match && match.confidence < 0.8) return "MEDIUM";
+  if (Math.abs(tx.amount) > company.materialityThreshold * 0.5) return "MEDIUM";
 
   // LOW: everything else (small, high-confidence, or auto-classified)
-  return 'LOW';
+  return "LOW";
 }
 ```

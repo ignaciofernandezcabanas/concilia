@@ -17,9 +17,7 @@ export type { EmailProvider, EmailMessage, EmailAttachment } from "./types";
  * Gets the storage provider for a company based on its active integration.
  * Returns null if no storage integration is configured.
  */
-export async function getStorageProvider(
-  db: ScopedPrisma
-): Promise<StorageProvider | null> {
+export async function getStorageProvider(db: ScopedPrisma): Promise<StorageProvider | null> {
   // Check for Google Drive integration
   const driveIntegration = await db.integration.findFirst({
     where: {
@@ -55,9 +53,7 @@ export async function getStorageProvider(
  * Gets the email provider for a company's invoice mailbox.
  * Looks for GMAIL or OUTLOOK integration with status CONNECTED.
  */
-export async function getEmailProvider(
-  db: ScopedPrisma
-): Promise<EmailProvider | null> {
+export async function getEmailProvider(db: ScopedPrisma): Promise<EmailProvider | null> {
   const gmailIntegration = await db.integration.findFirst({
     where: { type: "GMAIL", status: "CONNECTED" },
     select: { config: true },
@@ -89,13 +85,20 @@ function createGmailEmailProvider(accessToken: string): EmailProvider {
   return {
     name: "gmail",
     async searchMessages(query: string, maxResults = 50) {
-      const res = await fetch(`${BASE}/messages?q=${encodeURIComponent(query)}&maxResults=${maxResults}`, { headers });
+      const res = await fetch(
+        `${BASE}/messages?q=${encodeURIComponent(query)}&maxResults=${maxResults}`,
+        { headers }
+      );
       if (!res.ok) return [];
       const data = await res.json();
       const ids: string[] = (data.messages ?? []).map((m: { id: string }) => m.id);
       const messages = [];
       for (const id of ids.slice(0, maxResults)) {
-        try { messages.push(await this.getMessage(id)); } catch { /* skip */ }
+        try {
+          messages.push(await this.getMessage(id));
+        } catch {
+          /* skip */
+        }
       }
       return messages;
     },
@@ -103,26 +106,48 @@ function createGmailEmailProvider(accessToken: string): EmailProvider {
       const res = await fetch(`${BASE}/messages/${messageId}?format=full`, { headers });
       const data = await res.json();
       const hdrs = data.payload?.headers ?? [];
-      const getHdr = (name: string) => hdrs.find((h: { name: string }) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
+      const getHdr = (name: string) =>
+        hdrs.find((h: { name: string }) => h.name.toLowerCase() === name.toLowerCase())?.value ??
+        "";
       const attachments = (data.payload?.parts ?? [])
-        .filter((p: { filename: string; body?: { attachmentId?: string } }) => p.filename && p.body?.attachmentId)
-        .map((p: { filename: string; mimeType: string; body: { size: number; attachmentId: string } }) => ({
-          id: p.body.attachmentId, fileName: p.filename, mimeType: p.mimeType, size: p.body.size,
-        }));
+        .filter(
+          (p: { filename: string; body?: { attachmentId?: string } }) =>
+            p.filename && p.body?.attachmentId
+        )
+        .map(
+          (p: {
+            filename: string;
+            mimeType: string;
+            body: { size: number; attachmentId: string };
+          }) => ({
+            id: p.body.attachmentId,
+            fileName: p.filename,
+            mimeType: p.mimeType,
+            size: p.body.size,
+          })
+        );
       return {
-        id: messageId, from: getHdr("From"), to: [getHdr("To")],
-        subject: getHdr("Subject"), date: getHdr("Date"), snippet: data.snippet ?? "",
-        hasAttachments: attachments.length > 0, attachments,
+        id: messageId,
+        from: getHdr("From"),
+        to: [getHdr("To")],
+        subject: getHdr("Subject"),
+        date: getHdr("Date"),
+        snippet: data.snippet ?? "",
+        hasAttachments: attachments.length > 0,
+        attachments,
       };
     },
     async downloadAttachment(messageId: string, attachmentId: string) {
-      const res = await fetch(`${BASE}/messages/${messageId}/attachments/${attachmentId}`, { headers });
+      const res = await fetch(`${BASE}/messages/${messageId}/attachments/${attachmentId}`, {
+        headers,
+      });
       const data = await res.json();
       return Buffer.from(data.data, "base64url");
     },
     async markAsRead(messageId: string) {
       await fetch(`${BASE}/messages/${messageId}/modify`, {
-        method: "POST", headers: { ...headers, "Content-Type": "application/json" },
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
       });
     },
@@ -170,13 +195,20 @@ function createOutlookEmailProvider(accessToken: string): EmailProvider {
     name: "outlook",
     async searchMessages(query: string, maxResults = 50) {
       const filter = query.includes("unread") ? "$filter=isRead eq false" : `$search="${query}"`;
-      const res = await fetch(`${BASE}/messages?${filter}&$top=${maxResults}&$select=id,subject,from,toRecipients,receivedDateTime,bodyPreview,hasAttachments`, { headers });
+      const res = await fetch(
+        `${BASE}/messages?${filter}&$top=${maxResults}&$select=id,subject,from,toRecipients,receivedDateTime,bodyPreview,hasAttachments`,
+        { headers }
+      );
       if (!res.ok) return [];
       const data = await res.json();
       const messages = [];
       for (const m of data.value ?? []) {
         if (m.hasAttachments) {
-          try { messages.push(await this.getMessage(m.id)); } catch { /* skip */ }
+          try {
+            messages.push(await this.getMessage(m.id));
+          } catch {
+            /* skip */
+          }
         }
       }
       return messages;
@@ -188,24 +220,38 @@ function createOutlookEmailProvider(accessToken: string): EmailProvider {
       ]);
       const msg = await msgRes.json();
       const att = await attRes.json();
-      const attachments = (att.value ?? []).map((a: { id: string; name: string; contentType: string; size: number }) => ({
-        id: a.id, fileName: a.name, mimeType: a.contentType, size: a.size,
-      }));
+      const attachments = (att.value ?? []).map(
+        (a: { id: string; name: string; contentType: string; size: number }) => ({
+          id: a.id,
+          fileName: a.name,
+          mimeType: a.contentType,
+          size: a.size,
+        })
+      );
       return {
-        id: messageId, from: msg.from?.emailAddress?.address ?? "",
-        to: (msg.toRecipients ?? []).map((r: { emailAddress: { address: string } }) => r.emailAddress.address),
-        subject: msg.subject ?? "", date: msg.receivedDateTime ?? "",
-        snippet: msg.bodyPreview ?? "", hasAttachments: attachments.length > 0, attachments,
+        id: messageId,
+        from: msg.from?.emailAddress?.address ?? "",
+        to: (msg.toRecipients ?? []).map(
+          (r: { emailAddress: { address: string } }) => r.emailAddress.address
+        ),
+        subject: msg.subject ?? "",
+        date: msg.receivedDateTime ?? "",
+        snippet: msg.bodyPreview ?? "",
+        hasAttachments: attachments.length > 0,
+        attachments,
       };
     },
     async downloadAttachment(messageId: string, attachmentId: string) {
-      const res = await fetch(`${BASE}/messages/${messageId}/attachments/${attachmentId}`, { headers });
+      const res = await fetch(`${BASE}/messages/${messageId}/attachments/${attachmentId}`, {
+        headers,
+      });
       const data = await res.json();
       return Buffer.from(data.contentBytes, "base64");
     },
     async markAsRead(messageId: string) {
       await fetch(`${BASE}/messages/${messageId}`, {
-        method: "PATCH", headers: { ...headers, "Content-Type": "application/json" },
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ isRead: true }),
       });
     },

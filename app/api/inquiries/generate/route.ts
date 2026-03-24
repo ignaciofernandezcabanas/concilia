@@ -8,7 +8,12 @@ import Fuse from "fuse.js";
 const generateSchema = z.object({
   bankTransactionId: z.string().optional(),
   invoiceId: z.string().optional(),
-  triggerType: z.enum(["MISSING_INVOICE", "MISSING_DOCUMENTATION", "EXPENSE_CLARIFICATION", "IC_CONFIRMATION"]),
+  triggerType: z.enum([
+    "MISSING_INVOICE",
+    "MISSING_DOCUMENTATION",
+    "EXPENSE_CLARIFICATION",
+    "IC_CONFIRMATION",
+  ]),
   contactId: z.string().optional(),
   email: z.string().email().optional(),
   tone: z.enum(["PROFESSIONAL", "FRIENDLY", "FORMAL", "URGENT"]).default("PROFESSIONAL"),
@@ -23,7 +28,10 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     const body = await req.json();
     const parsed = generateSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid input", details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid input", details: parsed.error.flatten() },
+        { status: 400 }
+      );
     }
 
     const data = parsed.data;
@@ -57,7 +65,9 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       contact = await db.contact.findFirst({ where: { iban: bankTx.counterpartIban } });
     }
     if (!contact && bankTx?.counterpartName) {
-      const allContacts = await db.contact.findMany({ select: { id: true, name: true, email: true, accountingEmail: true } });
+      const allContacts = await db.contact.findMany({
+        select: { id: true, name: true, email: true, accountingEmail: true },
+      });
       const fuse = new Fuse(allContacts, { keys: ["name"], threshold: 0.4 });
       const results = fuse.search(bankTx.counterpartName);
       if (results.length === 1) {
@@ -66,7 +76,11 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         return NextResponse.json({
           status: "CONTACT_NEEDED",
           suggestions: results.slice(0, 5).map((r) => r.item),
-          itemContext: { bankTransactionId: bankTx?.id, concept: bankTx?.concept, counterpartName: bankTx?.counterpartName },
+          itemContext: {
+            bankTransactionId: bankTx?.id,
+            concept: bankTx?.concept,
+            counterpartName: bankTx?.counterpartName,
+          },
         });
       }
     }
@@ -90,7 +104,10 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     if (!recipientEmail) {
       // Save manual email if provided
       if (data.email) {
-        await db.contact.update({ where: { id: contact.id }, data: { accountingEmail: data.email } });
+        await db.contact.update({
+          where: { id: contact.id },
+          data: { accountingEmail: data.email },
+        });
       } else {
         return NextResponse.json({
           status: "EMAIL_NEEDED",
@@ -105,18 +122,22 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     // 4. Draft email via AI
     const draft = await draftInquiryEmail({
       trigger: data.triggerType,
-      bankTransaction: bankTx ? {
-        amount: bankTx.amount,
-        valueDate: bankTx.valueDate.toISOString().slice(0, 10),
-        concept: bankTx.concept ?? "",
-        counterpartName: bankTx.counterpartName ?? undefined,
-      } : undefined,
-      invoice: invoice ? {
-        number: invoice.number,
-        date: invoice.issueDate.toISOString().slice(0, 10),
-        amount: invoice.totalAmount,
-        description: invoice.description ?? undefined,
-      } : undefined,
+      bankTransaction: bankTx
+        ? {
+            amount: bankTx.amount,
+            valueDate: bankTx.valueDate.toISOString().slice(0, 10),
+            concept: bankTx.concept ?? "",
+            counterpartName: bankTx.counterpartName ?? undefined,
+          }
+        : undefined,
+      invoice: invoice
+        ? {
+            number: invoice.number,
+            date: invoice.issueDate.toISOString().slice(0, 10),
+            amount: invoice.totalAmount,
+            description: invoice.description ?? undefined,
+          }
+        : undefined,
       contact: {
         name: contact.name,
         accountingContact: contact.accountingContact ?? undefined,

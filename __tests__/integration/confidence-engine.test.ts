@@ -13,7 +13,11 @@ const mockPrisma = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
 
-import { calibrateFromDecision, getPatternAdjustment, isCategoryPaused } from "@/lib/ai/confidence-calibrator";
+import {
+  calibrateFromDecision,
+  getPatternAdjustment,
+  isCategoryPaused,
+} from "@/lib/ai/confidence-calibrator";
 
 function ctx(overrides: Partial<ConfidenceContext> = {}): ConfidenceContext {
   return {
@@ -40,11 +44,13 @@ describe("Confidence Engine", () => {
 
     it("materialidad alta → -0.03", () => {
       const r1 = calculateConfidence(ctx({ historicalMatchCount: 15 }));
-      const r2 = calculateConfidence(ctx({
-        historicalMatchCount: 15,
-        amount: 10000,
-        materialityThreshold: 5000,
-      }));
+      const r2 = calculateConfidence(
+        ctx({
+          historicalMatchCount: 15,
+          amount: 10000,
+          materialityThreshold: 5000,
+        })
+      );
       expect(r2.score).toBe(r1.score - 0.03);
     });
   });
@@ -63,12 +69,16 @@ describe("Confidence Engine", () => {
 
   describe("llm_classification", () => {
     it("checks pasan → score = llmConf", () => {
-      const r = calculateConfidence(ctx({ category: "llm_classification", llmConfidence: 0.80, systemCheckMultiplier: 1.0 }));
-      expect(r.score).toBe(0.80);
+      const r = calculateConfidence(
+        ctx({ category: "llm_classification", llmConfidence: 0.8, systemCheckMultiplier: 1.0 })
+      );
+      expect(r.score).toBe(0.8);
     });
 
     it("1 check falla → ×0.85", () => {
-      const r = calculateConfidence(ctx({ category: "llm_classification", llmConfidence: 0.80, systemCheckMultiplier: 0.85 }));
+      const r = calculateConfidence(
+        ctx({ category: "llm_classification", llmConfidence: 0.8, systemCheckMultiplier: 0.85 })
+      );
       expect(r.score).toBe(0.68);
     });
   });
@@ -101,7 +111,7 @@ describe("Confidence Engine", () => {
 
   describe("periodification", () => {
     it("cualquier contexto → autoExecute SIEMPRE false", () => {
-      const r = calculateConfidence(ctx({ category: "periodification", threshold: 0.50 }));
+      const r = calculateConfidence(ctx({ category: "periodification", threshold: 0.5 }));
       expect(r.autoExecute).toBe(false);
     });
   });
@@ -136,19 +146,21 @@ describe("Confidence Engine", () => {
   describe("difference_match", () => {
     it("descuento frecuente → sube", () => {
       const r = calculateConfidence(ctx({ category: "difference_match", discountFrequency: 0.8 }));
-      expect(r.score).toBeGreaterThan(0.90);
+      expect(r.score).toBeGreaterThan(0.9);
     });
 
     it("descuento atípico → baja", () => {
       const r = calculateConfidence(ctx({ category: "difference_match", isAtypical: true }));
-      expect(r.score).toBeLessThan(0.80);
+      expect(r.score).toBeLessThan(0.8);
     });
   });
 
   describe("persisted calibration", () => {
     it("persistedAdjustment positive → score increases", () => {
       const base = calculateConfidence(ctx({ category: "fuzzy_match" })); // base 0.80
-      const adjusted = calculateConfidence(ctx({ category: "fuzzy_match", persistedAdjustment: 0.05 }));
+      const adjusted = calculateConfidence(
+        ctx({ category: "fuzzy_match", persistedAdjustment: 0.05 })
+      );
       expect(adjusted.score).toBeGreaterThan(base.score);
     });
 
@@ -170,21 +182,27 @@ describe("Confidence Calibrator (DB)", () => {
 
   it("error auto-execute → upsert with -0.10", async () => {
     await calibrateFromDecision({
-      wasAutoExecuted: true, wasModified: true,
-      category: "exact_match", patternKey: "p1", companyId: "c1",
+      wasAutoExecuted: true,
+      wasModified: true,
+      category: "exact_match",
+      patternKey: "p1",
+      companyId: "c1",
     });
 
     expect(mockPrisma.confidenceAdjustment.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        create: expect.objectContaining({ adjustment: -0.10, errors30d: 1 }),
+        create: expect.objectContaining({ adjustment: -0.1, errors30d: 1 }),
       })
     );
   });
 
   it("aprobado sin cambio → upsert with +0.01", async () => {
     await calibrateFromDecision({
-      wasAutoExecuted: false, wasModified: false,
-      category: "exact_match", patternKey: "p1", companyId: "c1",
+      wasAutoExecuted: false,
+      wasModified: false,
+      category: "exact_match",
+      patternKey: "p1",
+      companyId: "c1",
     });
 
     expect(mockPrisma.confidenceAdjustment.upsert).toHaveBeenCalledWith(
@@ -197,12 +215,17 @@ describe("Confidence Calibrator (DB)", () => {
   it("2 errores → pausedUntil set", async () => {
     // First error exists
     mockPrisma.confidenceAdjustment.findUnique.mockResolvedValue({
-      adjustment: -0.10, errors30d: 1, lastErrorAt: new Date(),
+      adjustment: -0.1,
+      errors30d: 1,
+      lastErrorAt: new Date(),
     });
 
     await calibrateFromDecision({
-      wasAutoExecuted: true, wasModified: true,
-      category: "exact_match", patternKey: "p1", companyId: "c1",
+      wasAutoExecuted: true,
+      wasModified: true,
+      category: "exact_match",
+      patternKey: "p1",
+      companyId: "c1",
     });
 
     expect(mockPrisma.confidenceAdjustment.upsert).toHaveBeenCalledWith(

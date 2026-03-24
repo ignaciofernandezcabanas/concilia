@@ -99,12 +99,16 @@ export async function evaluateResponse(params: {
 
   // Determine final responseType (prefer attachment-based if document found)
   const responseType = attachmentResult.hasInvoicePdf
-    ? "DOCUMENT_ATTACHED" as ResponseType
+    ? ("DOCUMENT_ATTACHED" as ResponseType)
     : textResult.responseType;
 
   const confidence = attachmentResult.hasInvoicePdf
-    ? (attachmentResult.documentValidation?.amountMatch === "exact" ? 0.95 : 0.80)
-    : (textResult.responseType === "UNCLEAR" ? 0.30 : 0.70);
+    ? attachmentResult.documentValidation?.amountMatch === "exact"
+      ? 0.95
+      : 0.8
+    : textResult.responseType === "UNCLEAR"
+      ? 0.3
+      : 0.7;
 
   return {
     responseType,
@@ -133,7 +137,12 @@ interface AttachmentResult extends AttachmentAnalysis {
 
 async function analyzeAttachments(
   attachments: Array<{ filename: string; mimeType: string; size: number; content?: Buffer }>,
-  original: { bankTransaction?: { amount: number; valueDate: string }; invoice?: { number: string; amount: number; date: string }; contactName?: string; contactCif?: string }
+  original: {
+    bankTransaction?: { amount: number; valueDate: string };
+    invoice?: { number: string; amount: number; date: string };
+    contactName?: string;
+    contactCif?: string;
+  }
 ): Promise<AttachmentResult> {
   const result: AttachmentResult = {
     count: 0,
@@ -165,7 +174,7 @@ async function analyzeAttachments(
       if (!extracted) continue;
 
       // Detect document type by content
-      const isInvoice = extracted.totalAmount != null && (extracted.confidence ?? 0) >= 0.50;
+      const isInvoice = extracted.totalAmount != null && (extracted.confidence ?? 0) >= 0.5;
       if (isInvoice) {
         result.hasInvoicePdf = true;
         result.invoicePdfBuffer = att.content;
@@ -183,13 +192,17 @@ async function analyzeAttachments(
           else if (pct < 0.05) amountMatch = "close";
           else {
             amountMatch = "different";
-            issues.push(`Importe: factura ${extracted.totalAmount}€ vs movimiento ${Math.abs(expectedAmount)}€`);
+            issues.push(
+              `Importe: factura ${extracted.totalAmount}€ vs movimiento ${Math.abs(expectedAmount)}€`
+            );
           }
         }
 
         let dateMatch: DocumentValidation["dateMatch"] = "not_found";
         if (extracted.issueDate && expectedDate) {
-          const dDays = Math.abs(new Date(extracted.issueDate).getTime() - new Date(expectedDate).getTime()) / 86400000;
+          const dDays =
+            Math.abs(new Date(extracted.issueDate).getTime() - new Date(expectedDate).getTime()) /
+            86400000;
           if (dDays <= 5) dateMatch = "exact";
           else if (dDays <= 60) dateMatch = "close";
           else {
@@ -198,12 +211,16 @@ async function analyzeAttachments(
           }
         }
 
-        const contactMatch = !original.contactCif || !extracted.supplierCif
-          ? true // can't verify → assume OK
-          : extracted.supplierCif.replace(/[^A-Z0-9]/g, "") === original.contactCif.replace(/[^A-Z0-9]/g, "");
+        const contactMatch =
+          !original.contactCif || !extracted.supplierCif
+            ? true // can't verify → assume OK
+            : extracted.supplierCif.replace(/[^A-Z0-9]/g, "") ===
+              original.contactCif.replace(/[^A-Z0-9]/g, "");
 
         if (!contactMatch) {
-          issues.push(`Emisor: factura de ${extracted.supplierName ?? "?"} vs contacto ${original.contactName ?? "?"}`);
+          issues.push(
+            `Emisor: factura de ${extracted.supplierName ?? "?"} vs contacto ${original.contactName ?? "?"}`
+          );
         }
 
         result.documentValidation = {
@@ -231,7 +248,10 @@ async function classifyResponseText(
   inquiry: { triggerType: InquiryTrigger; subject: string },
   email: { body: string; subject: string },
   attachments: AttachmentResult,
-  original: { bankTransaction?: { amount: number; valueDate: string; concept: string }; invoice?: { number: string; amount: number } }
+  original: {
+    bankTransaction?: { amount: number; valueDate: string; concept: string };
+    invoice?: { number: string; amount: number };
+  }
 ): Promise<TextAnalysis> {
   const aiResult = await callAIJson(
     "evaluate_inquiry_response",
@@ -282,70 +302,126 @@ function decideAction(
   if (att.hasInvoicePdf && att.documentValidation) {
     const v = att.documentValidation;
     if (v.amountMatch === "exact" && v.contactMatch) {
-      return { action: "CLOSE_RESOLVED", reason: "Factura recibida, importe coincide exactamente.", waitUntilDate: null };
+      return {
+        action: "CLOSE_RESOLVED",
+        reason: "Factura recibida, importe coincide exactamente.",
+        waitUntilDate: null,
+      };
     }
     if (v.amountMatch === "close" && v.contactMatch) {
-      return { action: "CLOSE_RESOLVED", reason: "Factura recibida, diferencia menor del 5% (posible retención/comisión).", waitUntilDate: null };
+      return {
+        action: "CLOSE_RESOLVED",
+        reason: "Factura recibida, diferencia menor del 5% (posible retención/comisión).",
+        waitUntilDate: null,
+      };
     }
     if (v.amountMatch === "different") {
-      return { action: "REPLY_REQUEST_CORRECT", reason: `Factura recibida pero importe no coincide. ${v.issues.join(". ")}`, waitUntilDate: null };
+      return {
+        action: "REPLY_REQUEST_CORRECT",
+        reason: `Factura recibida pero importe no coincide. ${v.issues.join(". ")}`,
+        waitUntilDate: null,
+      };
     }
     if (!v.contactMatch) {
-      return { action: "REPLY_REQUEST_CORRECT", reason: "Factura recibida pero parece ser de otro proveedor.", waitUntilDate: null };
+      return {
+        action: "REPLY_REQUEST_CORRECT",
+        reason: "Factura recibida pero parece ser de otro proveedor.",
+        waitUntilDate: null,
+      };
     }
   }
 
   // CASE 2: Delivery note but we asked for invoice
   if (att.hasDeliveryNote && triggerType === "MISSING_INVOICE") {
-    return { action: "REPLY_REQUEST_DOCUMENT", reason: "Han enviado un albarán pero necesitamos la factura.", waitUntilDate: null };
+    return {
+      action: "REPLY_REQUEST_DOCUMENT",
+      reason: "Han enviado un albarán pero necesitamos la factura.",
+      waitUntilDate: null,
+    };
   }
 
   // CASE 3: Promise with date
   if (text.responseType === "DOCUMENT_PROMISED" && text.promisedDeliveryDate) {
     const wait = new Date(text.promisedDeliveryDate);
     wait.setDate(wait.getDate() + 2); // +2 days grace
-    return { action: "WAIT_PROMISED", reason: `Prometen enviar el ${text.promisedDeliveryDate}.`, waitUntilDate: wait.toISOString().slice(0, 10) };
+    return {
+      action: "WAIT_PROMISED",
+      reason: `Prometen enviar el ${text.promisedDeliveryDate}.`,
+      waitUntilDate: wait.toISOString().slice(0, 10),
+    };
   }
 
   // CASE 4: Promise without date
   if (text.responseType === "DOCUMENT_PROMISED") {
-    return { action: "REPLY_REQUEST_DOCUMENT", reason: "Prometen enviar pero sin fecha concreta.", waitUntilDate: null };
+    return {
+      action: "REPLY_REQUEST_DOCUMENT",
+      reason: "Prometen enviar pero sin fecha concreta.",
+      waitUntilDate: null,
+    };
   }
 
   // CASE 5: Explanation
   if (text.responseType === "EXPLANATION_GIVEN") {
-    return { action: "ESCALATE_CONTROLLER", reason: `Explican: "${text.summary}". Requiere decisión del controller.`, waitUntilDate: null };
+    return {
+      action: "ESCALATE_CONTROLLER",
+      reason: `Explican: "${text.summary}". Requiere decisión del controller.`,
+      waitUntilDate: null,
+    };
   }
 
   // CASE 6: Dispute
   if (text.responseType === "DISPUTE") {
-    return { action: "ESCALATE_DISPUTE", reason: `Disputan: "${text.disputeReason}". Requiere decisión humana.`, waitUntilDate: null };
+    return {
+      action: "ESCALATE_DISPUTE",
+      reason: `Disputan: "${text.disputeReason}". Requiere decisión humana.`,
+      waitUntilDate: null,
+    };
   }
 
   // CASE 7: Redirect
   if (text.responseType === "REDIRECT" && text.redirectContact?.email) {
-    return { action: "REPLY_REDIRECT", reason: `Redirigen a ${text.redirectContact.name} (${text.redirectContact.email}).`, waitUntilDate: null };
+    return {
+      action: "REPLY_REDIRECT",
+      reason: `Redirigen a ${text.redirectContact.name} (${text.redirectContact.email}).`,
+      waitUntilDate: null,
+    };
   }
 
   // CASE 8: Question back
   if (text.responseType === "QUESTION_BACK") {
-    return { action: "REPLY_CLARIFY", reason: `Preguntan: "${text.questionAsked}".`, waitUntilDate: null };
+    return {
+      action: "REPLY_CLARIFY",
+      reason: `Preguntan: "${text.questionAsked}".`,
+      waitUntilDate: null,
+    };
   }
 
   // CASE 9: Out of office
   if (text.responseType === "OUT_OF_OFFICE") {
     const wait = new Date();
     wait.setDate(wait.getDate() + 5);
-    return { action: "WAIT_PROMISED", reason: "Respuesta automática de ausencia.", waitUntilDate: wait.toISOString().slice(0, 10) };
+    return {
+      action: "WAIT_PROMISED",
+      reason: "Respuesta automática de ausencia.",
+      waitUntilDate: wait.toISOString().slice(0, 10),
+    };
   }
 
   // CASE 10: Acknowledgment only
   if (text.responseType === "ACKNOWLEDGMENT_ONLY") {
     const wait = new Date();
     wait.setDate(wait.getDate() + 3);
-    return { action: "WAIT_PROMISED", reason: "Solo acusan recibo. Esperar 3 días.", waitUntilDate: wait.toISOString().slice(0, 10) };
+    return {
+      action: "WAIT_PROMISED",
+      reason: "Solo acusan recibo. Esperar 3 días.",
+      waitUntilDate: wait.toISOString().slice(0, 10),
+    };
   }
 
   // DEFAULT: Unclear → escalate
-  return { action: "ESCALATE_CONTROLLER", reason: "No se puede determinar si resuelve la consulta.", waitUntilDate: null };
+  return {
+    action: "ESCALATE_CONTROLLER",
+    reason: "No se puede determinar si resuelve la consulta.",
+    waitUntilDate: null,
+  };
 }

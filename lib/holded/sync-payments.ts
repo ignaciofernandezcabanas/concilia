@@ -27,7 +27,7 @@ export interface SyncPaymentsResult {
 export async function syncPayments(
   db: ScopedPrisma,
   companyId: string,
-  apiKey: string,
+  apiKey: string
 ): Promise<SyncPaymentsResult> {
   const client = new HoldedClient(apiKey);
   const result: SyncPaymentsResult = {
@@ -101,7 +101,7 @@ export async function syncPayments(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(
-        `[syncPayments] Error processing payments for invoice ${invoice.holdedId}: ${message}`,
+        `[syncPayments] Error processing payments for invoice ${invoice.holdedId}: ${message}`
       );
       result.errors.push({
         invoiceHoldedId: invoice.holdedId,
@@ -125,7 +125,7 @@ export async function syncPayments(
   });
 
   console.log(
-    `[syncPayments] company=${companyId} payments_created=${result.created} payments_updated=${result.updated} invoices_updated=${result.invoicesUpdated} errors=${result.errors.length}`,
+    `[syncPayments] company=${companyId} payments_created=${result.created} payments_updated=${result.updated} invoices_updated=${result.invoicesUpdated} errors=${result.errors.length}`
   );
 
   return result;
@@ -138,7 +138,7 @@ export async function syncPayments(
 function deriveStatus(
   amountPaid: number,
   amountPending: number,
-  totalAmount: number,
+  totalAmount: number
 ): InvoiceStatus {
   // Use a small tolerance for floating-point comparison
   if (amountPending <= 0.01) return "PAID";

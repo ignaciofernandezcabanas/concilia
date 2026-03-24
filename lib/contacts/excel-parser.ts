@@ -21,9 +21,12 @@ export interface ContactParseResult {
 const CIF_REGEX = /^[A-HJNP-SUVW]\d{7}[0-9A-J]$|^\d{8}[A-Z]$|^[XYZ]\d{7}[A-Z]$/;
 
 const TYPE_MAP: Record<string, "CUSTOMER" | "SUPPLIER" | "BOTH"> = {
-  cliente: "CUSTOMER", customer: "CUSTOMER",
-  proveedor: "SUPPLIER", supplier: "SUPPLIER",
-  ambos: "BOTH", both: "BOTH",
+  cliente: "CUSTOMER",
+  customer: "CUSTOMER",
+  proveedor: "SUPPLIER",
+  supplier: "SUPPLIER",
+  ambos: "BOTH",
+  both: "BOTH",
 };
 
 export async function parseContactExcel(buffer: Buffer): Promise<ContactParseResult> {
@@ -41,7 +44,9 @@ export async function parseContactExcel(buffer: Buffer): Promise<ContactParseRes
     const vals = (row.values as unknown[]).slice(1);
     const name = String(vals[0] ?? "").trim();
     const cif = vals[1] != null ? String(vals[1]).trim().toUpperCase() : null;
-    const tipoRaw = String(vals[2] ?? "").trim().toLowerCase();
+    const tipoRaw = String(vals[2] ?? "")
+      .trim()
+      .toLowerCase();
     const email = vals[3] != null ? String(vals[3]).trim() : null;
     const iban = vals[4] != null ? String(vals[4]).trim().replace(/\s/g, "").toUpperCase() : null;
 

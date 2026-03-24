@@ -39,9 +39,7 @@ export class GoogleDriveClient {
 
   constructor(config: DriveClientConfig) {
     if (!config.clientId || !config.clientSecret || !config.refreshToken) {
-      throw new Error(
-        "GoogleDriveClient: clientId, clientSecret, and refreshToken are required",
-      );
+      throw new Error("GoogleDriveClient: clientId, clientSecret, and refreshToken are required");
     }
 
     this.auth = new google.auth.OAuth2(config.clientId, config.clientSecret);
@@ -77,10 +75,7 @@ export class GoogleDriveClient {
    * Find a folder by name within an optional parent folder.
    * Returns the first match, or null if not found.
    */
-  async getFolderByName(
-    name: string,
-    parentId?: string,
-  ): Promise<DriveFile | null> {
+  async getFolderByName(name: string, parentId?: string): Promise<DriveFile | null> {
     const parentClause = parentId ? ` and '${parentId}' in parents` : "";
     const query = `mimeType='${FOLDER_MIME}' and name='${escapeDriveQuery(name)}' and trashed=false${parentClause}`;
 
@@ -122,7 +117,7 @@ export class GoogleDriveClient {
     name: string,
     content: Buffer,
     mimeType: string,
-    folderId: string,
+    folderId: string
   ): Promise<DriveFile> {
     const response = await this.drive.files.create({
       requestBody: {
@@ -149,8 +144,7 @@ export class GoogleDriveClient {
     do {
       const response = await this.drive.files.list({
         q: `'${folderId}' in parents and trashed=false`,
-        fields:
-          "nextPageToken, files(id, name, mimeType, webViewLink, createdTime)",
+        fields: "nextPageToken, files(id, name, mimeType, webViewLink, createdTime)",
         pageSize: 100,
         pageToken,
       });

@@ -14,7 +14,10 @@ export function formatAmount(amount: number, currency = "EUR"): string {
   return isNegative ? `(${str})` : str;
 }
 
-export function formatDate(date: string | Date, format: "short" | "long" | "iso" = "short"): string {
+export function formatDate(
+  date: string | Date,
+  format: "short" | "long" | "iso" = "short"
+): string {
   const d = typeof date === "string" ? new Date(date) : date;
   if (format === "iso") return localDateStr(d);
   if (format === "long") {

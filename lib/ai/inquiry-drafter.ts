@@ -11,7 +11,12 @@ import type { InquiryTrigger, InquiryTone } from "@prisma/client";
 
 export interface DraftParams {
   trigger: InquiryTrigger;
-  bankTransaction?: { amount: number; valueDate: string; concept: string; counterpartName?: string };
+  bankTransaction?: {
+    amount: number;
+    valueDate: string;
+    concept: string;
+    counterpartName?: string;
+  };
   invoice?: { number: string; date: string; amount: number; description?: string };
   contact: { name: string; accountingContact?: string; preferredLanguage?: string };
   company: { name: string };
@@ -93,7 +98,10 @@ function generateTemplate(params: DraftParams): DraftResult {
   }
 
   // Generate plain text from HTML (strip tags)
-  const plainBody = body.replace(/<[^>]*>/g, "").replace(/\n\n+/g, "\n\n").trim();
+  const plainBody = body
+    .replace(/<[^>]*>/g, "")
+    .replace(/\n\n+/g, "\n\n")
+    .trim();
 
   return { subject, htmlBody: body, plainBody };
 }

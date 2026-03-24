@@ -97,10 +97,13 @@ export default function OnboardingPage() {
 
   const cifRegex = /^[A-HJNP-SUVW]\d{7}[0-9A-J]$|^\d{8}[A-Z]$|^[XYZ]\d{7}[A-Z]$/;
   const cifValid = cifRegex.test(cif.trim().toUpperCase());
-  const canAdvance1 = name.trim().length > 0 && cifValid && (mode !== "group" || isAddMode || orgName.trim().length > 0);
+  const canAdvance1 =
+    name.trim().length > 0 &&
+    cifValid &&
+    (mode !== "group" || isAddMode || orgName.trim().length > 0);
   const canAdvance2 = accounts.some((a) => a.iban.trim().length > 0);
 
-  const totalSteps = isAddMode ? 3 : (mode === "group" ? 4 : 3);
+  const totalSteps = isAddMode ? 3 : mode === "group" ? 4 : 3;
   const stepLabels = isAddMode
     ? ["Empresa", "Cuentas", "Plan contable"]
     : mode === "group"
@@ -129,10 +132,14 @@ export default function OnboardingPage() {
                 >
                   {displayStep > s ? <Check size={12} /> : s}
                 </div>
-                <span className={`text-[11px] hidden sm:inline ${displayStep >= s ? "text-text-primary" : "text-text-tertiary"}`}>
+                <span
+                  className={`text-[11px] hidden sm:inline ${displayStep >= s ? "text-text-primary" : "text-text-tertiary"}`}
+                >
                   {stepLabels[s - 1]}
                 </span>
-                {s < totalSteps && <div className={`flex-1 h-px ${displayStep > s ? "bg-green" : "bg-subtle"}`} />}
+                {s < totalSteps && (
+                  <div className={`flex-1 h-px ${displayStep > s ? "bg-green" : "bg-subtle"}`} />
+                )}
               </div>
             ))}
           </div>
@@ -142,7 +149,9 @@ export default function OnboardingPage() {
         {step === 0 && !isAddMode && (
           <div className="flex flex-col gap-5">
             <div className="text-center mb-4">
-              <h1 className="text-[20px] font-semibold text-text-primary mb-1">Bienvenido a Concilia</h1>
+              <h1 className="text-[20px] font-semibold text-text-primary mb-1">
+                Bienvenido a Concilia
+              </h1>
               <p className="text-[13px] text-text-secondary">¿Cómo quieres configurar tu cuenta?</p>
             </div>
 
@@ -154,7 +163,9 @@ export default function OnboardingPage() {
                 <Building size={20} className="text-accent" />
               </div>
               <div>
-                <span className="text-[14px] font-semibold text-text-primary block">Empresa individual</span>
+                <span className="text-[14px] font-semibold text-text-primary block">
+                  Empresa individual
+                </span>
                 <span className="text-[12px] text-text-secondary mt-0.5 block">
                   Una sola sociedad. Ideal para autónomos y PYMEs con una única entidad legal.
                 </span>
@@ -169,9 +180,12 @@ export default function OnboardingPage() {
                 <Users size={20} className="text-accent" />
               </div>
               <div>
-                <span className="text-[14px] font-semibold text-text-primary block">Grupo de empresas</span>
+                <span className="text-[14px] font-semibold text-text-primary block">
+                  Grupo de empresas
+                </span>
                 <span className="text-[12px] text-text-secondary mt-0.5 block">
-                  Varias sociedades bajo una misma organización. Vista consolidada, detección intercompañía.
+                  Varias sociedades bajo una misma organización. Vista consolidada, detección
+                  intercompañía.
                 </span>
               </div>
             </button>
@@ -198,7 +212,9 @@ export default function OnboardingPage() {
             {/* Org name — only for group mode on first onboarding */}
             {mode === "group" && !isAddMode && (
               <div>
-                <label className="text-xs font-medium text-text-secondary block mb-1">Nombre del grupo / organización</label>
+                <label className="text-xs font-medium text-text-secondary block mb-1">
+                  Nombre del grupo / organización
+                </label>
                 <input
                   type="text"
                   value={orgName}
@@ -210,7 +226,9 @@ export default function OnboardingPage() {
             )}
 
             <div>
-              <label className="text-xs font-medium text-text-secondary block mb-1">Nombre de la empresa</label>
+              <label className="text-xs font-medium text-text-secondary block mb-1">
+                Nombre de la empresa
+              </label>
               <input
                 type="text"
                 value={name}
@@ -223,7 +241,9 @@ export default function OnboardingPage() {
             {/* Short name — useful for groups */}
             {(mode === "group" || isAddMode) && (
               <div>
-                <label className="text-xs font-medium text-text-secondary block mb-1">Nombre corto (opcional)</label>
+                <label className="text-xs font-medium text-text-secondary block mb-1">
+                  Nombre corto (opcional)
+                </label>
                 <input
                   type="text"
                   value={shortName}
@@ -231,12 +251,16 @@ export default function OnboardingPage() {
                   placeholder="MiEmpresa"
                   className="w-full h-10 px-3 text-[13px] border border-subtle rounded-md focus:border-accent focus:outline-none"
                 />
-                <p className="text-[10px] text-text-tertiary mt-1">Se muestra en el selector de empresas</p>
+                <p className="text-[10px] text-text-tertiary mt-1">
+                  Se muestra en el selector de empresas
+                </p>
               </div>
             )}
 
             <div>
-              <label className="text-xs font-medium text-text-secondary block mb-1">CIF / NIF</label>
+              <label className="text-xs font-medium text-text-secondary block mb-1">
+                CIF / NIF
+              </label>
               <input
                 type="text"
                 value={cif}
@@ -245,7 +269,9 @@ export default function OnboardingPage() {
                 className="w-full h-10 px-3 text-[13px] border border-subtle rounded-md focus:border-accent focus:outline-none"
               />
               {cif.trim().length > 0 && !cifValid && (
-                <p className="text-[11px] text-red-text mt-1">CIF/NIF inválido. Formato: B12345670, 12345678Z, o X1234567A</p>
+                <p className="text-[11px] text-red-text mt-1">
+                  CIF/NIF inválido. Formato: B12345670, 12345678Z, o X1234567A
+                </p>
               )}
             </div>
             <div>
@@ -289,17 +315,26 @@ export default function OnboardingPage() {
               <div>
                 <h1 className="text-[18px] font-semibold text-text-primary">Cuentas bancarias</h1>
                 <p className="text-[12px] text-text-secondary">
-                  Añade los IBANs de tus cuentas propias. Se usan para detectar transferencias internas.
+                  Añade los IBANs de tus cuentas propias. Se usan para detectar transferencias
+                  internas.
                 </p>
               </div>
             </div>
 
             {accounts.map((acc, i) => (
-              <div key={i} className="flex flex-col gap-2 p-3 bg-page rounded-md border border-border-light">
+              <div
+                key={i}
+                className="flex flex-col gap-2 p-3 bg-page rounded-md border border-border-light"
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-text-secondary">Cuenta {i + 1}</span>
+                  <span className="text-[11px] font-medium text-text-secondary">
+                    Cuenta {i + 1}
+                  </span>
                   {accounts.length > 1 && (
-                    <button onClick={() => removeAccount(i)} className="text-text-tertiary hover:text-red">
+                    <button
+                      onClick={() => removeAccount(i)}
+                      className="text-text-tertiary hover:text-red"
+                    >
                       <X size={14} />
                     </button>
                   )}
@@ -330,7 +365,10 @@ export default function OnboardingPage() {
               </div>
             ))}
 
-            <button onClick={addAccount} className="text-[12px] text-accent font-medium self-start flex items-center gap-1">
+            <button
+              onClick={addAccount}
+              className="text-[12px] text-accent font-medium self-start flex items-center gap-1"
+            >
               <Plus size={12} /> Añadir otra cuenta
             </button>
 
@@ -366,9 +404,16 @@ export default function OnboardingPage() {
             </div>
 
             <label className="flex items-start gap-3 p-4 border border-subtle rounded-lg cursor-pointer hover:bg-page">
-              <input type="radio" checked={loadPgc} onChange={() => setLoadPgc(true)} className="mt-0.5" />
+              <input
+                type="radio"
+                checked={loadPgc}
+                onChange={() => setLoadPgc(true)}
+                className="mt-0.5"
+              />
               <div>
-                <span className="text-[13px] font-medium text-text-primary block">Cargar PGC estándar para PYMEs</span>
+                <span className="text-[13px] font-medium text-text-primary block">
+                  Cargar PGC estándar para PYMEs
+                </span>
                 <span className="text-[11px] text-text-secondary">
                   Incluye ~50 cuentas más comunes del Plan General Contable español. Recomendado.
                 </span>
@@ -376,16 +421,25 @@ export default function OnboardingPage() {
             </label>
 
             <label className="flex items-start gap-3 p-4 border border-subtle rounded-lg cursor-pointer hover:bg-page">
-              <input type="radio" checked={!loadPgc} onChange={() => setLoadPgc(false)} className="mt-0.5" />
+              <input
+                type="radio"
+                checked={!loadPgc}
+                onChange={() => setLoadPgc(false)}
+                className="mt-0.5"
+              />
               <div>
-                <span className="text-[13px] font-medium text-text-primary block">Lo configuraré más tarde</span>
+                <span className="text-[13px] font-medium text-text-primary block">
+                  Lo configuraré más tarde
+                </span>
                 <span className="text-[11px] text-text-secondary">
                   Podrás cargar cuentas desde Holded o manualmente en Ajustes.
                 </span>
               </div>
             </label>
 
-            {error && <p className="text-xs text-red-text bg-red-light px-3 py-2 rounded">{error}</p>}
+            {error && (
+              <p className="text-xs text-red-text bg-red-light px-3 py-2 rounded">{error}</p>
+            )}
 
             <div className="flex gap-2">
               <button

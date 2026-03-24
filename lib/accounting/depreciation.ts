@@ -60,7 +60,8 @@ export async function runMonthlyDepreciation(
       let depAmount = asset.monthlyDepreciation;
 
       // Check if this would exceed depreciable amount
-      const maxRemaining = asset.acquisitionCost - asset.residualValue - asset.accumulatedDepreciation;
+      const maxRemaining =
+        asset.acquisitionCost - asset.residualValue - asset.accumulatedDepreciation;
       if (maxRemaining <= 0) {
         // Fully depreciated
         await db.fixedAsset.update({
@@ -76,7 +77,8 @@ export async function runMonthlyDepreciation(
       if (depAmount <= 0) continue;
 
       // Create journal entry (companyId injected by scoped db)
-      await (db as any).journalEntry.create({ data: {
+      await (db as any).journalEntry.create({
+        data: {
           number: nextNumber++,
           date: depDate,
           description: `Amortización mensual: ${asset.name} (${month}/${year})`,

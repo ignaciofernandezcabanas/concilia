@@ -54,13 +54,15 @@ describe("Monthly Depreciation", () => {
   });
 
   it("crea JournalEntry con tipo AUTO_DEPRECIATION", async () => {
-    mockDb.fixedAsset.findMany.mockResolvedValue([buildAsset({
-      acquisitionCost: 3600,
-      monthlyDepreciation: 75,
-      accumulatedDepreciation: 150,
-      netBookValue: 3450,
-      lastDepreciationDate: new Date("2026-02-01"),
-    })]);
+    mockDb.fixedAsset.findMany.mockResolvedValue([
+      buildAsset({
+        acquisitionCost: 3600,
+        monthlyDepreciation: 75,
+        accumulatedDepreciation: 150,
+        netBookValue: 3450,
+        lastDepreciationDate: new Date("2026-02-01"),
+      }),
+    ]);
 
     await runMonthlyDepreciation(mockDb as any, 2026, 3);
 
@@ -71,10 +73,12 @@ describe("Monthly Depreciation", () => {
   });
 
   it("activo totalmente amortizado → skip, marca FULLY_DEPRECIATED", async () => {
-    mockDb.fixedAsset.findMany.mockResolvedValue([buildAsset({
-      accumulatedDepreciation: 12000,
-      netBookValue: 0,
-    })]);
+    mockDb.fixedAsset.findMany.mockResolvedValue([
+      buildAsset({
+        accumulatedDepreciation: 12000,
+        netBookValue: 0,
+      }),
+    ]);
 
     const result = await runMonthlyDepreciation(mockDb as any, 2026, 3);
     expect(result.entriesCreated).toBe(0);
@@ -84,31 +88,37 @@ describe("Monthly Depreciation", () => {
   });
 
   it("valor residual se resta del cálculo", async () => {
-    mockDb.fixedAsset.findMany.mockResolvedValue([buildAsset({
-      acquisitionCost: 18000,
-      residualValue: 3000,
-      usefulLifeMonths: 96,
-      monthlyDepreciation: 156.25, // (18000-3000)/96
-    })]);
+    mockDb.fixedAsset.findMany.mockResolvedValue([
+      buildAsset({
+        acquisitionCost: 18000,
+        residualValue: 3000,
+        usefulLifeMonths: 96,
+        monthlyDepreciation: 156.25, // (18000-3000)/96
+      }),
+    ]);
 
     const result = await runMonthlyDepreciation(mockDb as any, 2026, 3);
     expect(result.totalDepreciation).toBeCloseTo(156.25, 1);
   });
 
   it("ya amortizado este mes → skip (no duplicar)", async () => {
-    mockDb.fixedAsset.findMany.mockResolvedValue([buildAsset({
-      lastDepreciationDate: new Date("2026-03-28"),
-    })]);
+    mockDb.fixedAsset.findMany.mockResolvedValue([
+      buildAsset({
+        lastDepreciationDate: new Date("2026-03-28"),
+      }),
+    ]);
 
     const result = await runMonthlyDepreciation(mockDb as any, 2026, 3);
     expect(result.entriesCreated).toBe(0);
   });
 
   it("actualiza accumulatedDepreciation y netBookValue del activo", async () => {
-    mockDb.fixedAsset.findMany.mockResolvedValue([buildAsset({
-      accumulatedDepreciation: 500,
-      netBookValue: 11500,
-    })]);
+    mockDb.fixedAsset.findMany.mockResolvedValue([
+      buildAsset({
+        accumulatedDepreciation: 500,
+        netBookValue: 11500,
+      }),
+    ]);
 
     await runMonthlyDepreciation(mockDb as any, 2026, 3);
 
@@ -116,7 +126,7 @@ describe("Monthly Depreciation", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           accumulatedDepreciation: 750, // 500 + 250
-          netBookValue: 11250,          // 12000 - 750
+          netBookValue: 11250, // 12000 - 750
         }),
       })
     );

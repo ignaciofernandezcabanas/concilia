@@ -8,21 +8,15 @@ import { generateForecast } from "@/lib/reports/forecast-generator";
  * Treasury forecast for the next N weeks (default 12 = 3 months).
  * Projects cash position based on pending invoices, recurring patterns, and current balance.
  */
-export const GET = withAuth(
-  async (req: NextRequest, ctx: AuthContext) => {
-    const weeksParam = req.nextUrl.searchParams.get("weeks");
-    const weeks = Math.min(52, Math.max(4, parseInt(weeksParam || "12")));
+export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+  const weeksParam = req.nextUrl.searchParams.get("weeks");
+  const weeks = Math.min(52, Math.max(4, parseInt(weeksParam || "12")));
 
-    try {
-      const report = await generateForecast(ctx.db, weeks);
-      return NextResponse.json(report);
-    } catch (err) {
-      console.error("[reports/forecast] Error:", err);
-      return NextResponse.json(
-        { error: "Failed to generate forecast." },
-        { status: 500 }
-      );
-    }
-  },
-  "read:reports"
-);
+  try {
+    const report = await generateForecast(ctx.db, weeks);
+    return NextResponse.json(report);
+  } catch (err) {
+    console.error("[reports/forecast] Error:", err);
+    return NextResponse.json({ error: "Failed to generate forecast." }, { status: 500 });
+  }
+}, "read:reports");

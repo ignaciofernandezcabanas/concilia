@@ -19,10 +19,7 @@ export function assignPriority(
   const absAmount = Math.abs(tx.amount);
 
   // URGENT: items that require immediate attention
-  if (
-    detectedType === "POSSIBLE_DUPLICATE" ||
-    detectedType === "RETURN"
-  ) {
+  if (detectedType === "POSSIBLE_DUPLICATE" || detectedType === "RETURN") {
     return "URGENT";
   }
 
@@ -31,19 +28,16 @@ export function assignPriority(
     return "DECISION";
   }
 
-  if (confidence < 0.70) {
+  if (confidence < 0.7) {
     return "DECISION";
   }
 
   // CONFIRMATION: moderate confidence, partial matches, or differences
-  if (confidence < 0.90) {
+  if (confidence < 0.9) {
     return "CONFIRMATION";
   }
 
-  if (
-    detectedType === "MATCH_PARTIAL" ||
-    detectedType === "MATCH_DIFFERENCE"
-  ) {
+  if (detectedType === "MATCH_PARTIAL" || detectedType === "MATCH_DIFFERENCE") {
     return "CONFIRMATION";
   }
 

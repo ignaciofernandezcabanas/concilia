@@ -56,20 +56,21 @@ export async function generateDailyBriefing(
     closeProposal: closeProposal ? "Generada" : "N/A",
   });
 
-  const forecastJson = forecast
-    ? JSON.stringify(forecast.slice(0, 4))
-    : "Sin datos de previsión.";
+  const forecastJson = forecast ? JSON.stringify(forecast.slice(0, 4)) : "Sin datos de previsión.";
 
-  const anomaliesJson = anomalies.length > 0
-    ? JSON.stringify(anomalies.map((a) => ({
-        company: a.companyName,
-        account: `${a.accountCode} ${a.accountName}`,
-        zScore: a.zScore,
-        current: a.currentAmount,
-        avg: a.avgAmount,
-        explanation: a.explanation?.slice(0, 100),
-      })))
-    : "Sin anomalías detectadas.";
+  const anomaliesJson =
+    anomalies.length > 0
+      ? JSON.stringify(
+          anomalies.map((a) => ({
+            company: a.companyName,
+            account: `${a.accountCode} ${a.accountName}`,
+            zScore: a.zScore,
+            current: a.currentAmount,
+            avg: a.avgAmount,
+            explanation: a.explanation?.slice(0, 100),
+          }))
+        )
+      : "Sin anomalías detectadas.";
 
   // Build consolidation context for Opus
   let consolidationJson: string | undefined;

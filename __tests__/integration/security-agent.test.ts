@@ -22,7 +22,9 @@ const mockRunDepreciation = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/accounting/depreciation", () => ({ runMonthlyDepreciation: mockRunDepreciation }));
 
 const mockDetectIntercompany = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/reconciliation/detectors/intercompany-detector", () => ({ detectIntercompany: mockDetectIntercompany }));
+vi.mock("@/lib/reconciliation/detectors/intercompany-detector", () => ({
+  detectIntercompany: mockDetectIntercompany,
+}));
 
 const mockGenerateForecast = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/reports/forecast-generator", () => ({ generateForecast: mockGenerateForecast }));
@@ -97,7 +99,8 @@ describe("Security — Agent Rate Limits", () => {
     mockPrisma.agentRun.create.mockResolvedValue({ id: "run_1" });
     mockPrisma.agentRun.update.mockResolvedValue({});
     mockPrisma.organization.findUniqueOrThrow.mockResolvedValue({
-      id: "org_1", name: "Test",
+      id: "org_1",
+      name: "Test",
       companies: [{ id: "c1", name: "A", shortName: "A" }],
     });
     mockPrisma.integration.findMany.mockResolvedValue([]);
@@ -111,14 +114,43 @@ describe("Security — Agent Rate Limits", () => {
     mockPrisma.journalEntry.count.mockResolvedValue(0);
     mockPrisma.membership.findMany.mockResolvedValue([{ userId: "u1" }]);
     mockPrisma.notification.create.mockResolvedValue({});
-    mockRunReconciliation.mockResolvedValue({ processed: 0, matched: 0, classified: 0, autoApproved: 0, needsReview: 0, errors: [] });
-    mockRunDepreciation.mockResolvedValue({ assetsProcessed: 0, entriesCreated: 0, totalDepreciation: 0, errors: [] });
-    mockDetectIntercompany.mockResolvedValue({ isIntercompany: false, siblingCompanyId: null, siblingCompanyName: null, organizationId: null });
+    mockRunReconciliation.mockResolvedValue({
+      processed: 0,
+      matched: 0,
+      classified: 0,
+      autoApproved: 0,
+      needsReview: 0,
+      errors: [],
+    });
+    mockRunDepreciation.mockResolvedValue({
+      assetsProcessed: 0,
+      entriesCreated: 0,
+      totalDepreciation: 0,
+      errors: [],
+    });
+    mockDetectIntercompany.mockResolvedValue({
+      isIntercompany: false,
+      siblingCompanyId: null,
+      siblingCompanyName: null,
+      organizationId: null,
+    });
     mockGenerateForecast.mockResolvedValue({
-      currentBalance: 50000, balanceDate: "2026-03-23",
-      weeks: [{ weekStart: "2026-03-23", weekEnd: "2026-03-29", projectedBalance: 50000, expectedInflows: 0, expectedOutflows: 0, netFlow: 0, details: [] }],
+      currentBalance: 50000,
+      balanceDate: "2026-03-23",
+      weeks: [
+        {
+          weekStart: "2026-03-23",
+          weekEnd: "2026-03-29",
+          projectedBalance: 50000,
+          expectedInflows: 0,
+          expectedOutflows: 0,
+          netFlow: 0,
+          details: [],
+        },
+      ],
       totals: { totalExpectedInflows: 0, totalExpectedOutflows: 0, projectedEndBalance: 50000 },
-      horizon: 8, generatedAt: new Date().toISOString(),
+      horizon: 8,
+      generatedAt: new Date().toISOString(),
     });
     mockCallAI.mockResolvedValue("OK");
   });

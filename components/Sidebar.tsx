@@ -103,9 +103,7 @@ export default function Sidebar() {
   const company = companyData?.company;
 
   // Detect multi-company org for GRUPO section
-  const totalCompanies = ctxData?.memberships?.reduce(
-    (sum, m) => sum + m.companies.length, 0
-  ) ?? 0;
+  const totalCompanies = ctxData?.memberships?.reduce((sum, m) => sum + m.companies.length, 0) ?? 0;
   const isGroup = totalCompanies > 1;
 
   const isActive = (href: string) => {
@@ -113,9 +111,7 @@ export default function Sidebar() {
     return pathname.startsWith(href);
   };
 
-  const initials = user?.email
-    ? user.email.substring(0, 2).toUpperCase()
-    : "?";
+  const initials = user?.email ? user.email.substring(0, 2).toUpperCase() : "?";
 
   return (
     <aside className="w-[220px] min-w-[220px] h-screen bg-white border-r border-subtle flex flex-col pt-5 sticky top-0 overflow-y-auto">
@@ -178,11 +174,7 @@ export default function Sidebar() {
             <LogOut size={14} />
           </button>
         </div>
-        {company && (
-          <span className="text-[11px] text-text-tertiary truncate">
-            {company.name}
-          </span>
-        )}
+        {company && <span className="text-[11px] text-text-tertiary truncate">{company.name}</span>}
       </div>
     </aside>
   );

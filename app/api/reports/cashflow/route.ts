@@ -14,37 +14,27 @@ import { generateCashflow, type CashflowMode } from "@/lib/reports/cashflow-gene
  *   to   - End date (ISO)
  *   mode - "direct" (treasury) or "indirect" (EFE). Default: "direct".
  */
-export const GET = withAuth(
-  async (req: NextRequest, ctx: AuthContext) => {
-    const { company } = ctx;
-    const searchParams = req.nextUrl.searchParams;
+export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+  const { company } = ctx;
+  const searchParams = req.nextUrl.searchParams;
 
-    const parsed = cashflowQuerySchema.safeParse(
-      Object.fromEntries(searchParams.entries())
+  const parsed = cashflowQuerySchema.safeParse(Object.fromEntries(searchParams.entries()));
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid query parameters.", details: parsed.error.flatten() },
+      { status: 400 }
     );
+  }
 
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid query parameters.", details: parsed.error.flatten() },
-        { status: 400 }
-      );
-    }
+  const { from, to, mode } = parsed.data;
 
-    const { from, to, mode } = parsed.data;
+  try {
+    const report = await generateCashflow(ctx.db, from, to, mode as CashflowMode);
 
-    try {
-      const report = await generateCashflow(
-        ctx.db,
-        from,
-        to,
-        mode as CashflowMode
-      );
-
-      return NextResponse.json(report);
-    } catch (err) {
-      console.error("[reports/cashflow] Error:", err);
-      return errorResponse("Failed to generate cash flow report.", err, 500);
-    }
-  },
-  "read:reports"
-);
+    return NextResponse.json(report);
+  } catch (err) {
+    console.error("[reports/cashflow] Error:", err);
+    return errorResponse("Failed to generate cash flow report.", err, 500);
+  }
+}, "read:reports");

@@ -10,16 +10,38 @@ import { useFetch } from "@/hooks/useApi";
 import { qs } from "@/lib/api-client";
 import { Download } from "lucide-react";
 
-interface EFESection { code: string; label: string; amount: number; children?: { label: string; amount: number }[]; }
-interface EFEReport { mode: "indirect"; sections: EFESection[]; totals: Record<string, number>; }
+interface EFESection {
+  code: string;
+  label: string;
+  amount: number;
+  children?: { label: string; amount: number }[];
+}
+interface EFEReport {
+  mode: "indirect";
+  sections: EFESection[];
+  totals: Record<string, number>;
+}
 
 // Treasury types
 interface TreasuryMonth {
-  month: string; saldoInicial: number; cobrosClientes: number; pagosProveedores: number;
-  nominas: number; impuestos: number; otrosIngresos: number; otrosGastos: number;
-  inversionesNetas: number; financiacionNeta: number; diferenciaNeta: number; saldoFinal: number;
+  month: string;
+  saldoInicial: number;
+  cobrosClientes: number;
+  pagosProveedores: number;
+  nominas: number;
+  impuestos: number;
+  otrosIngresos: number;
+  otrosGastos: number;
+  inversionesNetas: number;
+  financiacionNeta: number;
+  diferenciaNeta: number;
+  saldoFinal: number;
 }
-interface TreasuryReport { mode: "direct"; months: TreasuryMonth[]; totals: Record<string, number>; }
+interface TreasuryReport {
+  mode: "direct";
+  months: TreasuryMonth[];
+  totals: Record<string, number>;
+}
 type CashflowReport = TreasuryReport | EFEReport;
 
 type Mode = "direct" | "indirect";
@@ -94,7 +116,10 @@ export default function CashflowPage() {
             </div>
             <PeriodSelector
               periodType={periodType}
-              setPeriodType={(pt) => { setPeriodType(pt); setOffset(0); }}
+              setPeriodType={(pt) => {
+                setPeriodType(pt);
+                setOffset(0);
+              }}
               label={period.label}
               onPrev={() => setOffset((o) => o - 1)}
               onNext={() => setOffset((o) => o + 1)}
@@ -116,7 +141,7 @@ export default function CashflowPage() {
             drilldown={{ report: "cashflow", from: period.from, to: period.to }}
           />
         ) : (
-          <TreasuryView data={data?.mode === "direct" ? data as TreasuryReport : null} />
+          <TreasuryView data={data?.mode === "direct" ? (data as TreasuryReport) : null} />
         )}
       </div>
     </div>
@@ -127,10 +152,16 @@ export default function CashflowPage() {
 
 const fmtVal = (val: number) => {
   if (val === 0) return { text: "0,00", cls: "text-text-tertiary" };
-  const s = new Intl.NumberFormat("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(val));
+  const s = new Intl.NumberFormat("es-ES", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Math.abs(val));
   return val < 0 ? { text: `(${s})`, cls: "text-red-text" } : { text: s, cls: "text-green-text" };
 };
-const fmtN = (val: number) => new Intl.NumberFormat("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+const fmtN = (val: number) =>
+  new Intl.NumberFormat("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+    val
+  );
 
 const ROWS: { key: keyof TreasuryMonth; label: string; section: "in" | "out" }[] = [
   { key: "cobrosClientes", label: "Cobros de clientes", section: "in" },
@@ -145,61 +176,174 @@ const ROWS: { key: keyof TreasuryMonth; label: string; section: "in" | "out" }[]
 
 function TreasuryView({ data }: { data: TreasuryReport | null }) {
   const months = data?.months ?? [];
-  const totals = data?.totals as Record<string, number> ?? {};
+  const totals = (data?.totals as Record<string, number>) ?? {};
   const totalIn = (m: TreasuryMonth) => m.cobrosClientes + m.otrosIngresos;
-  const totalOut = (m: TreasuryMonth) => m.pagosProveedores + m.nominas + m.impuestos + m.otrosGastos + m.financiacionNeta + m.inversionesNetas;
+  const totalOut = (m: TreasuryMonth) =>
+    m.pagosProveedores +
+    m.nominas +
+    m.impuestos +
+    m.otrosGastos +
+    m.financiacionNeta +
+    m.inversionesNetas;
   const mLabel = (k: string) => new Date(k + "-15").toLocaleDateString("es-ES", { month: "short" });
 
   return (
     <div className="bg-white rounded-lg border border-subtle overflow-hidden text-[13px]">
       <div className="flex items-center h-10 px-6 bg-subtotal border-b border-subtle">
         <span className="flex-1 text-xs font-semibold text-text-secondary">Concepto</span>
-        {months.map((m) => <span key={m.month} className="w-[110px] text-right text-xs font-semibold text-text-secondary capitalize">{mLabel(m.month)}</span>)}
-        <span className="w-[110px] text-right text-xs font-semibold text-text-secondary">Total</span>
+        {months.map((m) => (
+          <span
+            key={m.month}
+            className="w-[110px] text-right text-xs font-semibold text-text-secondary capitalize"
+          >
+            {mLabel(m.month)}
+          </span>
+        ))}
+        <span className="w-[110px] text-right text-xs font-semibold text-text-secondary">
+          Total
+        </span>
       </div>
 
       {/* Saldo inicial */}
-      <TRow label="Saldo inicial" vals={months.map((m) => m.saldoInicial)} total={totals.saldoInicial ?? 0} bold bg />
+      <TRow
+        label="Saldo inicial"
+        vals={months.map((m) => m.saldoInicial)}
+        total={totals.saldoInicial ?? 0}
+        bold
+        bg
+      />
 
       <div className="h-1" />
-      <div className="flex items-center h-8 px-6 bg-page"><span className="text-xs font-semibold text-text-secondary">ENTRADAS</span></div>
-      {ROWS.filter((r) => r.section === "in").map((r) => <TDataRow key={r.key} label={r.label} months={months} field={r.key} />)}
-      <TRow label="Total entradas" vals={months.map(totalIn)} total={totals.totalCobros ?? 0} bold border vc="text-green-text" />
+      <div className="flex items-center h-8 px-6 bg-page">
+        <span className="text-xs font-semibold text-text-secondary">ENTRADAS</span>
+      </div>
+      {ROWS.filter((r) => r.section === "in").map((r) => (
+        <TDataRow key={r.key} label={r.label} months={months} field={r.key} />
+      ))}
+      <TRow
+        label="Total entradas"
+        vals={months.map(totalIn)}
+        total={totals.totalCobros ?? 0}
+        bold
+        border
+        vc="text-green-text"
+      />
 
       <div className="h-1" />
-      <div className="flex items-center h-8 px-6 bg-page"><span className="text-xs font-semibold text-text-secondary">SALIDAS</span></div>
-      {ROWS.filter((r) => r.section === "out").map((r) => <TDataRow key={r.key} label={r.label} months={months} field={r.key} />)}
-      <TRow label="Total salidas" vals={months.map(totalOut)} total={totals.totalPagos ?? 0} bold border vc="text-red-text" />
+      <div className="flex items-center h-8 px-6 bg-page">
+        <span className="text-xs font-semibold text-text-secondary">SALIDAS</span>
+      </div>
+      {ROWS.filter((r) => r.section === "out").map((r) => (
+        <TDataRow key={r.key} label={r.label} months={months} field={r.key} />
+      ))}
+      <TRow
+        label="Total salidas"
+        vals={months.map(totalOut)}
+        total={totals.totalPagos ?? 0}
+        bold
+        border
+        vc="text-red-text"
+      />
 
       <div className="h-1" />
       <div className="flex items-center h-10 px-6 bg-subtotal border-t border-subtle">
         <span className="flex-1 font-semibold text-text-primary">DIFERENCIA NETA</span>
-        {months.map((m) => { const v = fmtVal(m.diferenciaNeta); return <span key={m.month} className={`w-[110px] text-right font-mono font-semibold ${v.cls}`}>{v.text}</span>; })}
-        {(() => { const v = fmtVal(totals.diferenciaNeta ?? 0); return <span className={`w-[110px] text-right font-mono font-semibold ${v.cls}`}>{v.text}</span>; })()}
+        {months.map((m) => {
+          const v = fmtVal(m.diferenciaNeta);
+          return (
+            <span key={m.month} className={`w-[110px] text-right font-mono font-semibold ${v.cls}`}>
+              {v.text}
+            </span>
+          );
+        })}
+        {(() => {
+          const v = fmtVal(totals.diferenciaNeta ?? 0);
+          return (
+            <span className={`w-[110px] text-right font-mono font-semibold ${v.cls}`}>
+              {v.text}
+            </span>
+          );
+        })()}
       </div>
-      <TRow label="Saldo final" vals={months.map((m) => m.saldoFinal)} total={totals.saldoFinal ?? 0} bold bg />
+      <TRow
+        label="Saldo final"
+        vals={months.map((m) => m.saldoFinal)}
+        total={totals.saldoFinal ?? 0}
+        bold
+        bg
+      />
     </div>
   );
 }
 
-function TRow({ label, vals, total, bold, bg, border, vc }: { label: string; vals: number[]; total: number; bold?: boolean; bg?: boolean; border?: boolean; vc?: string; }) {
+function TRow({
+  label,
+  vals,
+  total,
+  bold,
+  bg,
+  border,
+  vc,
+}: {
+  label: string;
+  vals: number[];
+  total: number;
+  bold?: boolean;
+  bg?: boolean;
+  border?: boolean;
+  vc?: string;
+}) {
   return (
-    <div className={`flex items-center h-9 px-6 ${bg ? "bg-subtotal" : ""} ${border ? "border-b border-subtle" : ""}`}>
+    <div
+      className={`flex items-center h-9 px-6 ${bg ? "bg-subtotal" : ""} ${border ? "border-b border-subtle" : ""}`}
+    >
       <span className={`flex-1 ${bold ? "font-semibold" : ""} text-text-primary`}>{label}</span>
-      {vals.map((v, i) => <span key={i} className={`w-[110px] text-right font-mono ${bold ? "font-semibold" : ""} ${vc || "text-text-primary"}`}>{fmtN(v)}</span>)}
-      <span className={`w-[110px] text-right font-mono ${bold ? "font-semibold" : ""} ${vc || "text-text-primary"}`}>{fmtN(total)}</span>
+      {vals.map((v, i) => (
+        <span
+          key={i}
+          className={`w-[110px] text-right font-mono ${bold ? "font-semibold" : ""} ${vc || "text-text-primary"}`}
+        >
+          {fmtN(v)}
+        </span>
+      ))}
+      <span
+        className={`w-[110px] text-right font-mono ${bold ? "font-semibold" : ""} ${vc || "text-text-primary"}`}
+      >
+        {fmtN(total)}
+      </span>
     </div>
   );
 }
 
-function TDataRow({ label, months, field }: { label: string; months: TreasuryMonth[]; field: keyof TreasuryMonth; }) {
+function TDataRow({
+  label,
+  months,
+  field,
+}: {
+  label: string;
+  months: TreasuryMonth[];
+  field: keyof TreasuryMonth;
+}) {
   const vals = months.map((m) => m[field] as number);
   const total = vals.reduce((s, v) => s + v, 0);
   return (
-    <div className="flex items-center h-9 px-6 border-b border-border-light" style={{ paddingLeft: 48 }}>
+    <div
+      className="flex items-center h-9 px-6 border-b border-border-light"
+      style={{ paddingLeft: 48 }}
+    >
       <span className="flex-1 text-text-primary">{label}</span>
-      {vals.map((v, i) => { const f = fmtVal(v); return <span key={i} className={`w-[110px] text-right font-mono ${f.cls}`}>{f.text}</span>; })}
-      {(() => { const f = fmtVal(total); return <span className={`w-[110px] text-right font-mono ${f.cls}`}>{f.text}</span>; })()}
+      {vals.map((v, i) => {
+        const f = fmtVal(v);
+        return (
+          <span key={i} className={`w-[110px] text-right font-mono ${f.cls}`}>
+            {f.text}
+          </span>
+        );
+      })}
+      {(() => {
+        const f = fmtVal(total);
+        return <span className={`w-[110px] text-right font-mono ${f.cls}`}>{f.text}</span>;
+      })()}
     </div>
   );
 }

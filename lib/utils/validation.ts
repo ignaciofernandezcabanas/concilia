@@ -20,13 +20,7 @@ const manualMatchAction = z.object({
   bankTransactionId: z.string(),
   invoiceId: z.string(),
   differenceReason: z
-    .enum([
-      "BANK_COMMISSION",
-      "EARLY_PAYMENT",
-      "COMMERCIAL_DISCOUNT",
-      "PARTIAL_PAYMENT",
-      "OTHER",
-    ])
+    .enum(["BANK_COMMISSION", "EARLY_PAYMENT", "COMMERCIAL_DISCOUNT", "PARTIAL_PAYMENT", "OTHER"])
     .optional(),
   differenceAccountId: z.string().optional(),
 });
@@ -35,13 +29,7 @@ const classifyAction = z.object({
   action: z.literal("classify"),
   bankTransactionId: z.string(),
   accountCode: z.string().min(1),
-  cashflowType: z.enum([
-    "OPERATING",
-    "INVESTING",
-    "FINANCING",
-    "INTERNAL",
-    "NON_CASH",
-  ]),
+  cashflowType: z.enum(["OPERATING", "INVESTING", "FINANCING", "INTERNAL", "NON_CASH"]),
   description: z.string().optional(),
 });
 
@@ -90,23 +78,13 @@ export const invoiceFiltersSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
   type: z.enum(["ISSUED", "RECEIVED", "CREDIT_ISSUED", "CREDIT_RECEIVED"]).optional(),
   status: z
-    .enum([
-      "PENDING",
-      "PARTIAL",
-      "PAID",
-      "OVERDUE",
-      "PROVISIONED",
-      "WRITTEN_OFF",
-      "CANCELLED",
-    ])
+    .enum(["PENDING", "PARTIAL", "PAID", "OVERDUE", "PROVISIONED", "WRITTEN_OFF", "CANCELLED"])
     .optional(),
   contactId: z.string().optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   search: z.string().max(200).optional(),
-  sortBy: z
-    .enum(["issueDate", "dueDate", "totalAmount", "number"])
-    .default("issueDate"),
+  sortBy: z.enum(["issueDate", "dueDate", "totalAmount", "number"]).default("issueDate"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
@@ -193,10 +171,7 @@ export const companySettingsSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   cif: z
     .string()
-    .regex(
-      /^[A-HJNP-SUVW]\d{7}[0-9A-J]$|^\d{8}[A-Z]$|^[XYZ]\d{7}[A-Z]$/,
-      "CIF/NIF inválido."
-    )
+    .regex(/^[A-HJNP-SUVW]\d{7}[0-9A-J]$|^\d{8}[A-Z]$|^[XYZ]\d{7}[A-Z]$/, "CIF/NIF inválido.")
     .optional(),
   currency: z.string().length(3).default("EUR").optional(),
   fiscalYearStartMonth: z.number().int().min(1).max(12).optional(),
@@ -229,13 +204,7 @@ export type UserInvite = z.infer<typeof userInviteSchema>;
 export const classifySchema = z.object({
   bankTransactionId: z.string(),
   accountCode: z.string().min(1, "Account code is required."),
-  cashflowType: z.enum([
-    "OPERATING",
-    "INVESTING",
-    "FINANCING",
-    "INTERNAL",
-    "NON_CASH",
-  ]),
+  cashflowType: z.enum(["OPERATING", "INVESTING", "FINANCING", "INTERNAL", "NON_CASH"]),
   description: z.string().max(500).optional(),
   createRule: z.boolean().default(false),
   rulePattern: z.string().optional(),

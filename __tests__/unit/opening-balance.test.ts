@@ -8,15 +8,15 @@ const schema = z.object({
 
 describe("Opening Balance", () => {
   it("valid data passes schema", () => {
-    const result = schema.safeParse({ date: "2026-01-01", balance: 87432.50 });
+    const result = schema.safeParse({ date: "2026-01-01", balance: 87432.5 });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.balance).toBe(87432.50);
+      expect(result.data.balance).toBe(87432.5);
     }
   });
 
   it("creates tx with amount=0 and correct fields", () => {
-    const data = { date: "2026-01-01", balance: 87432.50 };
+    const data = { date: "2026-01-01", balance: 87432.5 };
     const created = {
       amount: 0,
       balanceAfter: data.balance,
@@ -27,7 +27,7 @@ describe("Opening Balance", () => {
       valueDate: new Date(data.date),
     };
     expect(created.amount).toBe(0);
-    expect(created.balanceAfter).toBe(87432.50);
+    expect(created.balanceAfter).toBe(87432.5);
     expect(created.detectedType).toBe("OPENING_BALANCE");
     expect(created.status).toBe("RECONCILED");
   });

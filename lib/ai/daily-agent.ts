@@ -13,7 +13,12 @@ import { detectIntercompany } from "@/lib/reconciliation/detectors/intercompany-
 import { generateForecast } from "@/lib/reports/forecast-generator";
 import { callAI } from "@/lib/ai/model-router";
 import { getCallBuffer, clearCallBuffer, type AICallRecord } from "@/lib/ai/model-router";
-import { EXPLAIN_ANOMALY, TREASURY_ADVICE, DAILY_BRIEFING, CLOSE_PROPOSAL } from "@/lib/ai/prompt-registry";
+import {
+  EXPLAIN_ANOMALY,
+  TREASURY_ADVICE,
+  DAILY_BRIEFING,
+  CLOSE_PROPOSAL,
+} from "@/lib/ai/prompt-registry";
 import type { AgentRunStatus } from "@prisma/client";
 
 // ── Types ──
@@ -106,131 +111,147 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
     let llmCallsThisCompany = 0;
 
     // Step 1: Sync
-    results.push(await runStep("sync", async () => {
-      const integrations = await prisma.integration.findMany({
-        where: { companyId: company.id, status: "CONNECTED" },
-        select: { type: true },
-      });
-      // Sync is handled by existing endpoints — just log which integrations are active
-      return { integrationsActive: integrations.length };
-    }));
+    results.push(
+      await runStep("sync", async () => {
+        const integrations = await prisma.integration.findMany({
+          where: { companyId: company.id, status: "CONNECTED" },
+          select: { type: true },
+        });
+        // Sync is handled by existing endpoints — just log which integrations are active
+        return { integrationsActive: integrations.length };
+      })
+    );
 
     // Step 2: Engine (reconciliation)
-    results.push(await runStep("engine", async () => {
-      const engineResult = await runReconciliation(companyDb, company.id);
-      totalTxsProcessed += engineResult.processed;
-      totalAutoExecuted += engineResult.autoApproved;
-      totalToBandeja += engineResult.needsReview;
-      return {
-        processed: engineResult.processed,
-        matched: engineResult.matched,
-        autoApproved: engineResult.autoApproved,
-        needsReview: engineResult.needsReview,
-      };
-    }));
+    results.push(
+      await runStep("engine", async () => {
+        const engineResult = await runReconciliation(companyDb, company.id);
+        totalTxsProcessed += engineResult.processed;
+        totalAutoExecuted += engineResult.autoApproved;
+        totalToBandeja += engineResult.needsReview;
+        return {
+          processed: engineResult.processed,
+          matched: engineResult.matched,
+          autoApproved: engineResult.autoApproved,
+          needsReview: engineResult.needsReview,
+        };
+      })
+    );
 
     // Step 3: Auto entries (depreciation)
-    results.push(await runStep("auto_entries", async () => {
-      const now = new Date();
-      const depResult = await runMonthlyDepreciation(companyDb, now.getFullYear(), now.getMonth() + 1);
-      return {
-        assetsProcessed: depResult.assetsProcessed,
-        entriesCreated: depResult.entriesCreated,
-        totalDepreciation: depResult.totalDepreciation,
-      };
-    }));
+    results.push(
+      await runStep("auto_entries", async () => {
+        const now = new Date();
+        const depResult = await runMonthlyDepreciation(
+          companyDb,
+          now.getFullYear(),
+          now.getMonth() + 1
+        );
+        return {
+          assetsProcessed: depResult.assetsProcessed,
+          entriesCreated: depResult.entriesCreated,
+          totalDepreciation: depResult.totalDepreciation,
+        };
+      })
+    );
 
     // Step 4: Intercompany detection
-    results.push(await runStep("intercompany", async () => {
-      const pendingTxs = await prisma.bankTransaction.findMany({
-        where: {
-          companyId: company.id,
-          status: "PENDING",
-          counterpartIban: { not: null },
-          detectedType: null,
-        },
-        take: 50,
-      });
+    results.push(
+      await runStep("intercompany", async () => {
+        const pendingTxs = await prisma.bankTransaction.findMany({
+          where: {
+            companyId: company.id,
+            status: "PENDING",
+            counterpartIban: { not: null },
+            detectedType: null,
+          },
+          take: 50,
+        });
 
-      let detected = 0;
-      for (const tx of pendingTxs) {
-        const result = await detectIntercompany(tx, company.id);
-        if (result.isIntercompany) {
-          // Check for exact mirror (same amount, inverse sign, same date)
-          const mirror = await prisma.bankTransaction.findFirst({
-            where: {
-              companyId: result.siblingCompanyId!,
-              amount: -tx.amount,
-              status: "PENDING",
-              valueDate: tx.valueDate,
-            },
-          });
+        let detected = 0;
+        for (const tx of pendingTxs) {
+          const result = await detectIntercompany(tx, company.id);
+          if (result.isIntercompany) {
+            // Check for exact mirror (same amount, inverse sign, same date)
+            const mirror = await prisma.bankTransaction.findFirst({
+              where: {
+                companyId: result.siblingCompanyId!,
+                amount: -tx.amount,
+                status: "PENDING",
+                valueDate: tx.valueDate,
+              },
+            });
 
-          await prisma.intercompanyLink.create({
-            data: {
-              amount: Math.abs(tx.amount),
-              date: tx.valueDate,
-              concept: tx.conceptParsed ?? tx.concept,
-              status: mirror ? "CONFIRMED" : "DETECTED",
-              companyAId: company.id,
-              companyBId: result.siblingCompanyId!,
-              transactionAId: tx.id,
-              transactionBId: mirror?.id ?? null,
-              matchedAt: mirror ? new Date() : null,
-              organizationId,
-            },
-          });
+            await prisma.intercompanyLink.create({
+              data: {
+                amount: Math.abs(tx.amount),
+                date: tx.valueDate,
+                concept: tx.conceptParsed ?? tx.concept,
+                status: mirror ? "CONFIRMED" : "DETECTED",
+                companyAId: company.id,
+                companyBId: result.siblingCompanyId!,
+                transactionAId: tx.id,
+                transactionBId: mirror?.id ?? null,
+                matchedAt: mirror ? new Date() : null,
+                organizationId,
+              },
+            });
 
-          if (mirror) {
-            await prisma.bankTransaction.update({
-              where: { id: tx.id },
-              data: { status: "RECONCILED", detectedType: "INTERCOMPANY" },
-            });
-            await prisma.bankTransaction.update({
-              where: { id: mirror.id },
-              data: { status: "RECONCILED", detectedType: "INTERCOMPANY" },
-            });
-          } else {
-            await prisma.bankTransaction.update({
-              where: { id: tx.id },
-              data: { detectedType: "INTERCOMPANY", priority: "DECISION" },
-            });
+            if (mirror) {
+              await prisma.bankTransaction.update({
+                where: { id: tx.id },
+                data: { status: "RECONCILED", detectedType: "INTERCOMPANY" },
+              });
+              await prisma.bankTransaction.update({
+                where: { id: mirror.id },
+                data: { status: "RECONCILED", detectedType: "INTERCOMPANY" },
+              });
+            } else {
+              await prisma.bankTransaction.update({
+                where: { id: tx.id },
+                data: { detectedType: "INTERCOMPANY", priority: "DECISION" },
+              });
+            }
+
+            detected++;
           }
-
-          detected++;
         }
-      }
-      return { scanned: pendingTxs.length, detected };
-    }));
+        return { scanned: pendingTxs.length, detected };
+      })
+    );
 
     // Step 5: Provisions
-    results.push(await runStep("provisions", async () => {
-      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-      const overdueInvoices = await prisma.invoice.findMany({
-        where: {
-          companyId: company.id,
-          type: "ISSUED",
-          status: "OVERDUE",
-          dueDate: { lt: ninetyDaysAgo },
-          provisionType: null,
-        },
-        take: 20,
-      });
-      // Just flag for review — provisions are always PROPOSED
-      return { overdueCount: overdueInvoices.length };
-    }));
+    results.push(
+      await runStep("provisions", async () => {
+        const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+        const overdueInvoices = await prisma.invoice.findMany({
+          where: {
+            companyId: company.id,
+            type: "ISSUED",
+            status: "OVERDUE",
+            dueDate: { lt: ninetyDaysAgo },
+            provisionType: null,
+          },
+          take: 20,
+        });
+        // Just flag for review — provisions are always PROPOSED
+        return { overdueCount: overdueInvoices.length };
+      })
+    );
 
     // Step 6: Reminders (stub — email sending not implemented yet)
-    results.push(await runStep("reminders", async () => {
-      const overdueForReminder = await prisma.invoice.count({
-        where: {
-          companyId: company.id,
-          type: "ISSUED",
-          status: "OVERDUE",
-        },
-      });
-      return { overdueForReminder };
-    }));
+    results.push(
+      await runStep("reminders", async () => {
+        const overdueForReminder = await prisma.invoice.count({
+          where: {
+            companyId: company.id,
+            type: "ISSUED",
+            status: "OVERDUE",
+          },
+        });
+        return { overdueForReminder };
+      })
+    );
 
     // Collect step errors
     for (const r of results) {
@@ -253,10 +274,12 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
     if (!firstCompanyId) return { skipped: true };
 
     const forecast = await generateForecast(getScopedDb(firstCompanyId), 8);
-    forecastJson = JSON.stringify(forecast.weeks.slice(0, 4).map((w) => ({
-      week: w.weekStart,
-      balance: w.projectedBalance,
-    })));
+    forecastJson = JSON.stringify(
+      forecast.weeks.slice(0, 4).map((w) => ({
+        week: w.weekStart,
+        balance: w.projectedBalance,
+      }))
+    );
 
     // Check for low balance weeks
     const lowWeeks = forecast.weeks.filter((w) => w.projectedBalance < 0);
@@ -275,8 +298,13 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
       if (advice) {
         const adminUsers = await getOrgAdminUsers(organizationId);
         for (const userId of adminUsers.slice(0, 3)) {
-          await createNotification(org.companies[0].id, userId, "TREASURY_ALERT",
-            "Alerta de tesorería", advice);
+          await createNotification(
+            org.companies[0].id,
+            userId,
+            "TREASURY_ALERT",
+            "Alerta de tesorería",
+            advice
+          );
           notificationCount++;
         }
       }
@@ -289,7 +317,12 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
   // Step 8: Anomalies
   let anomaliesJson = "[]";
   const step8 = await runStep("anomalies", async () => {
-    const anomalies: Array<{ company: string; account: string; zScore: number; explanation?: string }> = [];
+    const anomalies: Array<{
+      company: string;
+      account: string;
+      zScore: number;
+      explanation?: string;
+    }> = [];
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
@@ -306,11 +339,16 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
           status: "CLASSIFIED",
           valueDate: { gte: new Date(now.getFullYear(), now.getMonth(), 1) },
         },
-        include: { classification: { include: { account: { select: { code: true, name: true } } } } },
+        include: {
+          classification: { include: { account: { select: { code: true, name: true } } } },
+        },
       });
 
       // Group by account
-      const currentByAccount = new Map<string, { total: number; name: string; topConcept: string }>();
+      const currentByAccount = new Map<
+        string,
+        { total: number; name: string; topConcept: string }
+      >();
       for (const tx of currentTxs) {
         if (!tx.classification?.account) continue;
         const code = tx.classification.account.code;
@@ -392,9 +430,14 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
           if (notificationCount < MAX_NOTIFICATIONS_PER_RUN) {
             const adminUsers = await getOrgAdminUsers(organizationId);
             for (const userId of adminUsers.slice(0, 2)) {
-              await createNotification(company.id, userId, "ANOMALY_DETECTED",
+              await createNotification(
+                company.id,
+                userId,
+                "ANOMALY_DETECTED",
                 `Anomalía: ${code} ${current.name}`,
-                explanation ?? `Gasto ${zScore > 0 ? "superior" : "inferior"} a la media en ${code}.`);
+                explanation ??
+                  `Gasto ${zScore > 0 ? "superior" : "inferior"} a la media en ${code}.`
+              );
               notificationCount++;
             }
           }
@@ -451,8 +494,13 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
       const adminUsers = await getOrgAdminUsers(organizationId);
       for (const dl of deadlines) {
         for (const userId of adminUsers.slice(0, 2)) {
-          await createNotification(org.companies[0]?.id ?? "", userId, "FISCAL_DEADLINE",
-            `Vencimiento fiscal: ${dl.model}`, `${dl.description} — vence el ${dl.dueDate}`);
+          await createNotification(
+            org.companies[0]?.id ?? "",
+            userId,
+            "FISCAL_DEADLINE",
+            `Vencimiento fiscal: ${dl.model}`,
+            `${dl.description} — vence el ${dl.dueDate}`
+          );
           notificationCount++;
         }
       }
@@ -503,8 +551,13 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
     if (closeProposalText && notificationCount < MAX_NOTIFICATIONS_PER_RUN) {
       const adminUsers = await getOrgAdminUsers(organizationId);
       for (const userId of adminUsers.slice(0, 3)) {
-        await createNotification(org.companies[0]?.id ?? "", userId, "CLOSE_PROPOSAL",
-          `Propuesta de cierre: ${monthStr}`, closeProposalText.slice(0, 500));
+        await createNotification(
+          org.companies[0]?.id ?? "",
+          userId,
+          "CLOSE_PROPOSAL",
+          `Propuesta de cierre: ${monthStr}`,
+          closeProposalText.slice(0, 500)
+        );
         notificationCount++;
       }
     }
@@ -545,8 +598,13 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
     if (briefingText && notificationCount < MAX_NOTIFICATIONS_PER_RUN) {
       const adminUsers = await getOrgAdminUsers(organizationId);
       for (const userId of adminUsers.slice(0, 3)) {
-        await createNotification(org.companies[0]?.id ?? "", userId, "DAILY_BRIEFING",
-          "Briefing diario", briefingText.slice(0, 500));
+        await createNotification(
+          org.companies[0]?.id ?? "",
+          userId,
+          "DAILY_BRIEFING",
+          "Briefing diario",
+          briefingText.slice(0, 500)
+        );
         notificationCount++;
       }
     }
@@ -560,16 +618,27 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
   // ══════════════════════════════════════
 
   const aiCallLog = getCallBuffer().map((r) => ({
-    task: r.task, model: r.model,
-    inputTokens: r.inputTokens, outputTokens: r.outputTokens,
-    latencyMs: r.latencyMs, success: r.success,
+    task: r.task,
+    model: r.model,
+    inputTokens: r.inputTokens,
+    outputTokens: r.outputTokens,
+    latencyMs: r.latencyMs,
+    success: r.success,
   }));
 
   const llmCallsTotal = aiCallLog.length;
   const llmCostEstimate = aiCallLog.reduce((sum, r) => {
     // Rough cost estimate per 1K tokens
-    const inputCost = r.model.includes("haiku") ? 0.001 : r.model.includes("sonnet") ? 0.003 : 0.015;
-    const outputCost = r.model.includes("haiku") ? 0.005 : r.model.includes("sonnet") ? 0.015 : 0.075;
+    const inputCost = r.model.includes("haiku")
+      ? 0.001
+      : r.model.includes("sonnet")
+        ? 0.003
+        : 0.015;
+    const outputCost = r.model.includes("haiku")
+      ? 0.005
+      : r.model.includes("sonnet")
+        ? 0.015
+        : 0.075;
     return sum + (r.inputTokens / 1000) * inputCost + (r.outputTokens / 1000) * outputCost;
   }, 0);
 
@@ -587,7 +656,9 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
       llmCallsTotal,
       llmCostEstimate: Math.round(llmCostEstimate * 10000) / 10000,
       errorsCount: stepErrors.length,
-      companyResults: JSON.parse(JSON.stringify(companyResults)) as import("@prisma/client").Prisma.InputJsonValue,
+      companyResults: JSON.parse(
+        JSON.stringify(companyResults)
+      ) as import("@prisma/client").Prisma.InputJsonValue,
       aiCallLog: aiCallLog as unknown as import("@prisma/client").Prisma.InputJsonValue,
       briefing: briefingText,
     },
@@ -642,15 +713,17 @@ async function createNotification(
   title: string,
   body: string
 ): Promise<void> {
-  await prisma.notification.create({
-    data: {
-      type: type as import("@prisma/client").NotificationType,
-      title,
-      body,
-      userId,
-      companyId,
-    },
-  }).catch((err) =>
-    console.warn("[daily-agent] Notification failed:", err instanceof Error ? err.message : err)
-  );
+  await prisma.notification
+    .create({
+      data: {
+        type: type as import("@prisma/client").NotificationType,
+        title,
+        body,
+        userId,
+        companyId,
+      },
+    })
+    .catch((err) =>
+      console.warn("[daily-agent] Notification failed:", err instanceof Error ? err.message : err)
+    );
 }

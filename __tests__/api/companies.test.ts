@@ -39,11 +39,23 @@ describe("Companies API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPrisma.membership.findFirst.mockResolvedValue({
-      id: "m_1", role: "OWNER", organizationId: "org_1",
+      id: "m_1",
+      role: "OWNER",
+      organizationId: "org_1",
       organization: { id: "org_1", name: "Test Group", companies: [] },
     });
     mockPrisma.company.findMany.mockResolvedValue([
-      { id: "c_1", name: "Parent SL", cif: "B12345678", consolidationMethod: "FULL", ownershipPercentage: 100, functionalCurrency: "EUR", isActive: true, isHoldingCompany: true, parentCompanyId: null },
+      {
+        id: "c_1",
+        name: "Parent SL",
+        cif: "B12345678",
+        consolidationMethod: "FULL",
+        ownershipPercentage: 100,
+        functionalCurrency: "EUR",
+        isActive: true,
+        isHoldingCompany: true,
+        parentCompanyId: null,
+      },
     ]);
     mockPrisma.company.create.mockResolvedValue({ id: "c_new", name: "New SL" });
     mockPrisma.companyScope.create.mockResolvedValue({});

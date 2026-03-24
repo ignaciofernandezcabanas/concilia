@@ -30,10 +30,7 @@ export interface BalanceReport {
   generatedAt: string;
 }
 
-export async function generateBalance(
-  db: ScopedPrisma,
-  asOf: Date
-): Promise<BalanceReport> {
+export async function generateBalance(db: ScopedPrisma, asOf: Date): Promise<BalanceReport> {
   // ── Deudores comerciales: facturas emitidas pendientes ──
   const deudores = await db.invoice.aggregate({
     where: {
@@ -120,7 +117,7 @@ export async function generateBalance(
     { code: "PNC", amount: roundTwo(pasivoNoCorriente) },
     { code: "PC", amount: roundTwo(pasivoCorriente) },
     { code: "PC.IV", amount: roundTwo(acreedoresTotal) },
-    { code: "TOTAL_PNP", amount: roundTwo(totalPasivo) },
+    { code: "TOTAL_PNP", amount: roundTwo(totalPasivo) }
   );
 
   return {

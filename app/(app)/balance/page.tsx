@@ -10,8 +10,14 @@ import { useFetch } from "@/hooks/useApi";
 import { qs } from "@/lib/api-client";
 import { Download } from "lucide-react";
 
-interface BalanceLine { code: string; amount: number; }
-interface BalanceReport { lines: BalanceLine[]; totals: Record<string, number>; }
+interface BalanceLine {
+  code: string;
+  amount: number;
+}
+interface BalanceReport {
+  lines: BalanceLine[];
+  totals: Record<string, number>;
+}
 
 export default function BalancePage() {
   const [periodType, setPeriodType] = useState<PeriodType>("quarter");
@@ -44,7 +50,10 @@ export default function BalancePage() {
           <div className="flex items-center gap-2.5">
             <PeriodSelector
               periodType={periodType}
-              setPeriodType={(pt) => { setPeriodType(pt); setOffset(0); }}
+              setPeriodType={(pt) => {
+                setPeriodType(pt);
+                setOffset(0);
+              }}
               label={period.label}
               onPrev={() => setOffset((o) => o - 1)}
               onNext={() => setOffset((o) => o + 1)}

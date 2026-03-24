@@ -16,9 +16,21 @@ import type {
 // ── Invoice ──
 export type InvoiceResponse = Pick<
   PrismaInvoice,
-  "id" | "holdedId" | "number" | "type" | "issueDate" | "dueDate" |
-  "totalAmount" | "netAmount" | "vatAmount" | "currency" | "description" |
-  "status" | "amountPaid" | "amountPending" | "pdfUrl"
+  | "id"
+  | "holdedId"
+  | "number"
+  | "type"
+  | "issueDate"
+  | "dueDate"
+  | "totalAmount"
+  | "netAmount"
+  | "vatAmount"
+  | "currency"
+  | "description"
+  | "status"
+  | "amountPaid"
+  | "amountPending"
+  | "pdfUrl"
 > & {
   contact?: { id: string; name: string; cif?: string | null } | null;
   _count?: { reconciliations: number; payments: number };
@@ -27,9 +39,22 @@ export type InvoiceResponse = Pick<
 // ── BankTransaction ──
 export type BankTransactionResponse = Pick<
   PrismaBankTransaction,
-  "id" | "valueDate" | "bookingDate" | "amount" | "currency" |
-  "concept" | "conceptParsed" | "counterpartIban" | "counterpartName" |
-  "reference" | "balanceAfter" | "status" | "priority" | "detectedType" | "note" | "duplicateGroupId"
+  | "id"
+  | "valueDate"
+  | "bookingDate"
+  | "amount"
+  | "currency"
+  | "concept"
+  | "conceptParsed"
+  | "counterpartIban"
+  | "counterpartName"
+  | "reference"
+  | "balanceAfter"
+  | "status"
+  | "priority"
+  | "detectedType"
+  | "note"
+  | "duplicateGroupId"
 > & {
   classification?: {
     id: string;
@@ -67,8 +92,14 @@ export type NotificationResponse = Pick<
 // ── Company ──
 export type CompanyResponse = Pick<
   PrismaCompany,
-  "id" | "name" | "cif" | "currency" | "autoApproveThreshold" |
-  "materialityThreshold" | "materialityMinor" | "preAlertDays"
+  | "id"
+  | "name"
+  | "cif"
+  | "currency"
+  | "autoApproveThreshold"
+  | "materialityThreshold"
+  | "materialityMinor"
+  | "preAlertDays"
 > & {
   integrations?: IntegrationResponse[];
   _count?: Record<string, number>;
@@ -89,9 +120,19 @@ export type AppUserResponse = Pick<
 // ── MatchingRule ──
 export type MatchingRuleResponse = Pick<
   PrismaMatchingRule,
-  "id" | "type" | "isActive" | "timesApplied" | "pattern" |
-  "counterpartIban" | "action" | "accountCode" | "cashflowType" |
-  "name" | "origin" | "status" | "priority"
+  | "id"
+  | "type"
+  | "isActive"
+  | "timesApplied"
+  | "pattern"
+  | "counterpartIban"
+  | "action"
+  | "accountCode"
+  | "cashflowType"
+  | "name"
+  | "origin"
+  | "status"
+  | "priority"
 >;
 
 // ── Paginated Response ──
@@ -136,8 +177,24 @@ export interface ReconciliationReportResponse {
   saldoHolded: number;
   saldoBanco: number;
   diferencia: number;
-  unreconciledInvoices?: { invoiceId: string; number: string; type: string; issueDate: string; totalAmount: number; amountPending: number; contactName: string; status: string }[];
-  unreconciledTransactions?: { transactionId: string; valueDate: string; concept: string; amount: number; counterpartName: string; status: string }[];
+  unreconciledInvoices?: {
+    invoiceId: string;
+    number: string;
+    type: string;
+    issueDate: string;
+    totalAmount: number;
+    amountPending: number;
+    contactName: string;
+    status: string;
+  }[];
+  unreconciledTransactions?: {
+    transactionId: string;
+    valueDate: string;
+    concept: string;
+    amount: number;
+    counterpartName: string;
+    status: string;
+  }[];
 }
 
 export interface DashboardResponse {

@@ -58,17 +58,26 @@ export async function classifyByLlm(
 
     // Log CoT
     if (parsed.steps) {
-      console.info(`[llm-classifier] CoT for tx ${tx.id}:`, JSON.stringify(parsed.steps).slice(0, 500));
+      console.info(
+        `[llm-classifier] CoT for tx ${tx.id}:`,
+        JSON.stringify(parsed.steps).slice(0, 500)
+      );
     }
 
     // Validate cashflow type
-    const validTypes: CashflowType[] = ["OPERATING", "INVESTING", "FINANCING", "INTERNAL", "NON_CASH"];
+    const validTypes: CashflowType[] = [
+      "OPERATING",
+      "INVESTING",
+      "FINANCING",
+      "INTERNAL",
+      "NON_CASH",
+    ];
     const cashflowType = validTypes.includes(parsed.cashflowType as CashflowType)
       ? (parsed.cashflowType as CashflowType)
       : "OPERATING";
 
     // Clamp confidence to 0.60-0.85
-    const confidence = Math.min(0.85, Math.max(0.60, parsed.confidence));
+    const confidence = Math.min(0.85, Math.max(0.6, parsed.confidence));
 
     return {
       accountCode: parsed.accountCode,

@@ -18,8 +18,19 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       let contactId: string | null = null;
       if (row.contactName) {
         const contact = await (db as any).contact.upsert({
-          where: { holdedId_companyId: { holdedId: `excel:${row.contactCif ?? row.contactName}`, companyId: ctx.company.id } },
-          create: { holdedId: `excel:${row.contactCif ?? row.contactName}`, name: row.contactName, cif: row.contactCif, type: row.type === "ISSUED" ? "CUSTOMER" : "SUPPLIER", companyId: ctx.company.id },
+          where: {
+            holdedId_companyId: {
+              holdedId: `excel:${row.contactCif ?? row.contactName}`,
+              companyId: ctx.company.id,
+            },
+          },
+          create: {
+            holdedId: `excel:${row.contactCif ?? row.contactName}`,
+            name: row.contactName,
+            cif: row.contactCif,
+            type: row.type === "ISSUED" ? "CUSTOMER" : "SUPPLIER",
+            companyId: ctx.company.id,
+          },
           update: { name: row.contactName },
         });
         contactId = contact.id;
@@ -44,7 +55,12 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       imported++;
     }
 
-    return NextResponse.json({ success: true, imported, errors, total: rows.length + errors.length });
+    return NextResponse.json({
+      success: true,
+      imported,
+      errors,
+      total: rows.length + errors.length,
+    });
   } catch (err) {
     return errorResponse("Error al importar facturas.", err);
   }

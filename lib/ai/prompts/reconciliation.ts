@@ -79,7 +79,7 @@ export function buildReconciliationUserMessage(params: {
   candidateInvoices: Array<{
     id: string;
     number: string;
-    type: 'emitida' | 'recibida';
+    type: "emitida" | "recibida";
     contactName: string;
     contactCif?: string;
     contactIban?: string;
@@ -102,11 +102,13 @@ export function buildReconciliationUserMessage(params: {
 
   let message = `## MOVIMIENTO BANCARIO\n`;
   message += `ID: ${bankTransaction.id}\n`;
-  message += `Importe: ${bankTransaction.amount}€ (${bankTransaction.amount > 0 ? 'COBRO' : 'PAGO'})\n`;
+  message += `Importe: ${bankTransaction.amount}€ (${bankTransaction.amount > 0 ? "COBRO" : "PAGO"})\n`;
   message += `Fecha valor: ${bankTransaction.valueDate}\n`;
   message += `Concepto: ${bankTransaction.concept}\n`;
-  if (bankTransaction.counterpartName) message += `Ordenante/Beneficiario: ${bankTransaction.counterpartName}\n`;
-  if (bankTransaction.counterpartIban) message += `IBAN contrapartida: ${bankTransaction.counterpartIban}\n`;
+  if (bankTransaction.counterpartName)
+    message += `Ordenante/Beneficiario: ${bankTransaction.counterpartName}\n`;
+  if (bankTransaction.counterpartIban)
+    message += `IBAN contrapartida: ${bankTransaction.counterpartIban}\n`;
 
   message += `\n## FACTURAS CANDIDATAS (${candidateInvoices.length})\n\n`;
 
@@ -115,7 +117,7 @@ export function buildReconciliationUserMessage(params: {
   } else {
     for (const inv of candidateInvoices) {
       message += `- ID: ${inv.id} | Nº: ${inv.number} | Tipo: ${inv.type}\n`;
-      message += `  Contacto: ${inv.contactName}${inv.contactCif ? ` (${inv.contactCif})` : ''}${inv.contactIban ? ` — IBAN: ${inv.contactIban}` : ''}\n`;
+      message += `  Contacto: ${inv.contactName}${inv.contactCif ? ` (${inv.contactCif})` : ""}${inv.contactIban ? ` — IBAN: ${inv.contactIban}` : ""}\n`;
       message += `  Base: ${inv.baseAmount}€ + IVA: ${inv.ivaAmount}€ - IRPF: ${inv.irpfAmount}€ = Total: ${inv.totalAmount}€\n`;
       message += `  Emitida: ${inv.issueDate} | Vence: ${inv.dueDate} | Estado: ${inv.status} | Cobrado/Pagado: ${inv.paidAmount}€\n`;
       message += `  Pendiente: ${(inv.totalAmount - inv.paidAmount).toFixed(2)}€\n\n`;

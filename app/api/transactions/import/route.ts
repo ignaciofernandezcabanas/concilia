@@ -17,14 +17,17 @@ import { isNorma43, parseNorma43 } from "@/lib/bank/norma43-parser";
  * Auto-detects column mapping by header names (Spanish bank formats).
  */
 export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const { company, user } = ctx;
 
   let formData: FormData;
   try {
     formData = await req.formData();
   } catch {
-    return NextResponse.json({ error: "Se esperaba multipart/form-data con un archivo CSV." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Se esperaba multipart/form-data con un archivo CSV." },
+      { status: 400 }
+    );
   }
 
   const file = formData.get("file") as File | null;
@@ -47,7 +50,10 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       for (const tx of n43.transactions) {
         const externalId = `n43_${tx.date.toISOString().slice(0, 10)}_${tx.amount.toFixed(2)}_${tx.reference}`;
         const exists = await db.bankTransaction.findFirst({ where: { externalId } });
-        if (exists) { skipped++; continue; }
+        if (exists) {
+          skipped++;
+          continue;
+        }
 
         await db.bankTransaction.create({
           data: {
@@ -66,8 +72,15 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         imported++;
       }
 
-      createAuditLog(db, { userId: user.id, action: "TRANSACTIONS_IMPORTED_N43", entityType: "BankTransaction", entityId: "batch", details: { imported, skipped, total: n43.transactions.length } })
-        .catch((err) => console.warn("[import] Audit failed:", err instanceof Error ? err.message : err));
+      createAuditLog(db, {
+        userId: user.id,
+        action: "TRANSACTIONS_IMPORTED_N43",
+        entityType: "BankTransaction",
+        entityId: "batch",
+        details: { imported, skipped, total: n43.transactions.length },
+      }).catch((err) =>
+        console.warn("[import] Audit failed:", err instanceof Error ? err.message : err)
+      );
 
       return NextResponse.json({
         success: true,
@@ -80,7 +93,10 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         currency: n43.currency,
       });
     } catch (err) {
-      return NextResponse.json({ error: `Error al parsear Norma43: ${err instanceof Error ? err.message : String(err)}` }, { status: 400 });
+      return NextResponse.json(
+        { error: `Error al parsear Norma43: ${err instanceof Error ? err.message : String(err)}` },
+        { status: 400 }
+      );
     }
   }
 
@@ -93,16 +109,23 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   // ── Parse lines ──
   const rawLines = text.split(/\r?\n/).filter((l) => l.trim());
   if (rawLines.length < 2) {
-    return NextResponse.json({ error: "El archivo debe tener al menos una fila de cabecera y una de datos." }, { status: 400 });
+    return NextResponse.json(
+      { error: "El archivo debe tener al menos una fila de cabecera y una de datos." },
+      { status: 400 }
+    );
   }
 
   // ── Find header row (skip bank preamble lines) ──
   const { headerIndex, mapping } = detectHeader(rawLines, separator);
   if (headerIndex === -1 || !mapping) {
-    return NextResponse.json({
-      error: "No se pudieron detectar las columnas. Asegúrate de que el CSV tiene cabeceras como: Fecha, Concepto, Importe, Saldo.",
-      hint: "Columnas detectadas: " + parseCsvLine(rawLines[0], separator).join(" | "),
-    }, { status: 400 });
+    return NextResponse.json(
+      {
+        error:
+          "No se pudieron detectar las columnas. Asegúrate de que el CSV tiene cabeceras como: Fecha, Concepto, Importe, Saldo.",
+        hint: "Columnas detectadas: " + parseCsvLine(rawLines[0], separator).join(" | "),
+      },
+      { status: 400 }
+    );
   }
 
   // ── Parse data rows ──
@@ -138,18 +161,32 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       if (!rawDate || !rawAmount) continue;
 
       const valueDate = parseDate(rawDate, dateFormat);
-      if (!valueDate) { errors.push(`Fila ${i + 2}: fecha inválida "${rawDate}"`); continue; }
+      if (!valueDate) {
+        errors.push(`Fila ${i + 2}: fecha inválida "${rawDate}"`);
+        continue;
+      }
 
       const amount = parseAmount(rawAmount);
-      if (isNaN(amount)) { errors.push(`Fila ${i + 2}: importe inválido "${rawAmount}"`); continue; }
+      if (isNaN(amount)) {
+        errors.push(`Fila ${i + 2}: importe inválido "${rawAmount}"`);
+        continue;
+      }
 
       const balanceAfter = rawBalance ? parseAmount(rawBalance) : null;
-      const bal = (balanceAfter != null && !isNaN(balanceAfter)) ? balanceAfter : null;
+      const bal = balanceAfter != null && !isNaN(balanceAfter) ? balanceAfter : null;
       // Use balance as part of ID — it's unique per row in bank statements
       const balanceStr = bal != null ? bal.toFixed(2) : `row${i}`;
       const externalId = `csv_${valueDate.toISOString().slice(0, 10)}_${amount.toFixed(2)}_${balanceStr}`;
 
-      parsed.push({ externalId, valueDate, amount, concept: concept || null, counterpart: counterpart || null, reference: reference || null, balanceAfter: bal });
+      parsed.push({
+        externalId,
+        valueDate,
+        amount,
+        concept: concept || null,
+        counterpart: counterpart || null,
+        reference: reference || null,
+        balanceAfter: bal,
+      });
     } catch (err) {
       errors.push(`Fila ${i + 2}: ${err instanceof Error ? err.message : "error"}`);
     }
@@ -210,7 +247,12 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     entityType: "BankTransaction",
     entityId: "batch",
     details: { filename: file.name, created, skipped, errors: errors.length },
-  }).catch((err) => console.warn("[import] Non-critical operation failed:", err instanceof Error ? err.message : err));
+  }).catch((err) =>
+    console.warn(
+      "[import] Non-critical operation failed:",
+      err instanceof Error ? err.message : err
+    )
+  );
 
   return NextResponse.json({
     success: true,
@@ -264,24 +306,36 @@ interface ColumnMapping {
   fecha: number;
   concepto: number;
   importe: number;
-  saldo: number;      // -1 if not found
-  referencia: number;  // -1 if not found
+  saldo: number; // -1 if not found
+  referencia: number; // -1 if not found
   contrapartida: number; // -1 if not found
 }
 
-const DATE_PATTERNS = /^(fecha|date|f\.?\s*valor|fecha\s*valor|value\s*date|f\.?\s*operaci[oó]n|fecha\s*operaci[oó]n|fecha\s*mov)/i;
-const CONCEPT_PATTERNS = /^(concepto|descripci[oó]n|description|movimiento|detalle|observaciones|texto)/i;
-const AMOUNT_PATTERNS = /^(importe|amount|cantidad|monto|valor|cargo\/abono|importe\s*\(eur\)|euros)/i;
+const DATE_PATTERNS =
+  /^(fecha|date|f\.?\s*valor|fecha\s*valor|value\s*date|f\.?\s*operaci[oó]n|fecha\s*operaci[oó]n|fecha\s*mov)/i;
+const CONCEPT_PATTERNS =
+  /^(concepto|descripci[oó]n|description|movimiento|detalle|observaciones|texto)/i;
+const AMOUNT_PATTERNS =
+  /^(importe|amount|cantidad|monto|valor|cargo\/abono|importe\s*\(eur\)|euros)/i;
 const BALANCE_PATTERNS = /^(saldo|balance|saldo\s*disponible|saldo\s*contable)/i;
 const REF_PATTERNS = /^(referencia|reference|ref|n[uú]mero|ref\.\s*mov)/i;
-const COUNTERPART_PATTERNS = /^(beneficiario|ordenante|contrapartida|nombre|titular|pagador|destinatario)/i;
+const COUNTERPART_PATTERNS =
+  /^(beneficiario|ordenante|contrapartida|nombre|titular|pagador|destinatario)/i;
 
-function detectHeader(lines: string[], sep: string): { headerIndex: number; mapping: ColumnMapping | null } {
+function detectHeader(
+  lines: string[],
+  sep: string
+): { headerIndex: number; mapping: ColumnMapping | null } {
   // Try each of the first 10 lines as potential header
   for (let i = 0; i < Math.min(lines.length, 10); i++) {
     const cols = parseCsvLine(lines[i], sep).map((c) => c.trim().replace(/^["']|["']$/g, ""));
 
-    let fecha = -1, concepto = -1, importe = -1, saldo = -1, referencia = -1, contrapartida = -1;
+    let fecha = -1,
+      concepto = -1,
+      importe = -1,
+      saldo = -1,
+      referencia = -1,
+      contrapartida = -1;
 
     for (let j = 0; j < cols.length; j++) {
       const col = cols[j];
@@ -304,7 +358,10 @@ function detectHeader(lines: string[], sep: string): { headerIndex: number; mapp
           }
         }
       }
-      return { headerIndex: i, mapping: { fecha, concepto, importe, saldo, referencia, contrapartida } };
+      return {
+        headerIndex: i,
+        mapping: { fecha, concepto, importe, saldo, referencia, contrapartida },
+      };
     }
   }
 

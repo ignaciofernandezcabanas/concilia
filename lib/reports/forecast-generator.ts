@@ -242,18 +242,16 @@ function detectRecurringPatterns(transactions: ClassifiedTx[]): RecurringPattern
     // Check amount consistency (within 20%)
     const amounts = txs.map((t) => t.amount);
     const avgAmount = amounts.reduce((s, a) => s + a, 0) / amounts.length;
-    const allSimilar = amounts.every(
-      (a) => Math.abs(a - avgAmount) / Math.abs(avgAmount) < 0.2
-    );
+    const allSimilar = amounts.every((a) => Math.abs(a - avgAmount) / Math.abs(avgAmount) < 0.2);
     if (!allSimilar) continue;
 
     // Check monthly recurrence (occurrences in different months)
-    const months = new Set(txs.map((t) => `${t.valueDate.getFullYear()}-${t.valueDate.getMonth()}`));
+    const months = new Set(
+      txs.map((t) => `${t.valueDate.getFullYear()}-${t.valueDate.getMonth()}`)
+    );
     if (months.size < 2) continue;
 
-    const avgDay = Math.round(
-      txs.reduce((s, t) => s + t.valueDate.getDate(), 0) / txs.length
-    );
+    const avgDay = Math.round(txs.reduce((s, t) => s + t.valueDate.getDate(), 0) / txs.length);
 
     const desc =
       txs[0].classification?.description ??

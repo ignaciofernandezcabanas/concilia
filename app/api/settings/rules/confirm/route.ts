@@ -8,7 +8,7 @@ import { createAuditLog } from "@/lib/utils/audit";
  * Creates a MatchingRule from a confirmed structured proposal.
  */
 export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const { company, user } = ctx;
   const body = await req.json();
 
@@ -47,7 +47,12 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       actionDetails,
       source: "natural_language",
     },
-  }).catch((err) => console.warn("[confirm] Non-critical operation failed:", err instanceof Error ? err.message : err));
+  }).catch((err) =>
+    console.warn(
+      "[confirm] Non-critical operation failed:",
+      err instanceof Error ? err.message : err
+    )
+  );
 
   return NextResponse.json({ success: true, rule: { id: rule.id, type: rule.type } });
 }, "manage:rules");

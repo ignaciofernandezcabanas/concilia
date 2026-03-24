@@ -47,31 +47,36 @@ concilia/
 ## Financial Logic Rules — NEVER Violate These
 
 ### 1. Accounting Equation
+
 Every operation that touches balances MUST maintain: Assets = Liabilities + Equity.
 If you're creating a reconciliation entry, a journal adjustment, or any balance mutation,
 verify the equation holds. If it doesn't, you have a bug.
 
 ### 2. Double Entry
+
 Every transaction has at least one debit and one credit. They MUST sum to the same amount.
 When building reconciliation entries or classification logic:
+
 - Debit increases assets and expenses
 - Credit increases liabilities, equity, and revenue
 - NEVER create a one-sided entry
 
 ### 3. PGC Account Classification — Spanish Chart of Accounts
+
 Concilia uses PGC 2007 (adaptación PYMEs). Account groups:
 
-| Group | Range | Nature | Normal Balance |
-|-------|-------|--------|---------------|
-| 1 | 100-199 | Equity & Long-term liabilities | Credit |
-| 2 | 200-299 | Fixed assets | Debit |
-| 3 | 300-399 | Inventory | Debit |
-| 4 | 400-499 | Creditors & Debtors | Mixed (400s credit, 430s debit) |
-| 5 | 500-599 | Financial accounts (bank, cash, short-term) | Mixed |
-| 6 | 600-699 | Expenses | Debit |
-| 7 | 700-799 | Revenue | Credit |
+| Group | Range   | Nature                                      | Normal Balance                  |
+| ----- | ------- | ------------------------------------------- | ------------------------------- |
+| 1     | 100-199 | Equity & Long-term liabilities              | Credit                          |
+| 2     | 200-299 | Fixed assets                                | Debit                           |
+| 3     | 300-399 | Inventory                                   | Debit                           |
+| 4     | 400-499 | Creditors & Debtors                         | Mixed (400s credit, 430s debit) |
+| 5     | 500-599 | Financial accounts (bank, cash, short-term) | Mixed                           |
+| 6     | 600-699 | Expenses                                    | Debit                           |
+| 7     | 700-799 | Revenue                                     | Credit                          |
 
 Key accounts used in reconciliation:
+
 - 572: Bancos (the bank balance — ALWAYS matches the bank statement)
 - 430: Clientes (AR — matched against incoming payments)
 - 400: Proveedores (AP — matched against outgoing payments)
@@ -96,17 +101,20 @@ Key accounts used in reconciliation:
 ### 4. Reconciliation Matching Rules
 
 **Match quality hierarchy (implement in this order):**
+
 1. EXACT: Same amount + same contact/IBAN + date within ±5 days → confidence ≥ 0.95
 2. GROUPED: Multiple invoices sum to bank amount + same contact → confidence ≥ 0.85
 3. FUZZY: Amount within ±2% + concept contains contact name → confidence ≥ 0.70
 4. LLM: When deterministic matchers fail → Claude analyzes context → confidence varies
 
 **Auto-approval criteria (both must be true):**
+
 - confidence ≥ company.autoApproveThreshold (default 0.90)
 - amount < company.materialityThreshold (default €500)
 - NEVER auto-approve: duplicates, partial payments, amounts > materialityThreshold
 
 **Critical matching edge cases:**
+
 - **Partial payments**: Bank amount < invoice amount. Create reconciliation with
   `differenceAmount`, keep invoice status as PARTIALLY_PAID, track remaining balance.
 - **Grouped payments**: One bank transaction covers multiple invoices. Create one
@@ -123,7 +131,9 @@ Key accounts used in reconciliation:
 - **Payroll**: Detect nómina patterns. Classify 640 (salaries) + 642 (SS empresa).
 
 ### 5. FX and Multi-Currency
+
 If Concilia ever handles multi-currency entities:
+
 - Bank transactions: record in original currency AND company currency
 - Translation: use closing rate for balance sheet, average rate for P&L
 - FX differences on monetary items → P&L (account 668/768)
@@ -133,6 +143,7 @@ If Concilia ever handles multi-currency entities:
 ### 6. Reporting Logic
 
 **P&L (PyG PGC PYMEs — 17 line items):**
+
 - Revenue = sum of group 70x accounts
 - COGS = sum of group 60x accounts + inventory variation (group 61x)
 - Gross margin = Revenue - COGS
@@ -146,6 +157,7 @@ If Concilia ever handles multi-currency entities:
 - Net income = PBT - Tax
 
 **Cashflow (two modes):**
+
 - Treasury mode (for dashboard): direct method from bank transactions, grouped by cashflow type
 - EFE formal mode (for reporting): indirect method from P&L + BS movements
 
@@ -154,19 +166,22 @@ Always decompose into: volume, price/rate, mix, scope, FX, one-offs.
 Never present a variance without decomposition.
 
 ### 7. Confidence Scoring
+
 When calculating match confidence, use weighted factors:
+
 ```typescript
-const confidence = (
-  amountMatch * 0.40 +    // 1.0 if exact, 0.8 if ±1%, 0.5 if ±5%, 0 if >5%
-  contactMatch * 0.25 +   // 1.0 if IBAN match, 0.8 if name fuzzy match, 0 if unknown
-  dateMatch * 0.15 +      // 1.0 if ±3 days, 0.7 if ±7 days, 0.3 if ±30 days, 0 if >30
-  conceptMatch * 0.10 +   // 1.0 if invoice number in concept, 0.5 if partial match
-  historyMatch * 0.10     // 1.0 if matching rule exists for this pattern
-);
+const confidence =
+  amountMatch * 0.4 + // 1.0 if exact, 0.8 if ±1%, 0.5 if ±5%, 0 if >5%
+  contactMatch * 0.25 + // 1.0 if IBAN match, 0.8 if name fuzzy match, 0 if unknown
+  dateMatch * 0.15 + // 1.0 if ±3 days, 0.7 if ±7 days, 0.3 if ±30 days, 0 if >30
+  conceptMatch * 0.1 + // 1.0 if invoice number in concept, 0.5 if partial match
+  historyMatch * 0.1; // 1.0 if matching rule exists for this pattern
 ```
+
 NEVER inflate confidence. A false positive auto-approval is worse than requiring human review.
 
 ### 8. Data Integrity
+
 - Every mutation to financial data must create an AuditLog entry
 - Soft deletes only (set deletedAt, never DELETE FROM)
 - All queries MUST filter by companyId (multi-tenancy)
@@ -181,12 +196,12 @@ NEVER inflate confidence. A false positive auto-approval is worse than requiring
 
 Read these BEFORE implementing domain-specific logic:
 
-| When building... | Read first |
-|-----------------|-----------|
-| Reconciliation matchers/resolver | `references/reconciliation-logic.md` |
-| PGC classification or fiscal engine | `references/pgc-classification.md` |
-| Report generation (P&L, cashflow, variance) | `references/reporting-logic.md` |
-| Close process or period management | `references/close-process.md` |
+| When building...                            | Read first                           |
+| ------------------------------------------- | ------------------------------------ |
+| Reconciliation matchers/resolver            | `references/reconciliation-logic.md` |
+| PGC classification or fiscal engine         | `references/pgc-classification.md`   |
+| Report generation (P&L, cashflow, variance) | `references/reporting-logic.md`      |
+| Close process or period management          | `references/close-process.md`        |
 
 ## Code Standards for Financial Logic
 

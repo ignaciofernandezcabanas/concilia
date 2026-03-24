@@ -15,48 +15,37 @@ import { generatePyG, type PyGLevel } from "@/lib/reports/pyg-generator";
  *   level         - Detail level: 1=results, 2=titles, 3=groups, 4=accounts
  *   includeEbitda - Include EBITDA calculation (default: true)
  */
-export const GET = withAuth(
-  async (req: NextRequest, ctx: AuthContext) => {
-    const { company } = ctx;
-    const searchParams = req.nextUrl.searchParams;
+export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+  const { company } = ctx;
+  const searchParams = req.nextUrl.searchParams;
 
-    const parsed = pygQuerySchema.safeParse(
-      Object.fromEntries(searchParams.entries())
+  const parsed = pygQuerySchema.safeParse(Object.fromEntries(searchParams.entries()));
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid query parameters.", details: parsed.error.flatten() },
+      { status: 400 }
     );
+  }
 
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid query parameters.", details: parsed.error.flatten() },
-        { status: 400 }
-      );
-    }
+  const { from, to, level, includeEbitda } = parsed.data;
 
-    const { from, to, level, includeEbitda } = parsed.data;
+  // Map numeric level to named level
+  const levelMap: Record<number, PyGLevel> = {
+    1: "results",
+    2: "titles",
+    3: "groups",
+    4: "accounts",
+    5: "accounts",
+  };
+  const namedLevel = levelMap[level] ?? "titles";
 
-    // Map numeric level to named level
-    const levelMap: Record<number, PyGLevel> = {
-      1: "results",
-      2: "titles",
-      3: "groups",
-      4: "accounts",
-      5: "accounts",
-    };
-    const namedLevel = levelMap[level] ?? "titles";
+  try {
+    const report = await generatePyG(ctx.db, from, to, namedLevel, includeEbitda);
 
-    try {
-      const report = await generatePyG(
-        ctx.db,
-        from,
-        to,
-        namedLevel,
-        includeEbitda
-      );
-
-      return NextResponse.json(report);
-    } catch (err) {
-      console.error("[reports/pyg] Error:", err);
-      return errorResponse("Failed to generate P&L report.", err, 500);
-    }
-  },
-  "read:reports"
-);
+    return NextResponse.json(report);
+  } catch (err) {
+    console.error("[reports/pyg] Error:", err);
+    return errorResponse("Failed to generate P&L report.", err, 500);
+  }
+}, "read:reports");

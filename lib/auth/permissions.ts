@@ -33,8 +33,6 @@ export function hasPermission(role: Role, permission: Permission): boolean {
  */
 export function checkPermission(role: Role, permission: Permission): void {
   if (!hasPermission(role, permission)) {
-    throw new Error(
-      `Role "${role}" does not have permission "${permission}".`
-    );
+    throw new Error(`Role "${role}" does not have permission "${permission}".`);
   }
 }

@@ -81,7 +81,7 @@ export async function proposeEliminations(orgId: string): Promise<EliminationPro
       amount,
       eliminationAmount,
       type,
-      confidence: eliminationPct === 1 ? 0.95 : 0.80,
+      confidence: eliminationPct === 1 ? 0.95 : 0.8,
       reasoning: `Eliminación IC ${type}: ${companyA.name} ↔ ${companyB.name} por ${eliminationAmount.toFixed(2)} EUR (${Math.round(eliminationPct * 100)}%)`,
     });
   }

@@ -49,9 +49,7 @@ const ORG_ID = "org_1";
 const defaultOrg = {
   id: ORG_ID,
   name: "Test Org",
-  companies: [
-    { id: "c1", name: "Company A", shortName: "A" },
-  ],
+  companies: [{ id: "c1", name: "Company A", shortName: "A" }],
 };
 
 function setupDefaults() {
@@ -72,20 +70,42 @@ function setupDefaults() {
   mockPrisma.notification.create.mockResolvedValue({});
 
   mockRunReconciliation.mockResolvedValue({
-    processed: 5, matched: 3, classified: 1, autoApproved: 2,
-    needsReview: 1, errors: [],
+    processed: 5,
+    matched: 3,
+    classified: 1,
+    autoApproved: 2,
+    needsReview: 1,
+    errors: [],
   });
   mockRunDepreciation.mockResolvedValue({
-    assetsProcessed: 0, entriesCreated: 0, totalDepreciation: 0, errors: [],
+    assetsProcessed: 0,
+    entriesCreated: 0,
+    totalDepreciation: 0,
+    errors: [],
   });
   mockDetectIntercompany.mockResolvedValue({
-    isIntercompany: false, siblingCompanyId: null, siblingCompanyName: null, organizationId: null,
+    isIntercompany: false,
+    siblingCompanyId: null,
+    siblingCompanyName: null,
+    organizationId: null,
   });
   mockGenerateForecast.mockResolvedValue({
-    currentBalance: 50000, balanceDate: "2026-03-23",
-    weeks: [{ weekStart: "2026-03-23", weekEnd: "2026-03-29", expectedInflows: 1000, expectedOutflows: 500, netFlow: 500, projectedBalance: 50500, details: [] }],
+    currentBalance: 50000,
+    balanceDate: "2026-03-23",
+    weeks: [
+      {
+        weekStart: "2026-03-23",
+        weekEnd: "2026-03-29",
+        expectedInflows: 1000,
+        expectedOutflows: 500,
+        netFlow: 500,
+        projectedBalance: 50500,
+        details: [],
+      },
+    ],
     totals: { totalExpectedInflows: 1000, totalExpectedOutflows: 500, projectedEndBalance: 50500 },
-    horizon: 8, generatedAt: new Date().toISOString(),
+    horizon: 8,
+    generatedAt: new Date().toISOString(),
   });
   mockCallAI.mockResolvedValue("Briefing generado para Test Org.");
 }
@@ -185,7 +205,15 @@ describe("Daily Agent", () => {
       currentBalance: 1000,
       balanceDate: "2026-03-23",
       weeks: [
-        { weekStart: "2026-03-23", weekEnd: "2026-03-29", projectedBalance: -500, expectedInflows: 0, expectedOutflows: 1500, netFlow: -1500, details: [] },
+        {
+          weekStart: "2026-03-23",
+          weekEnd: "2026-03-29",
+          projectedBalance: -500,
+          expectedInflows: 0,
+          expectedOutflows: 1500,
+          netFlow: -1500,
+          details: [],
+        },
       ],
       totals: { totalExpectedInflows: 0, totalExpectedOutflows: 1500, projectedEndBalance: -500 },
       horizon: 8,
@@ -208,7 +236,11 @@ describe("Daily Agent", () => {
 
     await runDailyAgent(ORG_ID);
 
-    expect(mockRunDepreciation).toHaveBeenCalledWith(expect.anything(), now.getFullYear(), now.getMonth() + 1);
+    expect(mockRunDepreciation).toHaveBeenCalledWith(
+      expect.anything(),
+      now.getFullYear(),
+      now.getMonth() + 1
+    );
   });
 
   it("intercompany exact mirror → auto-confirms", async () => {
@@ -236,20 +268,24 @@ describe("Daily Agent", () => {
     });
 
     // Mirror transaction found
-    mockPrisma.bankTransaction.findMany.mockImplementation(async (args: Record<string, unknown>) => {
-      const where = args.where as Record<string, unknown>;
-      if (where?.counterpartIban) return [tx]; // intercompany pending txs
-      if (where?.status === "CLASSIFIED") return []; // anomalies
-      return [];
-    });
+    mockPrisma.bankTransaction.findMany.mockImplementation(
+      async (args: Record<string, unknown>) => {
+        const where = args.where as Record<string, unknown>;
+        if (where?.counterpartIban) return [tx]; // intercompany pending txs
+        if (where?.status === "CLASSIFIED") return []; // anomalies
+        return [];
+      }
+    );
 
     // For the mirror lookup via findFirst
     const mockFindFirst = vi.fn().mockResolvedValue({ id: "tx_mirror", amount: -5000 });
-    mockPrisma.bankTransaction.findMany = vi.fn().mockImplementation(async (args: Record<string, unknown>) => {
-      const where = args.where as Record<string, unknown>;
-      if (where?.counterpartIban) return [tx];
-      return [];
-    });
+    mockPrisma.bankTransaction.findMany = vi
+      .fn()
+      .mockImplementation(async (args: Record<string, unknown>) => {
+        const where = args.where as Record<string, unknown>;
+        if (where?.counterpartIban) return [tx];
+        return [];
+      });
     // We need to mock prisma.bankTransaction.findFirst for the mirror check
     (mockPrisma as Record<string, unknown>).bankTransaction = {
       ...mockPrisma.bankTransaction,

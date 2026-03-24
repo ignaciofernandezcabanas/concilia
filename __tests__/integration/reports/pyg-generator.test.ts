@@ -72,9 +72,21 @@ describe("PyG Generator", () => {
 
   it("resultado explotación = líneas 1 a 11", async () => {
     mockDb.invoiceLine.findMany.mockResolvedValue([
-      { totalAmount: 10000, invoice: { type: "ISSUED" }, account: { code: "700", group: 7, pygLine: "1", name: "Ventas" } },
-      { totalAmount: 4000, invoice: { type: "RECEIVED" }, account: { code: "600", group: 6, pygLine: "4", name: "Compras" } },
-      { totalAmount: 2000, invoice: { type: "RECEIVED" }, account: { code: "640", group: 6, pygLine: "6", name: "Sueldos" } },
+      {
+        totalAmount: 10000,
+        invoice: { type: "ISSUED" },
+        account: { code: "700", group: 7, pygLine: "1", name: "Ventas" },
+      },
+      {
+        totalAmount: 4000,
+        invoice: { type: "RECEIVED" },
+        account: { code: "600", group: 6, pygLine: "4", name: "Compras" },
+      },
+      {
+        totalAmount: 2000,
+        invoice: { type: "RECEIVED" },
+        account: { code: "640", group: 6, pygLine: "6", name: "Sueldos" },
+      },
     ]);
 
     const report = await generatePyG(mockDb as any, new Date("2026-01-01"), new Date("2026-03-31"));
@@ -85,8 +97,16 @@ describe("PyG Generator", () => {
 
   it("notas de crédito invierten el signo", async () => {
     mockDb.invoiceLine.findMany.mockResolvedValue([
-      { totalAmount: 1000, invoice: { type: "ISSUED" }, account: { code: "700", group: 7, pygLine: "1", name: "Ventas" } },
-      { totalAmount: 200, invoice: { type: "CREDIT_ISSUED" }, account: { code: "700", group: 7, pygLine: "1", name: "Ventas" } },
+      {
+        totalAmount: 1000,
+        invoice: { type: "ISSUED" },
+        account: { code: "700", group: 7, pygLine: "1", name: "Ventas" },
+      },
+      {
+        totalAmount: 200,
+        invoice: { type: "CREDIT_ISSUED" },
+        account: { code: "700", group: 7, pygLine: "1", name: "Ventas" },
+      },
     ]);
 
     const report = await generatePyG(mockDb as any, new Date("2026-01-01"), new Date("2026-03-31"));
@@ -95,7 +115,13 @@ describe("PyG Generator", () => {
   });
 
   it("EBITDA incluido por defecto", async () => {
-    const report = await generatePyG(mockDb as any, new Date("2026-01-01"), new Date("2026-03-31"), "titles", true);
+    const report = await generatePyG(
+      mockDb as any,
+      new Date("2026-01-01"),
+      new Date("2026-03-31"),
+      "titles",
+      true
+    );
     expect(report.results.ebitda).toBeDefined();
   });
 

@@ -37,8 +37,14 @@ interface AgentRun {
 }
 
 export default function AutomationPage() {
-  const { data: stats, loading: statsLoading, refetch: refetchStats } = useFetch<AutomationStats>("/api/settings/automation");
-  const { data: runsData, loading: runsLoading } = useFetch<{ data: AgentRun[] }>("/api/agent-runs");
+  const {
+    data: stats,
+    loading: statsLoading,
+    refetch: refetchStats,
+  } = useFetch<AutomationStats>("/api/settings/automation");
+  const { data: runsData, loading: runsLoading } = useFetch<{ data: AgentRun[] }>(
+    "/api/agent-runs"
+  );
   const [saving, setSaving] = useState(false);
   const [threshold, setThreshold] = useState<number | null>(null);
 
@@ -101,17 +107,38 @@ export default function AutomationPage() {
           )}
         </div>
         <p className="text-[11px] text-text-tertiary mt-2">
-          Solo se auto-ejecutan acciones con confianza ≥ {Math.round(currentThreshold * 100)}%. El resto va a bandeja para revisión.
+          Solo se auto-ejecutan acciones con confianza ≥ {Math.round(currentThreshold * 100)}%. El
+          resto va a bandeja para revisión.
         </p>
       </div>
 
       {/* Stats 30 days */}
       {s && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-          <StatCard icon={Zap} label="Tasa automatización" value={`${s.automationRate}%`} color="text-green" />
-          <StatCard icon={TrendingUp} label="Txs procesadas" value={String(s.txsProcessed)} color="text-accent" />
-          <StatCard icon={AlertTriangle} label="Errores" value={String(s.errorsCount)} color={s.errorsCount > 0 ? "text-red" : "text-green"} />
-          <StatCard icon={DollarSign} label="Coste LLM" value={`$${s.llmCostEstimate.toFixed(2)}`} color="text-text-secondary" />
+          <StatCard
+            icon={Zap}
+            label="Tasa automatización"
+            value={`${s.automationRate}%`}
+            color="text-green"
+          />
+          <StatCard
+            icon={TrendingUp}
+            label="Txs procesadas"
+            value={String(s.txsProcessed)}
+            color="text-accent"
+          />
+          <StatCard
+            icon={AlertTriangle}
+            label="Errores"
+            value={String(s.errorsCount)}
+            color={s.errorsCount > 0 ? "text-red" : "text-green"}
+          />
+          <StatCard
+            icon={DollarSign}
+            label="Coste LLM"
+            value={`$${s.llmCostEstimate.toFixed(2)}`}
+            color="text-text-secondary"
+          />
         </div>
       )}
 
@@ -141,22 +168,38 @@ export default function AutomationPage() {
           <h3 className="text-[13px] font-semibold text-text-primary">Historial de ejecuciones</h3>
         </div>
         {runsLoading ? (
-          <div className="p-8 flex justify-center"><LoadingSpinner /></div>
+          <div className="p-8 flex justify-center">
+            <LoadingSpinner />
+          </div>
         ) : runs.length === 0 ? (
-          <p className="p-5 text-[12px] text-text-tertiary text-center">Sin ejecuciones registradas.</p>
+          <p className="p-5 text-[12px] text-text-tertiary text-center">
+            Sin ejecuciones registradas.
+          </p>
         ) : (
           <div className="divide-y divide-border-light">
             {runs.map((run) => (
-              <div key={run.id} className="flex items-center px-5 py-3 text-[12px] hover:bg-page transition-colors">
+              <div
+                key={run.id}
+                className="flex items-center px-5 py-3 text-[12px] hover:bg-page transition-colors"
+              >
                 <span className="w-32 text-text-secondary">
-                  {new Date(run.startedAt).toLocaleDateString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  {new Date(run.startedAt).toLocaleDateString("es-ES", {
+                    day: "2-digit",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
                 </span>
-                <span className="w-24"><Badge value={run.status} /></span>
+                <span className="w-24">
+                  <Badge value={run.status} />
+                </span>
                 <span className="w-20 text-text-primary">{run.txsProcessed} txs</span>
                 <span className="w-20 text-green">{run.txsAutoExecuted} auto</span>
                 <span className="w-20 text-amber">{run.txsToBandeja} bandeja</span>
                 <span className="w-16 text-text-tertiary">{run.llmCallsTotal} LLM</span>
-                <span className="flex-1 text-right text-text-tertiary">${run.llmCostEstimate.toFixed(3)}</span>
+                <span className="flex-1 text-right text-text-tertiary">
+                  ${run.llmCostEstimate.toFixed(3)}
+                </span>
                 {run.errorsCount > 0 && (
                   <span className="ml-2 text-red">{run.errorsCount} err</span>
                 )}
@@ -169,7 +212,12 @@ export default function AutomationPage() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, color }: {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  color,
+}: {
   icon: LucideIcon;
   label: string;
   value: string;

@@ -1,5 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { buildReconciliation, buildBankTransaction, buildInvoice, buildContact, buildLearnedPattern } from '../helpers/factories';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  buildReconciliation,
+  buildBankTransaction,
+  buildInvoice,
+  buildContact,
+  buildLearnedPattern,
+} from "../helpers/factories";
 
 const mockPrisma = vi.hoisted(() => ({
   reconciliation: { findUnique: vi.fn() },
@@ -7,17 +13,17 @@ const mockPrisma = vi.hoisted(() => ({
   controllerDecision: { updateMany: vi.fn(), create: vi.fn() },
   learnedPattern: { findFirst: vi.fn(), update: vi.fn(), create: vi.fn() },
 }));
-vi.mock('@/lib/db', () => ({ prisma: mockPrisma }));
+vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
 
-import { trackControllerDecision } from '@/lib/reconciliation/decision-tracker';
+import { trackControllerDecision } from "@/lib/reconciliation/decision-tracker";
 
 const baseCtx = {
-  reconciliationId: 'reco_1',
-  bankTransactionId: 'tx_1',
-  invoiceId: 'inv_1',
-  userId: 'user_1',
-  companyId: 'company_1',
-  controllerAction: 'approve',
+  reconciliationId: "reco_1",
+  bankTransactionId: "tx_1",
+  invoiceId: "inv_1",
+  userId: "user_1",
+  companyId: "company_1",
+  controllerAction: "approve",
 };
 
 const contact = buildContact();
@@ -25,10 +31,10 @@ const bankTx = buildBankTransaction({ amount: -300, counterpartIban: contact.iba
 const invoice = buildInvoice({ contact });
 const reco = buildReconciliation({
   confidenceScore: 0.95,
-  matchReason: 'exact_amount+iban_match',
+  matchReason: "exact_amount+iban_match",
   difference: null,
-  bankTransactionId: 'tx_1',
-  invoiceId: 'inv_1',
+  bankTransactionId: "tx_1",
+  invoiceId: "inv_1",
 });
 
 function setupDefaults() {
@@ -45,15 +51,15 @@ function setupDefaults() {
   mockPrisma.learnedPattern.update.mockResolvedValue({});
 }
 
-describe('trackControllerDecision', () => {
+describe("trackControllerDecision", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setupDefaults();
   });
 
   // ── wasModified ──
-  it('aprobación sin cambios → wasModified: false', async () => {
-    await trackControllerDecision(mockPrisma as any, { ...baseCtx, controllerAction: 'approve' });
+  it("aprobación sin cambios → wasModified: false", async () => {
+    await trackControllerDecision(mockPrisma as any, { ...baseCtx, controllerAction: "approve" });
 
     expect(mockPrisma.controllerDecision.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -62,12 +68,12 @@ describe('trackControllerDecision', () => {
     );
   });
 
-  it('corrección (correctedField presente) → wasModified: true', async () => {
+  it("corrección (correctedField presente) → wasModified: true", async () => {
     await trackControllerDecision(mockPrisma as any, {
       ...baseCtx,
-      controllerAction: 'classify',
-      correctedField: 'accountCode',
-      correctedTo: '629',
+      controllerAction: "classify",
+      correctedField: "accountCode",
+      correctedTo: "629",
     });
 
     expect(mockPrisma.controllerDecision.create).toHaveBeenCalledWith(
@@ -77,8 +83,8 @@ describe('trackControllerDecision', () => {
     );
   });
 
-  it('reject siempre marca wasModified: true', async () => {
-    await trackControllerDecision(mockPrisma as any, { ...baseCtx, controllerAction: 'reject' });
+  it("reject siempre marca wasModified: true", async () => {
+    await trackControllerDecision(mockPrisma as any, { ...baseCtx, controllerAction: "reject" });
 
     expect(mockPrisma.controllerDecision.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -88,17 +94,17 @@ describe('trackControllerDecision', () => {
   });
 
   // ── Previous decisions marked non-definitive ──
-  it('marca decisiones previas como no definitivas', async () => {
+  it("marca decisiones previas como no definitivas", async () => {
     await trackControllerDecision(mockPrisma as any, baseCtx);
 
     expect(mockPrisma.controllerDecision.updateMany).toHaveBeenCalledWith({
-      where: { bankTransactionId: 'tx_1', companyId: 'company_1', isDefinitive: true },
+      where: { bankTransactionId: "tx_1", companyId: "company_1", isDefinitive: true },
       data: { isDefinitive: false },
     });
   });
 
   // ── Recurrence detection ──
-  it('3+ txs del mismo IBAN en 3 meses → isRecurring: true', async () => {
+  it("3+ txs del mismo IBAN en 3 meses → isRecurring: true", async () => {
     mockPrisma.bankTransaction.count.mockResolvedValue(5);
 
     await trackControllerDecision(mockPrisma as any, baseCtx);
@@ -110,7 +116,7 @@ describe('trackControllerDecision', () => {
     );
   });
 
-  it('< 3 txs del mismo IBAN → isRecurring: false', async () => {
+  it("< 3 txs del mismo IBAN → isRecurring: false", async () => {
     mockPrisma.bankTransaction.count.mockResolvedValue(2);
 
     await trackControllerDecision(mockPrisma as any, baseCtx);
@@ -124,10 +130,10 @@ describe('trackControllerDecision', () => {
 
   // ── Amount range buckets ──
   it.each([
-    [50, '0-100'],
-    [300, '100-500'],
-    [2000, '500-5000'],
-    [10000, '5000+'],
+    [50, "0-100"],
+    [300, "100-500"],
+    [2000, "500-5000"],
+    [10000, "5000+"],
   ])('importe %d → amountRange "%s"', async (amount, expected) => {
     mockPrisma.reconciliation.findUnique.mockResolvedValue({
       ...reco,
@@ -145,7 +151,7 @@ describe('trackControllerDecision', () => {
   });
 
   // ── Calls updateLearnedPattern on correction ──
-  it('llama a updateLearnedPattern cuando hay corrección', async () => {
+  it("llama a updateLearnedPattern cuando hay corrección", async () => {
     // Second findUnique call for updateLearnedPattern
     mockPrisma.reconciliation.findUnique
       .mockResolvedValueOnce({
@@ -160,8 +166,8 @@ describe('trackControllerDecision', () => {
 
     await trackControllerDecision(mockPrisma as any, {
       ...baseCtx,
-      correctedField: 'differenceReason',
-      correctedTo: 'BANK_COMMISSION',
+      correctedField: "differenceReason",
+      correctedTo: "BANK_COMMISSION",
     });
 
     // Should have tried to find or create a learned pattern
@@ -169,43 +175,45 @@ describe('trackControllerDecision', () => {
   });
 
   // ── No call to updateLearnedPattern without correction ──
-  it('no llama a updateLearnedPattern sin corrección', async () => {
-    await trackControllerDecision(mockPrisma as any, { ...baseCtx, controllerAction: 'approve' });
+  it("no llama a updateLearnedPattern sin corrección", async () => {
+    await trackControllerDecision(mockPrisma as any, { ...baseCtx, controllerAction: "approve" });
     expect(mockPrisma.learnedPattern.findFirst).not.toHaveBeenCalled();
   });
 
   // ── Reconciliation not found → returns silently ──
-  it('reconciliation no encontrada → no rompe', async () => {
+  it("reconciliation no encontrada → no rompe", async () => {
     mockPrisma.reconciliation.findUnique.mockResolvedValue(null);
     await expect(trackControllerDecision(baseCtx)).resolves.not.toThrow();
     expect(mockPrisma.controllerDecision.create).not.toHaveBeenCalled();
   });
 });
 
-describe('updateLearnedPattern (via trackControllerDecision)', () => {
+describe("updateLearnedPattern (via trackControllerDecision)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setupDefaults();
   });
 
-  it('patrón nuevo → crea con confidence 1.0, occurrences 1', async () => {
+  it("patrón nuevo → crea con confidence 1.0, occurrences 1", async () => {
     mockPrisma.reconciliation.findUnique
       .mockResolvedValueOnce({
-        ...reco, bankTransaction: { ...bankTx, reconciliations: [] }, invoice: { ...invoice, contact },
+        ...reco,
+        bankTransaction: { ...bankTx, reconciliations: [] },
+        invoice: { ...invoice, contact },
       })
       .mockResolvedValueOnce({ ...reco, bankTransaction: bankTx });
     mockPrisma.learnedPattern.findFirst.mockResolvedValue(null);
 
     await trackControllerDecision(mockPrisma as any, {
       ...baseCtx,
-      correctedField: 'differenceReason',
-      correctedTo: 'EARLY_PAYMENT',
+      correctedField: "differenceReason",
+      correctedTo: "EARLY_PAYMENT",
     });
 
     expect(mockPrisma.learnedPattern.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          predictedAction: 'EARLY_PAYMENT',
+          predictedAction: "EARLY_PAYMENT",
           confidence: 1.0,
           occurrences: 1,
           correctPredictions: 1,
@@ -214,9 +222,9 @@ describe('updateLearnedPattern (via trackControllerDecision)', () => {
     );
   });
 
-  it('patrón existente con predicción correcta → incrementa correctPredictions', async () => {
+  it("patrón existente con predicción correcta → incrementa correctPredictions", async () => {
     const existing = buildLearnedPattern({
-      predictedAction: 'BANK_COMMISSION',
+      predictedAction: "BANK_COMMISSION",
       occurrences: 5,
       correctPredictions: 4,
       confidence: 0.8,
@@ -224,15 +232,17 @@ describe('updateLearnedPattern (via trackControllerDecision)', () => {
 
     mockPrisma.reconciliation.findUnique
       .mockResolvedValueOnce({
-        ...reco, bankTransaction: { ...bankTx, reconciliations: [] }, invoice: { ...invoice, contact },
+        ...reco,
+        bankTransaction: { ...bankTx, reconciliations: [] },
+        invoice: { ...invoice, contact },
       })
       .mockResolvedValueOnce({ ...reco, bankTransaction: bankTx });
     mockPrisma.learnedPattern.findFirst.mockResolvedValue(existing);
 
     await trackControllerDecision(mockPrisma as any, {
       ...baseCtx,
-      correctedField: 'differenceReason',
-      correctedTo: 'BANK_COMMISSION', // same as predicted
+      correctedField: "differenceReason",
+      correctedTo: "BANK_COMMISSION", // same as predicted
     });
 
     expect(mockPrisma.learnedPattern.update).toHaveBeenCalledWith(
@@ -246,32 +256,34 @@ describe('updateLearnedPattern (via trackControllerDecision)', () => {
     );
   });
 
-  it('patrón existente con predicción incorrecta → actualiza predictedAction', async () => {
+  it("patrón existente con predicción incorrecta → actualiza predictedAction", async () => {
     const existing = buildLearnedPattern({
-      predictedAction: 'BANK_COMMISSION',
+      predictedAction: "BANK_COMMISSION",
       occurrences: 5,
       correctPredictions: 4,
     });
 
     mockPrisma.reconciliation.findUnique
       .mockResolvedValueOnce({
-        ...reco, bankTransaction: { ...bankTx, reconciliations: [] }, invoice: { ...invoice, contact },
+        ...reco,
+        bankTransaction: { ...bankTx, reconciliations: [] },
+        invoice: { ...invoice, contact },
       })
       .mockResolvedValueOnce({ ...reco, bankTransaction: bankTx });
     mockPrisma.learnedPattern.findFirst.mockResolvedValue(existing);
 
     await trackControllerDecision(mockPrisma as any, {
       ...baseCtx,
-      correctedField: 'differenceReason',
-      correctedTo: 'EARLY_PAYMENT', // different from predicted
+      correctedField: "differenceReason",
+      correctedTo: "EARLY_PAYMENT", // different from predicted
     });
 
     expect(mockPrisma.learnedPattern.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           occurrences: { increment: 1 },
-          predictedAction: 'EARLY_PAYMENT',
-          predictedReason: 'EARLY_PAYMENT',
+          predictedAction: "EARLY_PAYMENT",
+          predictedReason: "EARLY_PAYMENT",
           confidence: { set: 4 / 6 }, // 4/(5+1) — no increment to correctPredictions
         }),
       })

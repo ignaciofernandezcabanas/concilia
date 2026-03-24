@@ -92,10 +92,20 @@ export function createMockDb() {
     syncLog: { create: vi.fn().mockResolvedValue({}) },
     invoiceLine: { findMany: vi.fn().mockResolvedValue([]) },
     budget: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
-    agentRun: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null), count: vi.fn().mockResolvedValue(0) },
+    agentRun: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      count: vi.fn().mockResolvedValue(0),
+    },
     confidenceAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
-    controllerDecision: { findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) },
-    integration: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
+    controllerDecision: {
+      findMany: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
+    },
+    integration: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     classification: { findMany: vi.fn().mockResolvedValue([]) },
   };
 }
@@ -105,7 +115,13 @@ export function createMockCtx(dbOverrides?: Record<string, unknown>) {
   if (dbOverrides) Object.assign(db, dbOverrides);
   return {
     user: { id: "user_1", email: "admin@example.com", name: "Admin", activeCompanyId: "company_1" },
-    company: { id: "company_1", name: "Test SL", currency: "EUR", autoApproveThreshold: 0.95, materialityThreshold: 500 },
+    company: {
+      id: "company_1",
+      name: "Test SL",
+      currency: "EUR",
+      autoApproveThreshold: 0.95,
+      materialityThreshold: 500,
+    },
     db: db as any,
   };
 }

@@ -46,10 +46,7 @@ export class GmailClient {
   private gmail: gmail_v1.Gmail;
 
   constructor(config: GmailConfig) {
-    const oauth2 = new google.auth.OAuth2(
-      config.clientId,
-      config.clientSecret
-    );
+    const oauth2 = new google.auth.OAuth2(config.clientId, config.clientSecret);
     oauth2.setCredentials({ refresh_token: config.refreshToken });
     this.gmail = google.gmail({ version: "v1", auth: oauth2 });
   }
@@ -58,10 +55,7 @@ export class GmailClient {
    * Search for emails that likely contain invoices.
    * Default query targets: PDFs, from common invoice senders, with attachment.
    */
-  async searchInvoiceEmails(
-    query?: string,
-    maxResults = 30
-  ): Promise<ReceivedEmail[]> {
+  async searchInvoiceEmails(query?: string, maxResults = 30): Promise<ReceivedEmail[]> {
     const defaultQuery = "has:attachment (filename:pdf OR filename:xml) newer_than:30d";
     const q = query || defaultQuery;
 
@@ -84,8 +78,7 @@ export class GmailClient {
 
         const headers = detail.data.payload?.headers ?? [];
         const getHeader = (name: string) =>
-          headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())
-            ?.value ?? "";
+          headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
 
         // Collect invoice-like attachments from all parts (including nested)
         const attachments: AttachmentMeta[] = [];
@@ -115,10 +108,7 @@ export class GmailClient {
    * Download an attachment by message ID and attachment ID.
    * Returns the raw file content as a Buffer.
    */
-  async downloadAttachment(
-    messageId: string,
-    attachmentId: string
-  ): Promise<Buffer> {
+  async downloadAttachment(messageId: string, attachmentId: string): Promise<Buffer> {
     const res = await this.gmail.users.messages.attachments.get({
       userId: "me",
       messageId,

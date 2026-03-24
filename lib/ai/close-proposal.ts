@@ -49,9 +49,7 @@ export async function generateCloseProposal(
     include: { company: { select: { shortName: true, name: true } } },
   });
 
-  const openCompanies = openPeriods.map(
-    (p) => p.company.shortName ?? p.company.name
-  );
+  const openCompanies = openPeriods.map((p) => p.company.shortName ?? p.company.name);
 
   // Pending bank transactions
   const pendingTxCount = await prisma.bankTransaction.count({

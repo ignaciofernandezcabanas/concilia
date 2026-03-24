@@ -16,18 +16,31 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     let imported = 0;
     for (const row of rows) {
       await (db as any).contact.upsert({
-        where: { holdedId_companyId: { holdedId: `excel:${row.cif ?? row.name}`, companyId: ctx.company.id } },
+        where: {
+          holdedId_companyId: {
+            holdedId: `excel:${row.cif ?? row.name}`,
+            companyId: ctx.company.id,
+          },
+        },
         create: {
           holdedId: `excel:${row.cif ?? row.name}`,
-          name: row.name, cif: row.cif, iban: row.iban,
-          type: row.type, companyId: ctx.company.id,
+          name: row.name,
+          cif: row.cif,
+          iban: row.iban,
+          type: row.type,
+          companyId: ctx.company.id,
         },
         update: { name: row.name, cif: row.cif ?? undefined, iban: row.iban ?? undefined },
       });
       imported++;
     }
 
-    return NextResponse.json({ success: true, imported, errors, total: rows.length + errors.length });
+    return NextResponse.json({
+      success: true,
+      imported,
+      errors,
+      total: rows.length + errors.length,
+    });
   } catch (err) {
     return errorResponse("Error al importar contactos.", err);
   }

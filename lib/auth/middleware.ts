@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db"; // GLOBAL-PRISMA: user lookup before company scoping
 import { getScopedDb, type ScopedPrisma } from "@/lib/db-scoped";
 import { createServerClient } from "@/lib/supabase";
-import {
-  hasPermission,
-  type Permission,
-} from "@/lib/auth/permissions";
+import { hasPermission, type Permission } from "@/lib/auth/permissions";
 import { checkRateLimit, type RateLimitTier } from "@/lib/auth/rate-limit";
 import type { User, Company, Role } from "@prisma/client";
 
@@ -27,10 +24,7 @@ type AuthenticatedHandler = (
  * Injects `{ user, company, db }` into the handler context.
  * `db` is a scoped Prisma client that auto-filters by companyId.
  */
-export function withAuth(
-  handler: AuthenticatedHandler,
-  requiredPermission?: Permission
-) {
+export function withAuth(handler: AuthenticatedHandler, requiredPermission?: Permission) {
   return async (
     req: NextRequest,
     routeCtx?: { params?: Record<string, string> }
@@ -65,10 +59,7 @@ export function withAuth(
       } = await supabase.auth.getUser(token);
 
       if (authError || !supabaseUser) {
-        return NextResponse.json(
-          { error: "Invalid or expired token." },
-          { status: 401 }
-        );
+        return NextResponse.json({ error: "Invalid or expired token." }, { status: 401 });
       }
 
       // Look up user in our database
@@ -102,10 +93,7 @@ export function withAuth(
       // Check permission if required
       if (requiredPermission) {
         if (!hasPermission(user.role as Role, requiredPermission)) {
-          return NextResponse.json(
-            { error: "Insufficient permissions." },
-            { status: 403 }
-          );
+          return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
         }
       }
 
@@ -115,7 +103,10 @@ export function withAuth(
         prisma.user
           .update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
           .catch((err) => {
-            console.warn("[auth] Failed to update lastLoginAt:", err instanceof Error ? err.message : err);
+            console.warn(
+              "[auth] Failed to update lastLoginAt:",
+              err instanceof Error ? err.message : err
+            );
           });
       }
 
@@ -130,10 +121,7 @@ export function withAuth(
       });
     } catch (error) {
       console.error("[withAuth] Unexpected error:", error instanceof Error ? error.message : error);
-      return NextResponse.json(
-        { error: "Internal authentication error." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Internal authentication error." }, { status: 500 });
     }
   };
 }

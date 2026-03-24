@@ -123,8 +123,12 @@ function classifyTransaction(
     // Group 64x = gastos de personal (nóminas)
     if (subgroup >= 64 && subgroup <= 64) return "nominas";
     // 640-649 personal expenses
-    if (accountCode.startsWith("640") || accountCode.startsWith("641") ||
-        accountCode.startsWith("642") || accountCode.startsWith("649")) {
+    if (
+      accountCode.startsWith("640") ||
+      accountCode.startsWith("641") ||
+      accountCode.startsWith("642") ||
+      accountCode.startsWith("649")
+    ) {
       return "nominas";
     }
 
@@ -273,17 +277,9 @@ async function generateTreasuryReport(
     });
   }
 
-  const totalCobros = months.reduce(
-    (s, m) => s + m.cobrosClientes + m.otrosIngresos,
-    0
-  );
+  const totalCobros = months.reduce((s, m) => s + m.cobrosClientes + m.otrosIngresos, 0);
   const totalPagos = months.reduce(
-    (s, m) =>
-      s +
-      m.pagosProveedores +
-      m.nominas +
-      m.impuestos +
-      m.otrosGastos,
+    (s, m) => s + m.pagosProveedores + m.nominas + m.impuestos + m.otrosGastos,
     0
   );
 
@@ -308,11 +304,7 @@ async function generateTreasuryReport(
 // EFE (indirect) mode
 // ---------------------------------------------------------------------------
 
-async function generateEFEReport(
-  db: ScopedPrisma,
-  from: Date,
-  to: Date
-): Promise<EFEReport> {
+async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promise<EFEReport> {
   // 1. Get resultado antes de impuestos (A.3) from PyG
   const pyg = await generatePyG(db, from, to, "titles", false);
   const resultadoAntesImpuestos = pyg.results.resultadoAntesImpuestos;
@@ -345,10 +337,8 @@ async function generateEFEReport(
     getWorkingCapitalSnapshot(db, to),
   ]);
 
-  const wcDeudores =
-    -(pendingEnd.deudores - pendingStart.deudores);
-  const wcAcreedores =
-    pendingEnd.acreedores - pendingStart.acreedores;
+  const wcDeudores = -(pendingEnd.deudores - pendingStart.deudores);
+  const wcAcreedores = pendingEnd.acreedores - pendingStart.acreedores;
   const wcChange = wcDeudores + wcAcreedores;
 
   // Other non-cash adjustments
@@ -389,8 +379,7 @@ async function generateEFEReport(
   });
 
   const efectivoInicio = lastTxBefore?.balanceAfter ?? 0;
-  const aumentoDisminucion =
-    flujosExplotacion + flujosInversion + flujosFinanciacion;
+  const aumentoDisminucion = flujosExplotacion + flujosInversion + flujosFinanciacion;
   const efectivoFinal = efectivoInicio + aumentoDisminucion;
 
   const sections: EFESection[] = [

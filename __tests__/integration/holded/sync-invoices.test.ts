@@ -13,7 +13,13 @@ vi.mock("@/lib/holded/client", () => {
 });
 
 const mockDb = {
-  invoice: { findFirst: vi.fn(), findUnique: vi.fn(), upsert: vi.fn(), create: vi.fn(), update: vi.fn() },
+  invoice: {
+    findFirst: vi.fn(),
+    findUnique: vi.fn(),
+    upsert: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+  },
   contact: { findFirst: vi.fn(), upsert: vi.fn() },
   invoiceLine: { deleteMany: vi.fn() },
   syncLog: { create: vi.fn(), findFirst: vi.fn() },
@@ -41,9 +47,15 @@ describe("Sync Invoices (Holded)", () => {
   it("factura nueva → upsert create", async () => {
     mockGetAllInvoices.mockResolvedValue([
       {
-        id: "h_inv_1", docNumber: "FRA-001", date: 1709251200,
-        total: 1210, subtotal: 1000, tax: 210,
-        status: 1, contactId: "h_c1", contactName: "Cliente SA",
+        id: "h_inv_1",
+        docNumber: "FRA-001",
+        date: 1709251200,
+        total: 1210,
+        subtotal: 1000,
+        tax: 210,
+        status: 1,
+        contactId: "h_c1",
+        contactName: "Cliente SA",
         items: [{ description: "Servicio", units: 1, subtotal: 1000, tax: 210, total: 1210 }],
       },
     ]);

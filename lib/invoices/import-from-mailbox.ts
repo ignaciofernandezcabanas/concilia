@@ -66,7 +66,7 @@ export async function importInvoicesFromMailbox(
         const extracted = await extractInvoiceFromPdf(buffer, attachment.fileName);
 
         // Reject low confidence
-        if ((extracted.confidence ?? 0) < 0.50) {
+        if ((extracted.confidence ?? 0) < 0.5) {
           result.errors.push({
             emailSubject: email.subject,
             attachment: attachment.fileName,
@@ -80,7 +80,10 @@ export async function importInvoicesFromMailbox(
         if (extracted.supplierName) {
           const contact = await (db as any).contact.upsert({
             where: {
-              holdedId_companyId: { holdedId: `email:${extracted.supplierCif ?? extracted.supplierName}`, companyId },
+              holdedId_companyId: {
+                holdedId: `email:${extracted.supplierCif ?? extracted.supplierName}`,
+                companyId,
+              },
             },
             create: {
               holdedId: `email:${extracted.supplierCif ?? extracted.supplierName}`,

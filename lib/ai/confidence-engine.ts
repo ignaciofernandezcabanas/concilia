@@ -89,26 +89,30 @@ export interface ConfidenceContext {
 
 const BASE_SCORES: Record<ActionCategory, number> = {
   exact_match: 0.97,
-  fuzzy_match: 0.80,
+  fuzzy_match: 0.8,
   grouped_match: 0.85,
-  difference_match: 0.90,
-  recurring_exact: 1.00,
-  recurring_variable: 0.90,
+  difference_match: 0.9,
+  recurring_exact: 1.0,
+  recurring_variable: 0.9,
   rule_application: 0.92,
-  internal_transfer: 1.00,
-  intercompany_exact: 1.00,
-  intercompany_approx: 0.80,
-  llm_classification: 0.70, // overridden by llmConfidence
-  llm_match: 0.70,          // overridden by llmConfidence
-  provision: 0.80,
-  amortization: 1.00,
+  internal_transfer: 1.0,
+  intercompany_exact: 1.0,
+  intercompany_approx: 0.8,
+  llm_classification: 0.7, // overridden by llmConfidence
+  llm_match: 0.7, // overridden by llmConfidence
+  provision: 0.8,
+  amortization: 1.0,
   periodification: 0.85,
-  manual_journal: 0.00,
-  consolidation_adjustment: 0.70,
+  manual_journal: 0.0,
+  consolidation_adjustment: 0.7,
 };
 
 // Categories that NEVER auto-execute
-const NEVER_AUTO = new Set<ActionCategory>(["periodification", "manual_journal", "consolidation_adjustment"]);
+const NEVER_AUTO = new Set<ActionCategory>([
+  "periodification",
+  "manual_journal",
+  "consolidation_adjustment",
+]);
 
 // ── Main function ──
 
@@ -118,7 +122,10 @@ export function calculateConfidence(ctx: ConfidenceContext): ConfidenceResult {
 
   // Base score
   let base = BASE_SCORES[category];
-  if ((category === "llm_classification" || category === "llm_match") && ctx.llmConfidence != null) {
+  if (
+    (category === "llm_classification" || category === "llm_match") &&
+    ctx.llmConfidence != null
+  ) {
     base = ctx.llmConfidence;
   }
 
@@ -172,7 +179,7 @@ export function calculateConfidence(ctx: ConfidenceContext): ConfidenceResult {
 
   if (category === "recurring_exact") {
     if (ctx.consecutiveCount != null && ctx.consecutiveCount < 6) {
-      base = 0.90;
+      base = 0.9;
       reasons.push(`Base 0.90: <6 consecutivos`);
     }
   }
@@ -183,7 +190,7 @@ export function calculateConfidence(ctx: ConfidenceContext): ConfidenceResult {
         historical += 0.06;
         reasons.push(`+0.06: dentro de media±2σ`);
       } else if (Math.abs(ctx.amountZScore) > 3) {
-        historical -= 0.20;
+        historical -= 0.2;
         reasons.push(`-0.20: fuera de 3σ`);
       }
     }
@@ -195,7 +202,7 @@ export function calculateConfidence(ctx: ConfidenceContext): ConfidenceResult {
         historical += 0.06;
         reasons.push(`+0.06: error rate <2%`);
       } else if (ctx.ruleErrorRate > 0.08) {
-        historical -= 0.10;
+        historical -= 0.1;
         reasons.push(`-0.10: error rate >8%`);
       }
     }
@@ -215,7 +222,7 @@ export function calculateConfidence(ctx: ConfidenceContext): ConfidenceResult {
 
   if (category === "intercompany_approx") {
     if (ctx.amountDiffPercent != null && ctx.amountDiffPercent > 1) {
-      historical -= 0.10;
+      historical -= 0.1;
       reasons.push(`-0.10: diferencia importe >1%`);
     }
   }
@@ -268,7 +275,9 @@ export function calculateConfidence(ctx: ConfidenceContext): ConfidenceResult {
   // Persisted calibration adjustment
   if (ctx.persistedAdjustment != null && ctx.persistedAdjustment !== 0) {
     historical += ctx.persistedAdjustment;
-    reasons.push(`${ctx.persistedAdjustment > 0 ? "+" : ""}${ctx.persistedAdjustment.toFixed(2)}: calibración persistida`);
+    reasons.push(
+      `${ctx.persistedAdjustment > 0 ? "+" : ""}${ctx.persistedAdjustment.toFixed(2)}: calibración persistida`
+    );
   }
 
   // Final score
@@ -346,9 +355,7 @@ export async function runSystemChecks(
     if (historicalTxs.length >= 5) {
       const amounts = historicalTxs.map((t) => Math.abs(t.amount));
       const mean = amounts.reduce((s, a) => s + a, 0) / amounts.length;
-      const stdDev = Math.sqrt(
-        amounts.reduce((s, a) => s + (a - mean) ** 2, 0) / amounts.length
-      );
+      const stdDev = Math.sqrt(amounts.reduce((s, a) => s + (a - mean) ** 2, 0) / amounts.length);
 
       if (stdDev > 0 && Math.abs(Math.abs(tx.amount) - mean) > 3 * stdDev) {
         failed.push("amount_in_range");
@@ -382,13 +389,7 @@ export async function runSystemChecks(
 
   // Multiplier: 0 → 1.0, 1 → 0.85, 2 → 0.70, 3+ → 0.50
   const multiplier =
-    failed.length === 0
-      ? 1.0
-      : failed.length === 1
-        ? 0.85
-        : failed.length === 2
-          ? 0.70
-          : 0.50;
+    failed.length === 0 ? 1.0 : failed.length === 1 ? 0.85 : failed.length === 2 ? 0.7 : 0.5;
 
   return {
     allPassed: failed.length === 0,

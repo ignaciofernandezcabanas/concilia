@@ -36,7 +36,8 @@ export default function InlineChart({
   const range = maxVal - minVal || 1;
 
   const yScale = (v: number) => PAD.top + chartH - ((v - minVal) / range) * chartH;
-  const xScale = (i: number) => PAD.left + (data.length > 1 ? (i / (data.length - 1)) * chartW : chartW / 2);
+  const xScale = (i: number) =>
+    PAD.left + (data.length > 1 ? (i / (data.length - 1)) * chartW : chartW / 2);
 
   const points = data.map((d, i) => `${xScale(i)},${yScale(d.value)}`).join(" ");
   const baseY = yScale(Math.max(0, minVal));
@@ -47,9 +48,14 @@ export default function InlineChart({
       {/* Threshold line */}
       {thresholdLine != null && (
         <line
-          x1={PAD.left} y1={yScale(thresholdLine)}
-          x2={width - PAD.right} y2={yScale(thresholdLine)}
-          stroke="#ef4444" strokeWidth="1" strokeDasharray="4 4" opacity="0.5"
+          x1={PAD.left}
+          y1={yScale(thresholdLine)}
+          x2={width - PAD.right}
+          y2={yScale(thresholdLine)}
+          stroke="#ef4444"
+          strokeWidth="1"
+          strokeDasharray="4 4"
+          opacity="0.5"
         />
       )}
       {/* Area */}
@@ -60,18 +66,28 @@ export default function InlineChart({
       {data.map((d, i) => (
         <circle
           key={i}
-          cx={xScale(i)} cy={yScale(d.value)} r="3"
+          cx={xScale(i)}
+          cy={yScale(d.value)}
+          r="3"
           fill={d.value < (thresholdLine ?? -Infinity) ? "#ef4444" : lineColor}
         />
       ))}
       {/* Labels */}
-      {showLabels && data.map((d, i) => (
-        i % Math.max(1, Math.floor(data.length / 8)) === 0 ? (
-          <text key={i} x={xScale(i)} y={height - 5} textAnchor="middle" fontSize="9" fill="#9ca3af">
-            {d.label}
-          </text>
-        ) : null
-      ))}
+      {showLabels &&
+        data.map((d, i) =>
+          i % Math.max(1, Math.floor(data.length / 8)) === 0 ? (
+            <text
+              key={i}
+              x={xScale(i)}
+              y={height - 5}
+              textAnchor="middle"
+              fontSize="9"
+              fill="#9ca3af"
+            >
+              {d.label}
+            </text>
+          ) : null
+        )}
     </svg>
   );
 }

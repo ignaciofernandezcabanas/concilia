@@ -16,9 +16,7 @@ export default function TopBar({ title }: { title: string }) {
   const { data: notifData } = useNotifications({ isRead: "false", pageSize: 1 });
   const unreadCount = notifData?.pagination?.total ?? 0;
 
-  const initials = user?.email
-    ? user.email.substring(0, 2).toUpperCase()
-    : "?";
+  const initials = user?.email ? user.email.substring(0, 2).toUpperCase() : "?";
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -32,9 +30,7 @@ export default function TopBar({ title }: { title: string }) {
 
   return (
     <header className="flex items-center justify-between h-12 px-6 bg-white border-b border-subtle shrink-0">
-      <span className="text-[15px] font-semibold text-text-primary">
-        {title}
-      </span>
+      <span className="text-[15px] font-semibold text-text-primary">{title}</span>
 
       {/* Search */}
       <div className="relative" ref={searchRef}>
@@ -54,7 +50,12 @@ export default function TopBar({ title }: { title: string }) {
             className="bg-transparent text-[13px] text-text-primary outline-none flex-1 placeholder:text-text-tertiary"
           />
           {query && (
-            <button onClick={() => { setQuery(""); setShowSearch(false); }}>
+            <button
+              onClick={() => {
+                setQuery("");
+                setShowSearch(false);
+              }}
+            >
               <X size={12} className="text-text-tertiary" />
             </button>
           )}
@@ -128,10 +129,7 @@ export default function TopBar({ title }: { title: string }) {
       </div>
 
       <div className="flex items-center gap-4">
-        <button
-          className="relative"
-          onClick={() => router.push("/notificaciones")}
-        >
+        <button className="relative" onClick={() => router.push("/notificaciones")}>
           <Bell size={20} className="text-text-secondary" />
           {unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 w-4 h-4 bg-red text-white text-[9px] font-bold rounded-full flex items-center justify-center">

@@ -4,7 +4,10 @@ import { parseInvoiceExcel } from "@/lib/invoices/excel-parser";
 import { parseContactExcel } from "@/lib/contacts/excel-parser";
 import { parseAssetExcel } from "@/lib/fixed-assets/excel-parser";
 
-async function createExcel(headers: string[], rows: (string | number | null | Date)[][]): Promise<Buffer> {
+async function createExcel(
+  headers: string[],
+  rows: (string | number | null | Date)[][]
+): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Datos");
   ws.addRow(headers);
@@ -15,7 +18,16 @@ async function createExcel(headers: string[], rows: (string | number | null | Da
 describe("Excel Import — Invoices", () => {
   it("parsea facturas válidas", async () => {
     const buffer = await createExcel(
-      ["Número", "Tipo", "Fecha emisión", "Importe total", "Base imponible", "IVA", "Contacto", "CIF contacto"],
+      [
+        "Número",
+        "Tipo",
+        "Fecha emisión",
+        "Importe total",
+        "Base imponible",
+        "IVA",
+        "Contacto",
+        "CIF contacto",
+      ],
       [
         ["FRA-001", "RECIBIDA", "15/01/2026", 1210, 1000, 210, "Proveedor SL", "B12345678"],
         ["FRA-002", "EMITIDA", "01/02/2026", 605, 500, 105, "Cliente SA", "A87654321"],
@@ -83,10 +95,7 @@ describe("Excel Import — Contacts", () => {
   });
 
   it("nombre vacío → error", async () => {
-    const buffer = await createExcel(
-      ["Nombre", "CIF", "Tipo"],
-      [["", "B12345678", "PROVEEDOR"]]
-    );
+    const buffer = await createExcel(["Nombre", "CIF", "Tipo"], [["", "B12345678", "PROVEEDOR"]]);
     const result = await parseContactExcel(buffer);
     expect(result.errors).toHaveLength(1);
   });
@@ -95,7 +104,15 @@ describe("Excel Import — Contacts", () => {
 describe("Excel Import — Fixed Assets", () => {
   it("parsea activo válido", async () => {
     const buffer = await createExcel(
-      ["Nombre", "Fecha adquisición", "Coste", "Vida útil (meses)", "Cuenta activo", "Cuenta amortización", "Cuenta amort. acumulada"],
+      [
+        "Nombre",
+        "Fecha adquisición",
+        "Coste",
+        "Vida útil (meses)",
+        "Cuenta activo",
+        "Cuenta amortización",
+        "Cuenta amort. acumulada",
+      ],
       [["Ordenador", "01/01/2026", 1500, 48, "217", "681", "281"]]
     );
     const result = await parseAssetExcel(buffer);

@@ -41,12 +41,7 @@ export async function exportToExcel(
   columns: ExportColumn[],
   options: ExportOptions
 ): Promise<Buffer> {
-  const {
-    viewName,
-    filters,
-    numberFormat = "eu",
-    currency = "EUR",
-  } = options;
+  const { viewName, filters, numberFormat = "eu", currency = "EUR" } = options;
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Concilia";
@@ -69,7 +64,8 @@ export async function exportToExcel(
   currentRow += 1;
 
   // Export date
-  sheet.getCell(`A${currentRow}`).value = `Exportado: ${new Date().toISOString().slice(0, 19).replace("T", " ")}`;
+  sheet.getCell(`A${currentRow}`).value =
+    `Exportado: ${new Date().toISOString().slice(0, 19).replace("T", " ")}`;
   sheet.getCell(`A${currentRow}`).style = metaStyle;
   currentRow += 1;
 
@@ -113,8 +109,7 @@ export async function exportToExcel(
   currentRow += 1;
 
   // --- Data rows ---
-  const excelNumberFormat =
-    numberFormat === "eu" ? '#.##0,00' : '#,##0.00';
+  const excelNumberFormat = numberFormat === "eu" ? "#.##0,00" : "#,##0.00";
 
   for (const record of data) {
     const row = sheet.getRow(currentRow);
@@ -167,20 +162,13 @@ export function exportToCsv(
   columns: ExportColumn[],
   options: ExportOptions & { separator?: string }
 ): string {
-  const {
-    viewName,
-    filters,
-    numberFormat = "eu",
-    separator = ";",
-  } = options;
+  const { viewName, filters, numberFormat = "eu", separator = ";" } = options;
 
   const lines: string[] = [];
 
   // Metadata header
   lines.push(`${escapeCsvField(viewName, separator)}`);
-  lines.push(
-    `Exportado: ${new Date().toISOString().slice(0, 19).replace("T", " ")}`
-  );
+  lines.push(`Exportado: ${new Date().toISOString().slice(0, 19).replace("T", " ")}`);
 
   if (filters && Object.keys(filters).length > 0) {
     lines.push("Filtros aplicados:");
@@ -192,9 +180,7 @@ export function exportToCsv(
   lines.push(""); // blank separator
 
   // Header row
-  lines.push(
-    columns.map((col) => escapeCsvField(col.header, separator)).join(separator)
-  );
+  lines.push(columns.map((col) => escapeCsvField(col.header, separator)).join(separator));
 
   // Data rows
   for (const record of data) {

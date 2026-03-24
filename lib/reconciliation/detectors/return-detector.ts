@@ -28,9 +28,7 @@ export async function detectReturn(
 
   const normalizedIban = tx.counterpartIban.replace(/\s/g, "").toUpperCase();
   const inverseAmount = -tx.amount;
-  const windowDate = new Date(
-    tx.valueDate.getTime() - RETURN_WINDOW_DAYS * 24 * 60 * 60 * 1000
-  );
+  const windowDate = new Date(tx.valueDate.getTime() - RETURN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
   // Look for a reconciled transaction with the inverse amount from the same counterpart
   const originalTx = await db.bankTransaction.findFirst({

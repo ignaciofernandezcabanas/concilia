@@ -5,7 +5,7 @@ import { withAuth, type AuthContext } from "@/lib/auth/middleware";
  * GET /api/settings/learning
  */
 export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const { company } = ctx;
 
   const [patterns, rules, calibrations, totalDecisions, acceptedDecisions] = await Promise.all([
@@ -48,7 +48,7 @@ export const GET = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
  * Actions: deactivate, delete
  */
 export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const { company } = ctx;
   const body = await req.json();
 

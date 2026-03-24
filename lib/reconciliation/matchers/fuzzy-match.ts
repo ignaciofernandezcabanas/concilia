@@ -58,9 +58,7 @@ export async function findFuzzyMatch(
   }
 
   // Prepare the search corpus for concept matching
-  const searchText = [tx.concept, tx.conceptParsed, tx.counterpartName]
-    .filter(Boolean)
-    .join(" ");
+  const searchText = [tx.concept, tx.conceptParsed, tx.counterpartName].filter(Boolean).join(" ");
 
   if (!searchText.trim()) {
     // No text to match against; fall back to amount-only scoring
@@ -70,12 +68,7 @@ export async function findFuzzyMatch(
   // Build fuse.js index over candidate invoices
   const fuseItems = candidates.map((inv) => ({
     invoice: inv,
-    searchableText: [
-      inv.description,
-      inv.number,
-      inv.contact?.name,
-      inv.contact?.cif,
-    ]
+    searchableText: [inv.description, inv.number, inv.contact?.name, inv.contact?.cif]
       .filter(Boolean)
       .join(" "),
   }));
@@ -105,8 +98,8 @@ export async function findFuzzyMatch(
     // Confidence: start at 0.85, reduce by fuse score and amount difference
     const conceptConfidence = 1 - fuseScore; // 0..1, higher is better
     const amountConfidence = 1 - differencePercent / 100; // 0.95..1 range
-    const rawConfidence = 0.70 + 0.15 * conceptConfidence * amountConfidence;
-    const confidence = Math.min(0.85, Math.max(0.70, Math.round(rawConfidence * 100) / 100));
+    const rawConfidence = 0.7 + 0.15 * conceptConfidence * amountConfidence;
+    const confidence = Math.min(0.85, Math.max(0.7, Math.round(rawConfidence * 100) / 100));
 
     const suggestedDifferenceReason = suggestDifferenceReason(
       amountDifference,
@@ -142,7 +135,7 @@ function scoreByAmountOnly(
       const amountConfidence = 1 - differencePercent / 100;
       const confidence = Math.min(
         0.75,
-        Math.max(0.70, Math.round((0.70 + 0.05 * amountConfidence) * 100) / 100)
+        Math.max(0.7, Math.round((0.7 + 0.05 * amountConfidence) * 100) / 100)
       );
 
       return {

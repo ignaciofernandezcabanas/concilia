@@ -4,7 +4,12 @@ import * as registry from "@/lib/ai/prompt-registry";
 describe("Prompt Registry", () => {
   const prompts = Object.values(registry).filter(
     (v) => typeof v === "object" && v !== null && "task" in v && "system" in v && "buildUser" in v
-  ) as Array<{ task: string; version: string; system: string; buildUser: (...args: any[]) => string }>;
+  ) as Array<{
+    task: string;
+    version: string;
+    system: string;
+    buildUser: (...args: any[]) => string;
+  }>;
 
   it("todas las prompts registradas tienen task, system, buildUser y version", () => {
     expect(prompts.length).toBeGreaterThan(0);

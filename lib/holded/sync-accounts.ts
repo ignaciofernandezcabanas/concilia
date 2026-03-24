@@ -25,7 +25,7 @@ export interface SyncAccountsResult {
 export async function syncAccounts(
   db: ScopedPrisma,
   companyId: string,
-  apiKey: string,
+  apiKey: string
 ): Promise<SyncAccountsResult> {
   const client = new HoldedClient(apiKey);
   const result: SyncAccountsResult = { created: 0, updated: 0, errors: [] };
@@ -75,9 +75,7 @@ export async function syncAccounts(
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(
-        `[syncAccounts] Error processing account ${account.accountNum}: ${message}`,
-      );
+      console.error(`[syncAccounts] Error processing account ${account.accountNum}: ${message}`);
       result.errors.push({ code: account.accountNum, error: message });
     }
   }
@@ -97,7 +95,7 @@ export async function syncAccounts(
   });
 
   console.log(
-    `[syncAccounts] company=${companyId} created=${result.created} updated=${result.updated} errors=${result.errors.length}`,
+    `[syncAccounts] company=${companyId} created=${result.created} updated=${result.updated} errors=${result.errors.length}`
   );
 
   return result;

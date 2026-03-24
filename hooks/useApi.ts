@@ -40,18 +40,27 @@ export function useFetch<T>(path: string | null, deps: unknown[] = []) {
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    if (!path) { setLoading(false); return; }
+    if (!path) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(null);
-    api.get<T>(path).then((result) => {
-      if (!cancelled) setData(result);
-    }).catch((err) => {
-      if (!cancelled) setError(err instanceof ApiError ? err.message : "Error de conexión");
-    }).finally(() => {
-      if (!cancelled) setLoading(false);
-    });
-    return () => { cancelled = true; };
+    api
+      .get<T>(path)
+      .then((result) => {
+        if (!cancelled) setData(result);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : "Error de conexión");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, tick, ...deps]);
 
@@ -63,21 +72,22 @@ export function useFetch<T>(path: string | null, deps: unknown[] = []) {
 // ── Typed hooks ──
 
 export function useInvoices(filters: Record<string, unknown> = {}) {
-  return useFetch<PaginatedApiResponse<InvoiceResponse>>(
-    `/api/invoices${qs(filters)}`, [JSON.stringify(filters)]
-  );
+  return useFetch<PaginatedApiResponse<InvoiceResponse>>(`/api/invoices${qs(filters)}`, [
+    JSON.stringify(filters),
+  ]);
 }
 
 export function useTransactions(filters: Record<string, unknown> = {}) {
   return useFetch<PaginatedApiResponse<BankTransactionResponse>>(
-    `/api/transactions${qs(filters)}`, [JSON.stringify(filters)]
+    `/api/transactions${qs(filters)}`,
+    [JSON.stringify(filters)]
   );
 }
 
 export function useNotifications(filters: Record<string, unknown> = {}) {
-  return useFetch<PaginatedApiResponse<NotificationResponse>>(
-    `/api/notifications${qs(filters)}`, [JSON.stringify(filters)]
-  );
+  return useFetch<PaginatedApiResponse<NotificationResponse>>(`/api/notifications${qs(filters)}`, [
+    JSON.stringify(filters),
+  ]);
 }
 
 export function usePyG(from: string, to: string, level = 3) {
@@ -86,7 +96,8 @@ export function usePyG(from: string, to: string, level = 3) {
 
 export function useReconciliationReport(month: string) {
   return useFetch<ReconciliationReportResponse>(
-    `/api/reports/reconciliation-report${qs({ month })}`, [month]
+    `/api/reports/reconciliation-report${qs({ month })}`,
+    [month]
   );
 }
 
@@ -95,9 +106,9 @@ export function useCompany() {
 }
 
 export function useUsers(filters: Record<string, unknown> = {}) {
-  return useFetch<PaginatedApiResponse<AppUserResponse>>(
-    `/api/settings/users${qs(filters)}`, [JSON.stringify(filters)]
-  );
+  return useFetch<PaginatedApiResponse<AppUserResponse>>(`/api/settings/users${qs(filters)}`, [
+    JSON.stringify(filters),
+  ]);
 }
 
 export function useSearch(query: string) {
@@ -106,7 +117,7 @@ export function useSearch(query: string) {
 }
 
 export function useRules(filters: Record<string, unknown> = {}) {
-  return useFetch<PaginatedApiResponse<MatchingRuleResponse>>(
-    `/api/settings/rules${qs(filters)}`, [JSON.stringify(filters)]
-  );
+  return useFetch<PaginatedApiResponse<MatchingRuleResponse>>(`/api/settings/rules${qs(filters)}`, [
+    JSON.stringify(filters),
+  ]);
 }

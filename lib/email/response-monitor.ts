@@ -28,8 +28,12 @@ export async function checkInquiryResponses(
   companyId: string
 ): Promise<MonitorResult> {
   const result: MonitorResult = {
-    responsesFound: 0, resolved: 0, followUpsGenerated: 0,
-    escalated: 0, repliesDrafted: 0, errors: [],
+    responsesFound: 0,
+    resolved: 0,
+    followUpsGenerated: 0,
+    escalated: 0,
+    repliesDrafted: 0,
+    errors: [],
   };
 
   const provider = await getEmailProvider(db);
@@ -40,7 +44,15 @@ export async function checkInquiryResponses(
   const sentInquiries = await db.inquiry.findMany({
     where: { status: "SENT" },
     include: {
-      contact: { select: { id: true, name: true, cif: true, accountingContact: true, preferredLanguage: true } },
+      contact: {
+        select: {
+          id: true,
+          name: true,
+          cif: true,
+          accountingContact: true,
+          preferredLanguage: true,
+        },
+      },
       bankTransaction: { select: { id: true, amount: true, valueDate: true, concept: true } },
       invoice: { select: { id: true, number: true, totalAmount: true, issueDate: true } },
     },
@@ -52,11 +64,13 @@ export async function checkInquiryResponses(
       let responses;
       if (inquiry.sentThreadId) {
         responses = await provider.searchMessages(
-          `thread:${inquiry.sentThreadId} from:${inquiry.recipientEmail}`, 5
+          `thread:${inquiry.sentThreadId} from:${inquiry.recipientEmail}`,
+          5
         );
       } else {
         responses = await provider.searchMessages(
-          `from:${inquiry.recipientEmail} subject:"${inquiry.subject.slice(0, 50)}"`, 5
+          `from:${inquiry.recipientEmail} subject:"${inquiry.subject.slice(0, 50)}"`,
+          5
         );
       }
 
@@ -97,16 +111,20 @@ export async function checkInquiryResponses(
         },
         originalRequest: {
           triggerType: inquiry.triggerType as any,
-          bankTransaction: inquiry.bankTransaction ? {
-            amount: inquiry.bankTransaction.amount,
-            valueDate: inquiry.bankTransaction.valueDate.toISOString().slice(0, 10),
-            concept: inquiry.bankTransaction.concept ?? "",
-          } : undefined,
-          invoice: inquiry.invoice ? {
-            number: inquiry.invoice.number,
-            amount: inquiry.invoice.totalAmount,
-            date: inquiry.invoice.issueDate.toISOString().slice(0, 10),
-          } : undefined,
+          bankTransaction: inquiry.bankTransaction
+            ? {
+                amount: inquiry.bankTransaction.amount,
+                valueDate: inquiry.bankTransaction.valueDate.toISOString().slice(0, 10),
+                concept: inquiry.bankTransaction.concept ?? "",
+              }
+            : undefined,
+          invoice: inquiry.invoice
+            ? {
+                number: inquiry.invoice.number,
+                amount: inquiry.invoice.totalAmount,
+                date: inquiry.invoice.issueDate.toISOString().slice(0, 10),
+              }
+            : undefined,
           contactName: inquiry.contact.name,
           contactCif: inquiry.contact.cif ?? undefined,
         },
@@ -132,9 +150,10 @@ export async function checkInquiryResponses(
 
       // Execute action
       await executeAction(db, inquiry, evaluation, result);
-
     } catch (err) {
-      result.errors.push(`Inquiry ${inquiry.id}: ${err instanceof Error ? err.message : String(err)}`);
+      result.errors.push(
+        `Inquiry ${inquiry.id}: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
@@ -199,7 +218,9 @@ export async function checkInquiryResponses(
         result.followUpsGenerated++;
       }
     } catch (err) {
-      result.errors.push(`Follow-up ${inquiry.id}: ${err instanceof Error ? err.message : String(err)}`);
+      result.errors.push(
+        `Follow-up ${inquiry.id}: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
@@ -381,19 +402,33 @@ export interface InquiryMetrics {
 export async function getInquiryMetrics(db: ScopedPrisma): Promise<InquiryMetrics> {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000);
 
-  const [totalOpen, awaitingResponse, awaitingApproval, escalated, resolvedLast30d, sentLast30d, autoResolved] =
-    await Promise.all([
-      db.inquiry.count({ where: { status: { notIn: ["RESOLVED", "CANCELLED", "EXPIRED"] } } }),
-      db.inquiry.count({ where: { status: "SENT" } }),
-      db.inquiry.count({ where: { status: { in: ["DRAFT", "FOLLOW_UP_DRAFT"] } } }),
-      db.inquiry.count({ where: { status: "ESCALATED" } }),
-      db.inquiry.count({ where: { status: "RESOLVED", responseReceivedAt: { gte: thirtyDaysAgo } } }),
-      db.inquiry.count({ where: { sentAt: { gte: thirtyDaysAgo } } }),
-      db.inquiry.count({ where: { status: "RESOLVED", proposedAction: "CLOSE_RESOLVED", responseReceivedAt: { gte: thirtyDaysAgo } } }),
-    ]);
+  const [
+    totalOpen,
+    awaitingResponse,
+    awaitingApproval,
+    escalated,
+    resolvedLast30d,
+    sentLast30d,
+    autoResolved,
+  ] = await Promise.all([
+    db.inquiry.count({ where: { status: { notIn: ["RESOLVED", "CANCELLED", "EXPIRED"] } } }),
+    db.inquiry.count({ where: { status: "SENT" } }),
+    db.inquiry.count({ where: { status: { in: ["DRAFT", "FOLLOW_UP_DRAFT"] } } }),
+    db.inquiry.count({ where: { status: "ESCALATED" } }),
+    db.inquiry.count({ where: { status: "RESOLVED", responseReceivedAt: { gte: thirtyDaysAgo } } }),
+    db.inquiry.count({ where: { sentAt: { gte: thirtyDaysAgo } } }),
+    db.inquiry.count({
+      where: {
+        status: "RESOLVED",
+        proposedAction: "CLOSE_RESOLVED",
+        responseReceivedAt: { gte: thirtyDaysAgo },
+      },
+    }),
+  ]);
 
   const resolutionRate = sentLast30d > 0 ? Math.round((resolvedLast30d / sentLast30d) * 100) : 0;
-  const autoResolutionRate = resolvedLast30d > 0 ? Math.round((autoResolved / resolvedLast30d) * 100) : 0;
+  const autoResolutionRate =
+    resolvedLast30d > 0 ? Math.round((autoResolved / resolvedLast30d) * 100) : 0;
 
   // Avg response time: resolved inquiries with sentAt and responseReceivedAt
   const resolvedWithTimes = await db.inquiry.findMany({
@@ -413,7 +448,14 @@ export async function getInquiryMetrics(db: ScopedPrisma): Promise<InquiryMetric
   }
 
   return {
-    totalOpen, awaitingResponse, awaitingApproval, escalated,
-    resolvedLast30d, sentLast30d, resolutionRate, autoResolutionRate, avgResponseTimeDays,
+    totalOpen,
+    awaitingResponse,
+    awaitingApproval,
+    escalated,
+    resolvedLast30d,
+    sentLast30d,
+    resolutionRate,
+    autoResolutionRate,
+    avgResponseTimeDays,
   };
 }

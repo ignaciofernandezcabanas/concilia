@@ -16,10 +16,7 @@ export async function POST(req: NextRequest) {
     // Verify caller: QStash signature OR auth token
     const companyId = await verifyCallerAndGetCompanyId(req);
     if (!companyId) {
-      return NextResponse.json(
-        { error: "Unauthorized." },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
 
     // Get Holded integration config
@@ -30,18 +27,12 @@ export async function POST(req: NextRequest) {
     });
 
     if (!integration || integration.status !== "CONNECTED") {
-      return NextResponse.json(
-        { error: "Holded integration not connected." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Holded integration not connected." }, { status: 400 });
     }
 
     const config = integration.config as { apiKey: string } | null;
     if (!config?.apiKey) {
-      return NextResponse.json(
-        { error: "Holded API key not configured." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Holded API key not configured." }, { status: 400 });
     }
 
     const client = new HoldedClient(config.apiKey);
@@ -92,18 +83,13 @@ export async function POST(req: NextRequest) {
           });
           recordsProcessed++;
           // If the record was just created (no updatedAt in past), count as created
-          if (
-            result.createdAt.getTime() ===
-            result.updatedAt.getTime()
-          ) {
+          if (result.createdAt.getTime() === result.updatedAt.getTime()) {
             recordsCreated++;
           } else {
             recordsUpdated++;
           }
         } catch (err) {
-          errors.push(
-            `Contact ${contact.id}: ${err instanceof Error ? err.message : String(err)}`
-          );
+          errors.push(`Contact ${contact.id}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 
@@ -121,9 +107,7 @@ export async function POST(req: NextRequest) {
           if (stats === "created") recordsCreated++;
           else recordsUpdated++;
         } catch (err) {
-          errors.push(
-            `Invoice ${inv.id}: ${err instanceof Error ? err.message : String(err)}`
-          );
+          errors.push(`Invoice ${inv.id}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 
@@ -136,9 +120,7 @@ export async function POST(req: NextRequest) {
           if (stats === "created") recordsCreated++;
           else recordsUpdated++;
         } catch (err) {
-          errors.push(
-            `Purchase ${inv.id}: ${err instanceof Error ? err.message : String(err)}`
-          );
+          errors.push(`Purchase ${inv.id}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 
@@ -168,8 +150,7 @@ export async function POST(req: NextRequest) {
 
       // Trigger reconciliation after sync
       try {
-        const baseUrl =
-          process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
         await fetch(`${baseUrl}/api/reconciliation/run`, {
           method: "POST",
           headers: {
@@ -223,9 +204,7 @@ export async function POST(req: NextRequest) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function verifyCallerAndGetCompanyId(
-  req: NextRequest
-): Promise<string | null> {
+async function verifyCallerAndGetCompanyId(req: NextRequest): Promise<string | null> {
   // Check QStash signature
   const qstashSignature = req.headers.get("upstash-signature");
   if (qstashSignature) {

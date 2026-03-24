@@ -111,7 +111,10 @@ export const POST = withAuth(
       return NextResponse.json({ success: true, status: "REVERSED", reversalNumber: nextNumber });
     }
 
-    return NextResponse.json({ error: "Acción no válida. Use 'post' o 'reverse'." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Acción no válida. Use 'post' o 'reverse'." },
+      { status: 400 }
+    );
   },
   "manage:settings"
 );

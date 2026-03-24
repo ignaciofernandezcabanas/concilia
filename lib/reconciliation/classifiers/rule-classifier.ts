@@ -29,7 +29,7 @@ export async function classifyByRules(
       status: "ACTIVE",
     },
     orderBy: [
-      { priority: "desc" },  // higher priority first
+      { priority: "desc" }, // higher priority first
       { type: "asc" },
       { timesApplied: "desc" },
     ],
@@ -98,7 +98,8 @@ export async function classifyByRules(
           matches = regex.test(conceptLower) || regex.test(parsedConceptLower);
         } catch {
           const patternLower = rule.pattern.toLowerCase();
-          matches = conceptLower.includes(patternLower) || parsedConceptLower.includes(patternLower);
+          matches =
+            conceptLower.includes(patternLower) || parsedConceptLower.includes(patternLower);
         }
         break;
       }
@@ -115,16 +116,25 @@ export async function classifyByRules(
     if (!rule.accountCode && !rule.cashflowType) continue;
 
     // ── Match found — update timesApplied + lastExecutedAt ──
-    db.matchingRule.update({
-      where: { id: rule.id },
-      data: { timesApplied: { increment: 1 }, lastExecutedAt: new Date() },
-    }).catch((err) => console.warn("[rule-classifier] Non-critical operation failed:", err instanceof Error ? err.message : err));
+    db.matchingRule
+      .update({
+        where: { id: rule.id },
+        data: { timesApplied: { increment: 1 }, lastExecutedAt: new Date() },
+      })
+      .catch((err) =>
+        console.warn(
+          "[rule-classifier] Non-critical operation failed:",
+          err instanceof Error ? err.message : err
+        )
+      );
 
     // ── Calculate confidence ──
     const baseConfidence =
-      rule.type === "IBAN_CLASSIFY" || rule.type === "IBAN_INTERNAL" ? 0.95
-      : rule.type === "EXACT_AMOUNT_CONTACT" ? 0.92
-      : 0.85;
+      rule.type === "IBAN_CLASSIFY" || rule.type === "IBAN_INTERNAL"
+        ? 0.95
+        : rule.type === "EXACT_AMOUNT_CONTACT"
+          ? 0.92
+          : 0.85;
     const usageBoost = Math.min(0.04, rule.timesApplied * 0.005);
     const confidence = Math.min(0.99, baseConfidence + usageBoost);
 

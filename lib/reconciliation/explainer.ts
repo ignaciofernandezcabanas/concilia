@@ -51,15 +51,17 @@ export async function generateExplanation(ctx: ExplainContext): Promise<string |
             contact: ctx.invoice.contactName,
             amount: ctx.invoice.totalAmount.toFixed(2),
             dueDate: ctx.invoice.dueDate ?? undefined,
-            difference: ctx.reconciliation.difference != null && ctx.reconciliation.difference !== 0
-              ? ctx.reconciliation.difference.toFixed(2)
-              : undefined,
+            difference:
+              ctx.reconciliation.difference != null && ctx.reconciliation.difference !== 0
+                ? ctx.reconciliation.difference.toFixed(2)
+                : undefined,
             differenceReason: ctx.reconciliation.differenceReason ?? undefined,
           }
         : undefined,
-      materialityNote: Math.abs(ctx.tx.amount) > ctx.materialityThreshold
-        ? `El importe supera el umbral de materialidad (${ctx.materialityThreshold} EUR).`
-        : undefined,
+      materialityNote:
+        Math.abs(ctx.tx.amount) > ctx.materialityThreshold
+          ? `El importe supera el umbral de materialidad (${ctx.materialityThreshold} EUR).`
+          : undefined,
     });
 
     return await callAI("explain_bandeja", EXPLAIN_BANDEJA.system, userPrompt);

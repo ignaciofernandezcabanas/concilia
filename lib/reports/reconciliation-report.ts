@@ -111,8 +111,7 @@ export async function generateReconciliationReport(
 
   // 3. Calculate Holded balance (net of issued - received)
   const saldoHolded = invoices.reduce((sum, inv) => {
-    const sign =
-      inv.type === "ISSUED" || inv.type === "CREDIT_RECEIVED" ? 1 : -1;
+    const sign = inv.type === "ISSUED" || inv.type === "CREDIT_RECEIVED" ? 1 : -1;
     return sum + sign * inv.totalAmount;
   }, 0);
 
@@ -164,15 +163,11 @@ export async function generateReconciliationReport(
     }));
 
   // 7. Totals
-  const totalUnreconciledInvoices = unreconciledInvoices.reduce(
-    (sum, inv) => {
-      // Use same sign convention as saldoHolded
-      const sign =
-        inv.type === "ISSUED" || inv.type === "CREDIT_RECEIVED" ? 1 : -1;
-      return sum + sign * inv.amountPending;
-    },
-    0
-  );
+  const totalUnreconciledInvoices = unreconciledInvoices.reduce((sum, inv) => {
+    // Use same sign convention as saldoHolded
+    const sign = inv.type === "ISSUED" || inv.type === "CREDIT_RECEIVED" ? 1 : -1;
+    return sum + sign * inv.amountPending;
+  }, 0);
 
   const totalUnreconciledTransactions = unreconciledTransactions.reduce(
     (sum, tx) => sum + tx.amount,
@@ -180,16 +175,12 @@ export async function generateReconciliationReport(
   );
 
   const diferencia = roundTwo(saldoHolded - saldoBanco);
-  const expectedDifference = roundTwo(
-    totalUnreconciledInvoices - totalUnreconciledTransactions
-  );
+  const expectedDifference = roundTwo(totalUnreconciledInvoices - totalUnreconciledTransactions);
   const residual = roundTwo(diferencia - expectedDifference);
   const balanceCheck = Math.abs(residual) < 0.01;
 
   // 8. Reconciliation rate
-  const reconciledInvoiceCount = invoices.filter(
-    (inv) => inv.reconciliations.length > 0
-  ).length;
+  const reconciledInvoiceCount = invoices.filter((inv) => inv.reconciliations.length > 0).length;
   const reconciledTxCount = transactions.filter(
     (tx) =>
       tx.reconciliations.length > 0 ||
@@ -200,8 +191,7 @@ export async function generateReconciliationReport(
 
   const totalItems = invoices.length + transactions.length;
   const reconciledCount = reconciledInvoiceCount + reconciledTxCount;
-  const reconciliationRate =
-    totalItems > 0 ? roundTwo((reconciledCount / totalItems) * 100) : 100;
+  const reconciliationRate = totalItems > 0 ? roundTwo((reconciledCount / totalItems) * 100) : 100;
 
   return {
     month,

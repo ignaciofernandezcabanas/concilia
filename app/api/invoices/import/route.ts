@@ -16,7 +16,7 @@ import { join } from "path";
  * Also stores the PDF locally for visualization.
  */
 export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
+  const db = ctx.db;
   const { company, user } = ctx;
 
   let formData: FormData;
@@ -163,7 +163,12 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     entityType: "Invoice",
     entityId: "batch",
     details: { filesCount: files.length, created, skipped, errors: errors.length },
-  }).catch((err) => console.warn("[import] Non-critical operation failed:", err instanceof Error ? err.message : err));
+  }).catch((err) =>
+    console.warn(
+      "[import] Non-critical operation failed:",
+      err instanceof Error ? err.message : err
+    )
+  );
 
   return NextResponse.json({
     success: true,

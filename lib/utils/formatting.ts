@@ -42,10 +42,7 @@ export function formatAmount(
  * - "long": "15 de marzo de 2026"
  * - "iso": "2026-03-15"
  */
-export function formatDate(
-  date: Date | string,
-  format: DateFormat = "short"
-): string {
+export function formatDate(date: Date | string, format: DateFormat = "short"): string {
   const d = typeof date === "string" ? new Date(date) : date;
 
   if (format === "iso") {

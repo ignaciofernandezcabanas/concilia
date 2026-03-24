@@ -32,7 +32,7 @@ export async function syncBankTransactions(
   companyId: string,
   accountId: string,
   secretId: string,
-  secretKey: string,
+  secretKey: string
 ): Promise<SyncBankTransactionsResult> {
   const client = new GoCardlessClient(secretId, secretKey);
   const result: SyncBankTransactionsResult = {
@@ -102,9 +102,7 @@ export async function syncBankTransactions(
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(
-        `[syncBankTransactions] Error processing tx ${externalId}: ${message}`,
-      );
+      console.error(`[syncBankTransactions] Error processing tx ${externalId}: ${message}`);
       result.errors.push({ externalId, error: message });
     }
   }
@@ -124,7 +122,7 @@ export async function syncBankTransactions(
   });
 
   console.log(
-    `[syncBankTransactions] company=${companyId} account=${accountId} created=${result.created} updated=${result.updated} errors=${result.errors.length}`,
+    `[syncBankTransactions] company=${companyId} account=${accountId} created=${result.created} updated=${result.updated} errors=${result.errors.length}`
   );
 
   return result;
@@ -134,11 +132,7 @@ export async function syncBankTransactions(
 // Mapping helpers
 // ---------------------------------------------------------------------------
 
-function mapTransaction(
-  tx: GoCardlessTransaction,
-  externalId: string,
-  companyId: string,
-) {
+function mapTransaction(tx: GoCardlessTransaction, externalId: string, companyId: string) {
   const amount = parseFloat(tx.transactionAmount.amount);
   const isCredit = amount > 0;
 

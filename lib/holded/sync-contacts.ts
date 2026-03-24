@@ -26,7 +26,7 @@ export interface SyncContactsResult {
 export async function syncContacts(
   db: ScopedPrisma,
   companyId: string,
-  apiKey: string,
+  apiKey: string
 ): Promise<SyncContactsResult> {
   const client = new HoldedClient(apiKey);
   const result: SyncContactsResult = { created: 0, updated: 0, errors: [] };
@@ -67,9 +67,7 @@ export async function syncContacts(
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(
-        `[syncContacts] Error processing contact ${contact.id}: ${message}`,
-      );
+      console.error(`[syncContacts] Error processing contact ${contact.id}: ${message}`);
       result.errors.push({ holdedId: contact.id, error: message });
     }
   }
@@ -89,7 +87,7 @@ export async function syncContacts(
   });
 
   console.log(
-    `[syncContacts] company=${companyId} created=${result.created} updated=${result.updated} errors=${result.errors.length}`,
+    `[syncContacts] company=${companyId} created=${result.created} updated=${result.updated} errors=${result.errors.length}`
   );
 
   return result;

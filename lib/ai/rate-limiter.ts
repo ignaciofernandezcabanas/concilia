@@ -57,9 +57,7 @@ async function acquireSlot(): Promise<void> {
  * @param fn - The async function that makes the Anthropic API call
  * @returns The result, or null if circuit is broken or call failed
  */
-export async function withRateLimit<T>(
-  fn: () => Promise<T>
-): Promise<T | null> {
+export async function withRateLimit<T>(fn: () => Promise<T>): Promise<T | null> {
   // Check circuit breaker
   if (isCircuitBroken()) {
     console.warn("[ai/rate-limiter] Circuit broken — skipping LLM call.");

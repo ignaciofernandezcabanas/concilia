@@ -72,7 +72,7 @@ export async function importInvoicesFromStorage(
       const buffer = await storageProvider.downloadFile(file.id);
       const extracted = await extractInvoiceFromPdf(buffer, file.name);
 
-      if ((extracted.confidence ?? 0) < 0.50) {
+      if ((extracted.confidence ?? 0) < 0.5) {
         result.errors.push({
           file: file.name,
           error: `Low confidence: ${Math.round((extracted.confidence ?? 0) * 100)}%`,
@@ -86,7 +86,10 @@ export async function importInvoicesFromStorage(
       if (extracted.supplierName) {
         const contact = await (db as any).contact.upsert({
           where: {
-            holdedId_companyId: { holdedId: `storage:${extracted.supplierCif ?? extracted.supplierName}`, companyId },
+            holdedId_companyId: {
+              holdedId: `storage:${extracted.supplierCif ?? extracted.supplierName}`,
+              companyId,
+            },
           },
           create: {
             holdedId: `storage:${extracted.supplierCif ?? extracted.supplierName}`,

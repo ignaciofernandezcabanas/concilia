@@ -16,7 +16,10 @@ export async function GET(req: NextRequest) {
     }
 
     const supabase = createServerClient();
-    const { data: { user: supabaseUser }, error } = await supabase.auth.getUser(authHeader.slice(7));
+    const {
+      data: { user: supabaseUser },
+      error,
+    } = await supabase.auth.getUser(authHeader.slice(7));
     if (error || !supabaseUser) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
@@ -24,14 +27,25 @@ export async function GET(req: NextRequest) {
     const user = await prisma.user.findFirst({
       where: { email: supabaseUser.email!, status: "ACTIVE" },
       include: {
-        company: { select: { id: true, name: true, shortName: true, cif: true, type: true, organizationId: true } },
+        company: {
+          select: {
+            id: true,
+            name: true,
+            shortName: true,
+            cif: true,
+            type: true,
+            organizationId: true,
+          },
+        },
         memberships: {
           where: { status: "ACTIVE" },
           include: {
             organization: { select: { id: true, name: true } },
             companyScopes: {
               include: {
-                company: { select: { id: true, name: true, shortName: true, cif: true, type: true } },
+                company: {
+                  select: { id: true, name: true, shortName: true, cif: true, type: true },
+                },
               },
             },
           },
@@ -48,9 +62,8 @@ export async function GET(req: NextRequest) {
       id: m.id,
       role: m.role,
       organization: m.organization,
-      companies: m.role === "MEMBER"
-        ? m.companyScopes.map((s) => ({ ...s.company, role: s.role }))
-        : [], // OWNER/ADMIN see all companies in the org
+      companies:
+        m.role === "MEMBER" ? m.companyScopes.map((s) => ({ ...s.company, role: s.role })) : [], // OWNER/ADMIN see all companies in the org
     }));
 
     // For OWNER/ADMIN memberships, load all companies in the org
@@ -60,7 +73,10 @@ export async function GET(req: NextRequest) {
           where: { organizationId: m.organization.id },
           select: { id: true, name: true, shortName: true, cif: true, type: true },
         });
-        m.companies = orgCompanies.map((c) => ({ ...c, role: m.role === "OWNER" ? "ADMIN" : "ADMIN" }));
+        m.companies = orgCompanies.map((c) => ({
+          ...c,
+          role: m.role === "OWNER" ? "ADMIN" : "ADMIN",
+        }));
       }
     }
 
@@ -93,7 +109,10 @@ export async function PUT(req: NextRequest) {
     }
 
     const supabase = createServerClient();
-    const { data: { user: supabaseUser }, error } = await supabase.auth.getUser(authHeader.slice(7));
+    const {
+      data: { user: supabaseUser },
+      error,
+    } = await supabase.auth.getUser(authHeader.slice(7));
     if (error || !supabaseUser) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }

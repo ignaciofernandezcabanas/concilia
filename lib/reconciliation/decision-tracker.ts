@@ -19,19 +19,31 @@ interface DecisionContext {
   companyId: string;
   controllerAction: string;
   // If controller changed the difference reason or account, capture the correction
-  correctedField?: string;   // "differenceReason", "accountCode", etc.
-  correctedFrom?: string;    // original system value
-  correctedTo?: string;      // controller value
+  correctedField?: string; // "differenceReason", "accountCode", etc.
+  correctedFrom?: string; // original system value
+  correctedTo?: string; // controller value
   createdExplicitRule?: boolean;
 }
 
-export async function trackControllerDecision(db: ScopedPrisma, ctx: DecisionContext): Promise<void> {
+export async function trackControllerDecision(
+  db: ScopedPrisma,
+  ctx: DecisionContext
+): Promise<void> {
   try {
     // Load context — either from reconciliation or directly from bank transaction
-    let reco: Awaited<ReturnType<typeof db.reconciliation.findUnique>> & {
-      bankTransaction?: { amount: number; counterpartIban: string | null; counterpartName: string | null; concept: string | null; valueDate: Date; reconciliations?: unknown[] } | null;
-      invoice?: { contact?: { name: string; cif: string | null } | null } | null;
-    } | null = null;
+    let reco:
+      | (Awaited<ReturnType<typeof db.reconciliation.findUnique>> & {
+          bankTransaction?: {
+            amount: number;
+            counterpartIban: string | null;
+            counterpartName: string | null;
+            concept: string | null;
+            valueDate: Date;
+            reconciliations?: unknown[];
+          } | null;
+          invoice?: { contact?: { name: string; cif: string | null } | null } | null;
+        })
+      | null = null;
 
     if (ctx.reconciliationId) {
       reco = await db.reconciliation.findUnique({
@@ -53,12 +65,26 @@ export async function trackControllerDecision(db: ScopedPrisma, ctx: DecisionCon
       if (tx) {
         // Create a minimal reco-like object for context extraction
         reco = {
-          id: "", matchReason: null, confidenceScore: 0, difference: null, differenceReason: null,
-          bankTransactionId: tx.id, invoiceId: null, companyId: ctx.companyId,
-          type: "MANUAL", status: "PROPOSED", invoiceAmount: null, bankAmount: null,
-          differenceAccountId: null, resolvedAt: null, resolvedById: null, resolution: null,
-          createdAt: new Date(), updatedAt: new Date(),
-          bankTransaction: tx, invoice: null,
+          id: "",
+          matchReason: null,
+          confidenceScore: 0,
+          difference: null,
+          differenceReason: null,
+          bankTransactionId: tx.id,
+          invoiceId: null,
+          companyId: ctx.companyId,
+          type: "MANUAL",
+          status: "PROPOSED",
+          invoiceAmount: null,
+          bankAmount: null,
+          differenceAccountId: null,
+          resolvedAt: null,
+          resolvedById: null,
+          resolution: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          bankTransaction: tx,
+          invoice: null,
         } as unknown as typeof reco;
       }
     }
@@ -78,15 +104,17 @@ export async function trackControllerDecision(db: ScopedPrisma, ctx: DecisionCon
 
     // Determine amount range bucket
     const absAmount = Math.abs(tx?.amount ?? 0);
-    const amountRange = absAmount < 100 ? "0-100"
-      : absAmount < 500 ? "100-500"
-      : absAmount < 5000 ? "500-5000"
-      : "5000+";
+    const amountRange =
+      absAmount < 100
+        ? "0-100"
+        : absAmount < 500
+          ? "100-500"
+          : absAmount < 5000
+            ? "500-5000"
+            : "5000+";
 
     // Determine transaction type
-    const txType = !tx ? null
-      : tx.amount > 0 ? "cobro"
-      : "pago";
+    const txType = !tx ? null : tx.amount > 0 ? "cobro" : "pago";
 
     // Check if this is a recurring pattern (same IBAN in last 3 months)
     let isRecurring = false;
@@ -187,7 +215,9 @@ async function updateLearnedPattern(db: ScopedPrisma, ctx: DecisionContext): Pro
           set: (existing.correctPredictions + (isCorrect ? 1 : 0)) / (existing.occurrences + 1),
         },
         // If the prediction was wrong, update it to the controller's choice
-        ...(!isCorrect ? { predictedAction: ctx.correctedTo!, predictedReason: ctx.correctedTo } : {}),
+        ...(!isCorrect
+          ? { predictedAction: ctx.correctedTo!, predictedReason: ctx.correctedTo }
+          : {}),
       },
     });
   } else {

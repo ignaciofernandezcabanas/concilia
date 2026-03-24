@@ -88,9 +88,7 @@ export async function findExactMatch(
   const txDate = tx.valueDate.getTime();
 
   const scored = invoices.map((invoice) => {
-    const daysDiff = Math.abs(
-      (invoice.issueDate.getTime() - txDate) / (24 * 60 * 60 * 1000)
-    );
+    const daysDiff = Math.abs((invoice.issueDate.getTime() - txDate) / (24 * 60 * 60 * 1000));
 
     // Confidence ranges from 0.95 to 0.99 based on date proximity
     // Perfect date match = 0.99, further away = lower confidence

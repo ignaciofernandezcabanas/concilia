@@ -8,15 +8,12 @@ import { errorResponse } from "@/lib/utils/error-response";
  *
  * Triggers manual import from the company's dedicated invoice mailbox.
  */
-export const POST = withAuth(
-  async (_req: NextRequest, ctx: AuthContext) => {
-    const db = ctx.db;
-    try {
-      const result = await importInvoicesFromMailbox(db, ctx.company.id);
-      return NextResponse.json(result);
-    } catch (err) {
-      return errorResponse("Failed to import from mailbox.", err);
-    }
-  },
-  "resolve:reconciliation"
-);
+export const POST = withAuth(async (_req: NextRequest, ctx: AuthContext) => {
+  const db = ctx.db;
+  try {
+    const result = await importInvoicesFromMailbox(db, ctx.company.id);
+    return NextResponse.json(result);
+  } catch (err) {
+    return errorResponse("Failed to import from mailbox.", err);
+  }
+}, "resolve:reconciliation");
