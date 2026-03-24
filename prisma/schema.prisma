@@ -1188,6 +1188,7 @@ enum DetectedType {
   CREDIT_NOTE
   INTERCOMPANY
   OPENING_BALANCE
+  PAYROLL
 }
 
 enum DuplicateStatus {

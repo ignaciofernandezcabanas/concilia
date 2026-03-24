@@ -8,6 +8,7 @@ import type {
   Contact,
 } from "@prisma/client";
 
+import { detectPayroll } from "./detectors/payroll-detector";
 import { detectInternalTransfer } from "./detectors/internal-detector";
 import { detectIntercompany } from "./detectors/intercompany-detector";
 import { detectDuplicates } from "./detectors/duplicate-detector";
@@ -227,6 +228,30 @@ async function processTransaction(
       result.needsReview++;
       return;
     }
+  }
+
+  // =====================================================================
+  // PHASE 0b: PAYROLL PRE-CLASSIFICATION
+  // =====================================================================
+  // Payroll detection runs early to tag transactions, but does NOT
+  // short-circuit — payroll transactions continue through phases 1-4.
+
+  const payrollResult = await detectPayroll(
+    {
+      amount: tx.amount,
+      concept: tx.concept,
+      counterpartyName: tx.counterpartName,
+      counterpartyIban: tx.counterpartIban,
+      valueDate: tx.valueDate,
+    },
+    db
+  ).catch(() => null);
+
+  if (payrollResult?.isPayroll) {
+    await db.bankTransaction.update({
+      where: { id: tx.id },
+      data: { detectedType: "PAYROLL" as DetectedType },
+    });
   }
 
   // =====================================================================
