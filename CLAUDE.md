@@ -90,7 +90,7 @@ __tests__/                  # 30 archivos, 352 tests
 ```bash
 cp .env.example .env   # Fill in Supabase, Anthropic keys
 npm install
-npx prisma db push
+npx prisma migrate dev # Apply migrations (creates tables + _prisma_migrations)
 npx prisma db seed     # PGC accounts + datos demo
 npm run dev
 ```
