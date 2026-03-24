@@ -48,7 +48,7 @@ app/
     onboarding/             # Onboarding v3 (individual vs grupo)
   login/                    # Login page (email + OAuth)
   auth/callback/            # OAuth callback handler
-  api/                      # 84 endpoints
+  api/                      # 90+ endpoints
 
 lib/
   ai/                       # AI orchestration
@@ -71,7 +71,7 @@ lib/
     resolver.ts             # Resolver unificado (16 acciones) en $transaction
     invoice-payments.ts     # Actualizador de status de pago
     decision-tracker.ts     # Feedback loop: registra decisiones del controller
-    detectors/              # Internal, duplicate, return, financial, intercompany, investment, payroll
+    detectors/              # Internal, duplicate, return, financial, intercompany, investment, payroll, equity
     matchers/               # Exact (FX-aware), grouped, fuzzy (FX-aware), LLM
     classifiers/            # Rule-based, LLM-based
     prioritizer.ts          # URGENT / DECISION / CONFIRMATION / ROUTINE
@@ -85,6 +85,7 @@ lib/
     vat-generator.ts        # Cálculo teórico IVA (extraído de fiscal)
     vat-reconciliation.ts   # Reconciliación IVA teórico vs banco
     withholding-reconciliation.ts # Reconciliación retenciones vs banco
+    fiscal-models.ts        # Modelos 303, 111, 115, 390 + calendario fiscal
     reconciliation-report.ts
     exporter.ts
   accounting/               # Módulos contables
@@ -93,6 +94,9 @@ lib/
     deferred-entries.ts     # Anticipos (registro + vinculación con facturas)
     bad-debt.ts             # Insolvencias (criterio fiscal español: 6 meses + reclamación)
     payroll-verification.ts # Verificación mensual de nóminas
+    supporting-docs.ts      # Documentos soporte (10 tipos, JE DRAFT automático)
+    equity.ts               # Regularización + distribución de resultados
+    capital-adequacy.ts     # Check PN/capital per art. 363.1.e LSC
   fx/                       # Multi-divisa
     exchange-rate.ts        # ECB API, cache in-memory, 31 divisas, conversión EUR
   email/                    # Email sending + response monitoring
@@ -110,8 +114,8 @@ lib/
 
 components/                 # 17 React components: Sidebar, ContextSwitcher, ConfidenceBar, InlineChart...
 hooks/useApi.ts             # useFetch, useInvoices, useTransactions...
-prisma/schema.prisma        # 41 modelos, 53 enums
-__tests__/                  # 61 archivos, 508 tests
+prisma/schema.prisma        # 42 modelos, 55 enums
+__tests__/                  # 69 archivos, 577 tests
 ```
 
 ## Setup Local
@@ -151,8 +155,8 @@ export const GET = withAuth(async (req, ctx) => {
 import { prisma } from "@/lib/db"; // PROHIBIDO excepto GLOBAL-PRISMA
 ```
 
-**SCOPED_MODELS** (28 modelos auto-filtrados por companyId):
-`company, user, account, ownBankAccount, contact, invoice, bankTransaction, reconciliation, matchingRule, categoryThreshold, integration, syncLog, archiveLog, notification, auditLog, accountingPeriod, journalEntry, fixedAsset, budget, confidenceAdjustment, controllerDecision, learnedPattern, thresholdCalibration, inquiry, investment, recurringAccrual, deferredEntry, badDebtTracker, exchangeRateDifference`
+**SCOPED_MODELS** (29 modelos auto-filtrados por companyId):
+`company, user, account, ownBankAccount, contact, invoice, bankTransaction, reconciliation, matchingRule, categoryThreshold, integration, syncLog, archiveLog, notification, auditLog, accountingPeriod, journalEntry, fixedAsset, budget, confidenceAdjustment, controllerDecision, learnedPattern, thresholdCalibration, inquiry, investment, recurringAccrual, deferredEntry, badDebtTracker, exchangeRateDifference, supportingDocument`
 
 **NO scoped** (sin companyId): InvoiceLine, BudgetLine, JournalEntryLine, BankTransactionClassification, DuplicateGroup, Payment, CompanyScope, InvestmentTransaction.
 
@@ -257,8 +261,8 @@ Controller action → trackControllerDecision → calibrateFromDecision
 
 ## Motor de Conciliación (5 fases)
 
-0. **Investment/CAPEX** — detector determinístico, confidence 0.0 forzado, NUNCA auto-aprueba
-   - También detecta: payroll (SALARY, SS, IRPF)
+0. **Investment/CAPEX/Equity** — detector determinístico, confidence 0.0 forzado, NUNCA auto-aprueba
+   - También detecta: payroll (SALARY, SS, IRPF), equity (dividendos, ampliación capital, modelos fiscales, nóminas)
 1. **Detectors** — internal transfer, intercompany, duplicate, return, financial, credit note
 2. **Matchers** — exact (FX-aware, 2% cross-currency) → partial → grouped → learned patterns → fuzzy (FX-aware, 7% cross-currency) → LLM
 3. **Classifiers** — rule-based → cascade (Haiku → Sonnet) → unresolved
@@ -284,6 +288,11 @@ Auto-aprobación: `confidence >= categoryThreshold AND amount <= materialityThre
 - **Periodificaciones** (RecurringAccrual): devengos recurrentes (mensual/trimestral/anual), auto-reversión al vincular factura.
 - **Anticipos** (DeferredEntry): anticipos de clientes (438) y a proveedores (407), vinculación automática con facturas.
 - **Insolvencias** (BadDebtTracker): criterio fiscal español — 6 meses + reclamación para deducibilidad. Provisión 694/490.
+- **Documentos soporte** (SupportingDocument): actas, escrituras, contratos, modelos fiscales, nóminas, pólizas, alquileres. Estado: PENDING_APPROVAL → POSTED → RECONCILED. Genera JE DRAFT con cuentas PGC por tipo. Matching automático con banco por importe + dirección (1% tolerancia, confidence 0.93).
+- **Equity** (regularización + distribución + capital adequacy):
+  - Regularización: cierre de cuentas grupo 6/7, resultado a 129 (beneficio credit, pérdida debit).
+  - Distribución: reparto a 112 (reserva legal), 113 (voluntarias), 526 (dividendos), 120 (compensar pérdidas). Validaciones: sum = result, compensar pérdidas si 121 > 0, reserva legal >= 10% si < 20% capital, no dividendos si pérdida.
+  - Capital adequacy: PN/capital ratio per art. 363.1.e LSC. CRITICAL <= 50%, MEDIUM <= 100%, INFO si reserva legal < 20%.
 - **Presupuestos** (Budget): por cuenta y mes, DRAFT → APPROVED → CLOSED.
 - **Periodos** (AccountingPeriod): OPEN → SOFT_CLOSED → CLOSED → LOCKED. Soft close bloquea escrituras manuales, permite auto-entries.
 
@@ -291,6 +300,14 @@ Auto-aprobación: `confidence >= categoryThreshold AND amount <= materialityThre
 
 - **IVA** (vat-reconciliation.ts): compara IVA teórico (facturas) vs pagos reales a AEAT en banco. Detecta: TIMING, AMOUNT_MISMATCH, MISSING_PAYMENT.
 - **Retenciones** (withholding-reconciliation.ts): compara retenciones calculadas (modelo 111/115) vs pagos a AEAT. Mismo patrón.
+
+## Módulo Fiscal Standalone (`lib/reports/fiscal-models.ts`)
+
+- **Modelo 303**: IVA trimestral. Devengado (general 21%, reducido 10%, superreducido 4%) vs deducible interiores. Checks: CIF proveedor, tipos no estándar.
+- **Modelo 111**: Retenciones trabajo + profesionales. Desde facturas recibidas con retención.
+- **Modelo 115**: Retenciones alquileres. Filtra por cuenta 621 o descripción "alquiler".
+- **Modelo 390**: Resumen anual IVA (agrega 4 trimestres de M303).
+- **Calendario fiscal**: deadlines por año (T1-T4 para 303/111/115, IS julio, 390 enero siguiente).
 
 ## Multi-divisa
 
@@ -318,7 +335,7 @@ ContextSwitcher en sidebar. Vista consolidada (read-only) para OWNER/ADMIN. Dete
 
 ## Seguridad
 
-- **Scoped DB**: 28 modelos auto-filtrados. Imposible acceder a datos de otra empresa.
+- **Scoped DB**: 29 modelos auto-filtrados. Imposible acceder a datos de otra empresa.
 - **HTTP rate limiting**: read 100/min, write 30/min, auth 5/min, engine 3/min.
 - **LLM rate limiting**: max 5 concurrent, circuit breaker 3 errores → 60s.
 - **Prompt injection**: datos en XML tags + Zod schemas + system checks.

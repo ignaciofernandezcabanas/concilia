@@ -43,7 +43,7 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 - **Informe de Antigüedad** — aging AR/AP con buckets, DSO/DPO, y tracker de impagados con criterio fiscal
 - **Informe de Conciliación** — saldo contable vs bancario con diferencias
 - **Reporte consolidado** — PyG y Balance agregado multi-sociedad
-- **Fiscal**: IVA (Modelo 303) + Retenciones (Modelo 111/115) + reconciliación fiscal vs banco
+- **Fiscal**: IVA (Modelo 303) + Retenciones (Modelo 111/115) + Modelo 390 + calendario fiscal + reconciliación fiscal vs banco
 
 ### Contabilidad
 
@@ -52,6 +52,8 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 - **Periodificaciones recurrentes**: devengos mensuales/trimestrales/anuales con auto-reversión al vincular factura
 - **Anticipos**: registro de anticipos de clientes (438) y a proveedores (407), vinculación automática con facturas
 - **Insolvencias**: tracker con criterio fiscal español (6 meses + reclamación para deducibilidad, burofax/judicial/notarial)
+- **Documentos soporte**: actas de junta, escrituras, contratos, modelos fiscales, nóminas, pólizas, alquileres. JE DRAFT automático con cuentas PGC por tipo. Matching con banco por importe + dirección.
+- **Equity**: regularización de resultados (cierre grupo 6/7 → 129), distribución (reservas, dividendos, compensación), capital adequacy check per art. 363.1.e LSC
 - **Presupuestos**: por cuenta PGC y mes, con lifecycle DRAFT → APPROVED → CLOSED
 - **Periodos contables**: OPEN → SOFT_CLOSED → CLOSED → LOCKED. Soft close permite reporting provisional
 
@@ -111,14 +113,14 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 
 ### Seguridad
 
-- **Scoped Prisma client**: auto-inyecta companyId en todas las queries (28 modelos)
+- **Scoped Prisma client**: auto-inyecta companyId en todas las queries (29 modelos)
 - **HTTP rate limiting**: 4 tiers (read 100/min, write 30/min, auth 5/min, engine 3/min)
 - **Prompt injection defense**: datos de usuario siempre en XML tags
 - **Output validation**: Zod schemas + system checks post-LLM
 - **Error sanitization**: producción nunca expone detalles internos
 - **AES-256-GCM encryption**: para credenciales almacenadas
 
-### Frontend (23 páginas)
+### Frontend (25 páginas)
 
 - **Dashboard**: briefing diario + 6 KPIs + 3 acciones rápidas
 - **Conciliación**: bandeja con batch actions, barra de confianza, detalle de match
@@ -130,7 +132,8 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 - **Tesorería**: forecast 13 semanas con gráfico SVG inline, detalle semanal expandible
 - **Cuentas a cobrar/pagar**: aging con 5 buckets, DSO/DPO, riesgo, tracker de impagados
 - **Inversiones**: portfolio de participaciones, préstamos, dividendos
-- **Fiscal**: IVA, retenciones, reconciliación fiscal vs banco
+- **Documentos soporte**: registro, aprobación, vinculación con banco
+- **Fiscal**: IVA, retenciones, modelos fiscales (303/111/115/390), calendario fiscal, reconciliación vs banco
 - **Intercompañía**: operaciones entre sociedades, confirmación/eliminación
 - **Consolidado**: PyG/Balance multi-sociedad con totales
 
@@ -187,7 +190,7 @@ CRON_SECRET=...              # Para cron endpoints en dev
 │  Dashboard · Conciliación · Seguimientos · Facturas  │
 │  Reportes · Fiscal · Inversiones · Ajustes           │
 └──────────────────────┬──────────────────────────────┘
-                       │ API Routes (84 endpoints)
+                       │ API Routes (90+ endpoints)
 ┌──────────────────────┴──────────────────────────────┐
 │                  withAuth Middleware                   │
 │  JWT verification · Rate limiting · Scoped DB         │
@@ -216,7 +219,7 @@ CRON_SECRET=...              # Para cron endpoints en dev
 └───────────┬───────────────┘
             │
 ┌───────────┴───────────────┐
-│  Scoped Prisma (28 models) │
+│  Scoped Prisma (29 models) │
 │  Multi-tenant isolation    │
 │  Auto companyId injection  │
 │  FX-aware matchers         │
@@ -226,11 +229,11 @@ CRON_SECRET=...              # Para cron endpoints en dev
 ## Testing
 
 ```bash
-npx vitest run              # 508 tests, 61 archivos
+npx vitest run              # 577 tests, 69 archivos
 npx tsc --noEmit            # Type-check completo
 ```
 
-Cobertura: motor de conciliación (5 fases, 22 escenarios), detectors (7 tipos incl. investment + payroll), matchers (FX-aware), classifiers, resolver (16 acciones), confidence engine (16 categorías), cascade, agente diario (11 steps), context retriever, calibrador, rate limiting, data isolation, seguridad, accruals, deferred entries, bad debt, VAT/withholding reconciliation, WC bridge, PyG comparativas, FX calculations.
+Cobertura: motor de conciliación (5 fases, 22 escenarios), detectors (8 tipos incl. investment + payroll + equity), matchers (FX-aware + supporting docs), classifiers, resolver (16 acciones), confidence engine (16 categorías), cascade, agente diario (11 steps), context retriever, calibrador, rate limiting, data isolation, seguridad, accruals, deferred entries, bad debt, supporting documents, equity (regularización + distribución + capital adequacy), fiscal models (303/111/115/390/calendario), seed coherence, VAT/withholding reconciliation, WC bridge, PyG comparativas, FX calculations.
 
 ## Documentación técnica
 
@@ -238,12 +241,12 @@ Ver [CLAUDE.md](CLAUDE.md) para detalles del motor de conciliación, 22 escenari
 
 ## Estadísticas
 
-- **~41.700 líneas** de TypeScript
-- **41 modelos** Prisma, **53 enums**
-- **84 endpoints** API
-- **23 páginas** frontend
+- **~44K líneas** de TypeScript
+- **42 modelos** Prisma, **55+ enums**
+- **90+ endpoints** API
+- **25 páginas** frontend
 - **17 componentes** React
-- **508 tests** en 61 archivos
+- **577 tests** en 69 archivos
 - **16 categorías** de confianza
 - **16 acciones** de resolución
 - **22 escenarios** de conciliación
