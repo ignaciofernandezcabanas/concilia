@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Check, AlertTriangle, Search, ArrowRight } from "lucide-react";
-import Badge from "@/components/Badge";
+import { X, Check, Search, Eye } from "lucide-react";
+import InvoicePdfModal from "@/components/InvoicePdfModal";
 import { api, qs } from "@/lib/api-client";
 import { formatAmount, formatDate } from "@/lib/format";
 import type { BankTransactionResponse } from "@/lib/types/api";
@@ -46,6 +46,7 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
   const [showManualMatch, setShowManualMatch] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [showReject, setShowReject] = useState(false);
+  const [viewingPdf, setViewingPdf] = useState<{ id: string; number: string } | null>(null);
 
   const txType = tx.amount > 0 ? "Cobro" : "Pago";
   const confidence = reco?.confidenceScore ?? 0;
@@ -109,7 +110,18 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
               <div className="bg-page rounded p-3 mb-3 text-[12px]">
                 <div className="flex justify-between mb-1">
                   <span className="text-text-secondary">Factura</span>
-                  <span className="font-medium text-accent">{reco.invoice.number}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-accent">{reco.invoice.number}</span>
+                    <button
+                      onClick={() =>
+                        setViewingPdf({ id: reco.invoiceId!, number: reco.invoice!.number })
+                      }
+                      className="text-text-tertiary hover:text-accent transition-colors"
+                      title="Ver factura PDF"
+                    >
+                      <Eye size={14} />
+                    </button>
+                  </div>
                 </div>
                 {reco.invoice.contact?.name && (
                   <div className="flex justify-between mb-1">
@@ -371,6 +383,15 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
           </label>
         )}
       </div>
+
+      {/* Invoice PDF Modal */}
+      {viewingPdf && (
+        <InvoicePdfModal
+          invoiceId={viewingPdf.id}
+          invoiceNumber={viewingPdf.number}
+          onClose={() => setViewingPdf(null)}
+        />
+      )}
     </div>
   );
 }
@@ -395,12 +416,11 @@ function Row({
 }
 
 function AccountPicker({
-  bankTransactionId,
   onSelect,
   onCancel,
   resolving,
 }: {
-  bankTransactionId: string;
+  bankTransactionId?: string;
   onSelect: (accountCode: string, cashflowType: string) => void;
   onCancel: () => void;
   resolving: boolean;

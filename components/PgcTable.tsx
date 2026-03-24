@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, ChevronDown, Loader2 } from "lucide-react";
+import { ChevronRight, ChevronDown, Loader2, Eye } from "lucide-react";
 import { api, qs } from "@/lib/api-client";
+import InvoicePdfModal from "@/components/InvoicePdfModal";
 import type { PgcLineTemplate } from "@/lib/pgc-structure";
 
 const fmtAmount = (val: number): string => {
@@ -75,6 +76,7 @@ export default function PgcTable({ structure, data, columns, pctData, drilldown 
   const [drillData, setDrillData] = useState<Map<string, DrilldownResponse>>(new Map());
   const [loading, setLoading] = useState<Set<string>>(new Set());
   const [expandedAccts, setExpandedAccts] = useState<Set<string>>(new Set());
+  const [viewingPdf, setViewingPdf] = useState<{ id: string; number: string } | null>(null);
   const [acctDrillData, setAcctDrillData] = useState<Map<string, DrilldownResponse>>(new Map());
   const [acctLoading, setAcctLoading] = useState<Set<string>>(new Set());
 
@@ -150,7 +152,8 @@ export default function PgcTable({ structure, data, columns, pctData, drilldown 
     setExpandedAccts(next);
   }
 
-  const canExpand = (code: string, _tpl?: PgcLineTemplate) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const canExpand = (code: string, _tpl?: unknown): boolean => {
     if (!drilldown) return false;
     // Only expand if there's a non-zero value (no point drilling into 0)
     return cols.some((col) => getVal(code, col.key) !== 0);
@@ -434,14 +437,33 @@ export default function PgcTable({ structure, data, columns, pctData, drilldown 
                               (tx, i) => (
                                 <div
                                   key={tx.id || i}
-                                  className="flex items-center h-7 px-3 text-[11px] border-b border-border-light"
+                                  className="flex items-center h-7 px-3 text-[11px] border-b border-border-light group"
                                 >
                                   <span className="w-14 text-text-tertiary">
                                     {tx.date.slice(5)}
                                   </span>
                                   <span className="flex-1 text-text-secondary truncate">
                                     {tx.description}
+                                    {tx.invoiceNumber && (
+                                      <span className="ml-1 text-accent font-medium">
+                                        #{tx.invoiceNumber}
+                                      </span>
+                                    )}
                                   </span>
+                                  {tx.type === "invoice" && tx.id && (
+                                    <button
+                                      onClick={() =>
+                                        setViewingPdf({
+                                          id: tx.id,
+                                          number: tx.invoiceNumber ?? tx.description,
+                                        })
+                                      }
+                                      className="opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-accent transition-all mr-2"
+                                      title="Ver factura PDF"
+                                    >
+                                      <Eye size={12} />
+                                    </button>
+                                  )}
                                   <span
                                     className={`w-[90px] text-right font-mono ${amtColor(tx.amount)}`}
                                   >
@@ -467,6 +489,14 @@ export default function PgcTable({ structure, data, columns, pctData, drilldown 
           </div>
         );
       })}
+      {/* Invoice PDF Modal */}
+      {viewingPdf && (
+        <InvoicePdfModal
+          invoiceId={viewingPdf.id}
+          invoiceNumber={viewingPdf.number}
+          onClose={() => setViewingPdf(null)}
+        />
+      )}
     </div>
   );
 }
