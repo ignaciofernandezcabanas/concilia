@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from "react";
 import TopBar from "@/components/TopBar";
-import LoadingSpinner from "@/components/LoadingSpinner";
 import { useFetch } from "@/hooks/useApi";
 import { qs } from "@/lib/api-client";
 import { formatAmount, formatMonth, getMonthRange } from "@/lib/format";
@@ -112,7 +111,15 @@ export default function Dashboard() {
         </div>
 
         {loading ? (
-          <LoadingSpinner />
+          <div className="grid grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="border border-subtle rounded-lg p-5 space-y-3">
+                <div className="skeleton h-3 w-20" />
+                <div className="skeleton h-7 w-32" />
+                <div className="skeleton h-2 w-24" />
+              </div>
+            ))}
+          </div>
         ) : (
           <>
             {/* KPIs — 2 rows of 3 */}
@@ -186,7 +193,7 @@ export default function Dashboard() {
               <QuickAction
                 label="Inversiones"
                 href="/inversiones"
-                icon={<Briefcase size={16} className="text-purple-600" />}
+                icon={<Briefcase size={16} className="text-accent" />}
                 description="Cartera y participaciones"
               />
             </div>

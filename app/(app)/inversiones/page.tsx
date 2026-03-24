@@ -41,7 +41,7 @@ const TYPE_COLORS: Record<string, string> = {
   EQUITY_SUBSIDIARY: "bg-accent/10 text-accent",
   EQUITY_ASSOCIATE: "bg-amber-100 text-amber-700",
   EQUITY_OTHER: "bg-blue-100 text-blue-700",
-  DEBT_INSTRUMENT: "bg-gray-100 text-gray-600",
+  DEBT_INSTRUMENT: "bg-hover text-gray-600",
   LOAN_GRANTED: "bg-purple-100 text-purple-700",
   FUND: "bg-green-100 text-green-700",
 };
@@ -171,7 +171,7 @@ export default function InversionesPage() {
 
       {/* Add form */}
       {showForm && (
-        <div className="border border-border rounded-lg p-4 bg-gray-50 mb-6 space-y-3">
+        <div className="border border-border rounded-lg p-4 bg-page mb-6 space-y-3">
           <h3 className="text-sm font-semibold">Nueva inversión</h3>
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -258,7 +258,7 @@ export default function InversionesPage() {
       {/* Portfolio table */}
       <div className="border border-border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-border">
+          <thead className="bg-page border-b border-border">
             <tr>
               <th className="text-left px-4 py-2 text-xs font-medium text-text-secondary">
                 Inversión
@@ -285,7 +285,7 @@ export default function InversionesPage() {
                 <>
                   <tr
                     key={inv.id}
-                    className="border-b border-border hover:bg-gray-50 cursor-pointer"
+                    className="border-b border-border hover:bg-hover cursor-pointer row-hover"
                     onClick={() => toggleExpand(inv.id)}
                   >
                     <td className="px-4 py-2">
@@ -297,7 +297,7 @@ export default function InversionesPage() {
                     </td>
                     <td className="px-3 py-2">
                       <span
-                        className={`text-[11px] px-2 py-0.5 rounded ${TYPE_COLORS[inv.type] ?? "bg-gray-100"}`}
+                        className={`text-[11px] px-2 py-0.5 rounded ${TYPE_COLORS[inv.type] ?? "bg-hover"}`}
                       >
                         {TYPE_LABELS[inv.type] ?? inv.type}
                       </span>
@@ -322,7 +322,7 @@ export default function InversionesPage() {
                     </td>
                     <td className="px-3 py-2 text-center">
                       <span
-                        className={`text-[10px] px-2 py-0.5 rounded ${inv.status === "ACTIVE" ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-500"}`}
+                        className={`text-[10px] px-2 py-0.5 rounded ${inv.status === "ACTIVE" ? "bg-green-50 text-green-600" : "bg-hover text-gray-500"}`}
                       >
                         {inv.status === "ACTIVE"
                           ? "Activa"
@@ -334,7 +334,7 @@ export default function InversionesPage() {
                   </tr>
                   {isExp && inv.transactions.length > 0 && (
                     <tr key={`${inv.id}_txs`}>
-                      <td colSpan={7} className="bg-gray-50/50 px-8 py-2">
+                      <td colSpan={7} className="bg-page px-8 py-2">
                         <p className="text-[10px] text-text-tertiary uppercase mb-1">
                           Historial de transacciones
                         </p>
@@ -358,10 +358,7 @@ export default function InversionesPage() {
                   )}
                   {isExp && inv.transactions.length === 0 && (
                     <tr key={`${inv.id}_empty`}>
-                      <td
-                        colSpan={7}
-                        className="bg-gray-50/50 px-8 py-3 text-xs text-text-tertiary"
-                      >
+                      <td colSpan={7} className="bg-page px-8 py-3 text-xs text-text-tertiary">
                         Sin transacciones registradas
                       </td>
                     </tr>
