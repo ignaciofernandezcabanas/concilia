@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Briefcase, Plus, ChevronDown, ChevronRight } from "lucide-react";
+import { formatNumber } from "@/lib/format";
 
 interface InvTx {
   id: string;
@@ -82,8 +83,7 @@ export default function InversionesPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const fmt = (n: number) =>
-    n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = formatNumber;
 
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("es-ES");
 

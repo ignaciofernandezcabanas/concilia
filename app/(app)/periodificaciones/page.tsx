@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useFetch } from "@/hooks/useApi";
 import { CalendarRange, Plus, Link2 } from "lucide-react";
+import { formatAmount } from "@/lib/format";
 
 interface Accrual {
   id: string;
@@ -36,7 +37,7 @@ const FREQ_LABELS: Record<string, string> = {
 };
 
 function fmt(n: number) {
-  return n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+  return formatAmount(n);
 }
 
 export default function PeriodificacionesPage() {

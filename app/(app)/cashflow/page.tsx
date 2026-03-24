@@ -6,7 +6,8 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import PeriodSelector, { usePeriodData, type PeriodType } from "@/components/PeriodSelector";
 import { useFetch } from "@/hooks/useApi";
 import { qs } from "@/lib/api-client";
-import { Download, ChevronDown, ChevronRight } from "lucide-react";
+import { Download, ChevronDown, ChevronRight, Eye } from "lucide-react";
+import { formatNumber } from "@/lib/format";
 
 interface EFETransactionDetail {
   id: string;
@@ -89,7 +90,7 @@ export default function CashflowPage() {
                 onClick={() => setMode("direct")}
                 className={`px-3.5 h-full text-xs font-medium border-l border-subtle ${mode === "direct" ? "bg-accent text-white" : "bg-white text-text-secondary hover:bg-hover"}`}
               >
-                Tesorería
+                EFE directo
               </button>
             </div>
             <PeriodSelector
@@ -131,10 +132,7 @@ const fmtVal = (val: number) => {
   }).format(Math.abs(val));
   return val < 0 ? { text: `(${s})`, cls: "text-red-text" } : { text: s, cls: "text-green-text" };
 };
-const fmtN = (val: number) =>
-  new Intl.NumberFormat("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
-    val
-  );
+const fmtN = formatNumber;
 
 const ROWS: { key: keyof TreasuryMonth; label: string; section: "in" | "out" }[] = [
   { key: "cobrosClientes", label: "Cobros de clientes", section: "in" },
@@ -433,9 +431,20 @@ function EFEView({ data }: { data: EFEReport | null }) {
                             <span className="w-40 text-right text-text-secondary truncate">
                               {tx.counterpartName ?? "—"}
                             </span>
-                            <span className="w-24 text-right text-text-tertiary text-[11px]">
-                              {tx.invoiceNumber ?? ""}
-                            </span>
+                            {tx.invoiceNumber ? (
+                              <a
+                                href={`/facturas?search=${tx.invoiceNumber}`}
+                                className="w-24 text-right text-accent text-[11px] hover:underline flex items-center justify-end gap-1"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Eye size={10} />
+                                {tx.invoiceNumber}
+                              </a>
+                            ) : (
+                              <span className="w-24 text-right text-text-tertiary text-[11px]">
+                                —
+                              </span>
+                            )}
                             <span className={`w-24 text-right font-mono ${v.cls}`}>{v.text}</span>
                           </div>
                         );

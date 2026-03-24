@@ -2,6 +2,10 @@
  * Client-side formatting utilities (safe for "use client").
  */
 
+/**
+ * Format a monetary amount with currency symbol.
+ * Negatives shown in parentheses per financial convention: (1.234,56 €)
+ */
 export function formatAmount(amount: number, currency = "EUR"): string {
   const isNegative = amount < 0;
   const abs = Math.abs(amount);
@@ -12,6 +16,20 @@ export function formatAmount(amount: number, currency = "EUR"): string {
   const symbol = currency === "EUR" ? "€" : currency;
   const str = `${formatted} ${symbol}`;
   return isNegative ? `(${str})` : str;
+}
+
+/**
+ * Format a number without currency. Negatives in parentheses.
+ * Use for table cells where the € symbol is in the header.
+ */
+export function formatNumber(val: number): string {
+  if (val === 0) return "0,00";
+  const abs = Math.abs(val);
+  const s = new Intl.NumberFormat("es-ES", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(abs);
+  return val < 0 ? `(${s})` : s;
 }
 
 export function formatDate(
