@@ -15,11 +15,21 @@ interface CompanyReport {
   report: Record<string, unknown>;
 }
 
+interface EliminationDetail {
+  companyA: { name: string };
+  companyB: { name: string };
+  eliminationAmount: number;
+  type: string;
+  reasoning: string;
+}
+
 interface ConsolidatedResponse {
   type: string;
   companies: Array<{ id: string; name: string }>;
   perCompany: CompanyReport[];
   consolidated?: Record<string, number>;
+  eliminationDetails?: EliminationDetail[];
+  nci?: number | null;
 }
 
 export default function ConsolidadoPage() {
@@ -148,6 +158,58 @@ export default function ConsolidadoPage() {
                     }, 0)
                   )}
                 </span>
+              </div>
+            )}
+
+            {/* Elimination details */}
+            {(data?.eliminationDetails?.length ?? 0) > 0 && data && (
+              <div className="mt-4">
+                <h3 className="text-xs font-semibold text-text-secondary mb-2">
+                  Eliminaciones intercompañía
+                </h3>
+                <div className="border border-border rounded-lg overflow-hidden">
+                  {(
+                    data.eliminationDetails as Array<{
+                      companyA: { name: string };
+                      companyB: { name: string };
+                      eliminationAmount: number;
+                      type: string;
+                      reasoning: string;
+                    }>
+                  ).map(
+                    (
+                      elim: {
+                        companyA: { name: string };
+                        companyB: { name: string };
+                        eliminationAmount: number;
+                        type: string;
+                        reasoning: string;
+                      },
+                      i: number
+                    ) => (
+                      <div
+                        key={i}
+                        className="flex items-center h-9 px-4 text-xs border-b border-border-light last:border-0"
+                      >
+                        <span className="flex-1 text-text-secondary">
+                          {elim.companyA.name} ↔ {elim.companyB.name}
+                        </span>
+                        <span className="text-[10px] text-amber-600 mr-3">{elim.type}</span>
+                        <span className="font-mono text-red-600">
+                          -{formatAmount(elim.eliminationAmount)}
+                        </span>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* NCI */}
+            {data?.nci != null && data.nci !== 0 && (
+              <div className="mt-3 flex items-center justify-between px-5 py-2 bg-amber-50 rounded-lg text-sm">
+                <span className="text-amber-700 font-medium">Intereses minoritarios (NCI)</span>
+                <span className="font-mono text-amber-700">{formatAmount(data.nci)}</span>
               </div>
             )}
           </div>

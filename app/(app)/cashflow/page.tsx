@@ -85,6 +85,16 @@ export default function CashflowPage() {
           else if (child.label.includes("provisiones")) map.set("A.2c:total", child.amount);
           else if (child.label.includes("deudores")) map.set("A.3b:total", child.amount);
           else if (child.label.includes("acreedores")) map.set("A.3d:total", child.amount);
+          // Block B children (investment flows)
+          else if (child.label.includes("adquisición de inmovilizado"))
+            map.set("B.1:total", child.amount);
+          else if (child.label.includes("enajenación de inmovilizado"))
+            map.set("B.2:total", child.amount);
+          else if (child.label.includes("inversiones financieras"))
+            map.set("B.3:total", child.amount);
+          else if (child.label.includes("desinversiones")) map.set("B.4:total", child.amount);
+          else if (child.label.includes("Dividendos") || child.label.includes("intereses cobrados"))
+            map.set("B.5:total", child.amount);
         }
       }
     }

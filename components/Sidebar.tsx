@@ -27,6 +27,7 @@ import {
   LogOut,
   Mail,
   Receipt,
+  Briefcase,
   type LucideIcon,
 } from "lucide-react";
 
@@ -59,6 +60,7 @@ const sections: NavSection[] = [
       { label: "Asientos", icon: BookOpen, href: "/asientos" },
       { label: "Plan de cuentas", icon: List, href: "/plan-cuentas" },
       { label: "Activos", icon: Package, href: "/activos" },
+      { label: "Inversiones", icon: Briefcase, href: "/inversiones" },
     ],
   },
   {
