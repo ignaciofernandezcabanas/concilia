@@ -920,6 +920,7 @@ enum NciMethod {
 
 enum PeriodStatus {
   OPEN
+  SOFT_CLOSED
   CLOSED
   LOCKED
 }
