@@ -21,9 +21,10 @@ describe("getScopedDb", () => {
   it("creates a prisma extension with query overrides", () => {
     const db = getScopedDb("company_1");
     expect(mockPrisma.$extends).toHaveBeenCalledTimes(1);
-    const config = (db as unknown as { _extensionConfig: { query: unknown } })._extensionConfig;
+    const config = (db as unknown as { _extensionConfig: { query: Record<string, unknown> } })
+      ._extensionConfig;
     expect(config.query).toBeDefined();
-    expect(config.query.$allModels).toBeDefined();
+    expect((config.query as Record<string, unknown>).$allModels).toBeDefined();
   });
 
   it("injects companyId in findMany for scoped models", async () => {

@@ -183,7 +183,7 @@ describe("trackControllerDecision", () => {
   // ── Reconciliation not found → returns silently ──
   it("reconciliation no encontrada → no rompe", async () => {
     mockPrisma.reconciliation.findUnique.mockResolvedValue(null);
-    await expect(trackControllerDecision(baseCtx)).resolves.not.toThrow();
+    await expect(trackControllerDecision(mockPrisma as any, baseCtx)).resolves.not.toThrow();
     expect(mockPrisma.controllerDecision.create).not.toHaveBeenCalled();
   });
 });

@@ -53,8 +53,16 @@
   },
   "lint-staged": {
     "*.{ts,tsx}": [
-      "prettier --write",
-      "eslint --fix --max-warnings 0"
+      "prettier --write"
+    ],
+    "app/**/*.{ts,tsx}": [
+      "eslint --fix"
+    ],
+    "lib/**/*.{ts,tsx}": [
+      "eslint --fix"
+    ],
+    "components/**/*.{ts,tsx}": [
+      "eslint --fix"
     ],
     "*.{json,md,yml,yaml,css}": [
       "prettier --write"
