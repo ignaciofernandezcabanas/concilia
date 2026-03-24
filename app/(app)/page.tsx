@@ -18,6 +18,7 @@ import {
   ArrowRight,
   BarChart3,
   GitCompare,
+  Briefcase,
 } from "lucide-react";
 import Link from "next/link";
 import type { DashboardResponse } from "@/lib/types/api";
@@ -151,7 +152,7 @@ export default function Dashboard() {
             </div>
 
             {/* Quick actions */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               <QuickAction
                 label={`${d.pendingCount} items en bandeja`}
                 href="/conciliacion"
@@ -169,6 +170,12 @@ export default function Dashboard() {
                 href="/tesoreria"
                 icon={<Wallet size={16} className="text-accent" />}
                 description="Próximas 13 semanas"
+              />
+              <QuickAction
+                label="Inversiones"
+                href="/inversiones"
+                icon={<Briefcase size={16} className="text-purple-600" />}
+                description="Cartera y participaciones"
               />
             </div>
 

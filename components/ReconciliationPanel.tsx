@@ -47,6 +47,21 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
   const [rejectReason, setRejectReason] = useState("");
   const [showReject, setShowReject] = useState(false);
   const [viewingPdf, setViewingPdf] = useState<{ id: string; number: string } | null>(null);
+  const [showCapexForm, setShowCapexForm] = useState(false);
+  const [showInvestmentForm, setShowInvestmentForm] = useState(false);
+  const [capexForm, setCapexForm] = useState({
+    name: "",
+    assetAccountCode: "219",
+    usefulLifeMonths: 60,
+    residualValue: 0,
+  });
+  const [investForm, setInvestForm] = useState({
+    name: "",
+    type: "EQUITY_OTHER",
+    pgcAccount: "250",
+    isinCif: "",
+    ownershipPct: 0,
+  });
 
   const txType = tx.amount > 0 ? "Cobro" : "Pago";
   const confidence = reco?.confidenceScore ?? 0;
@@ -305,6 +320,191 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
             >
               Confirmar devolución
             </button>
+          )}
+
+          {/* CAPEX detection — scenario 19 */}
+          {reco?.matchReason?.startsWith("capex_detected:") && (
+            <div className="space-y-2">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-xs font-semibold text-amber-700 mb-1">CAPEX detectado</p>
+                <p className="text-[11px] text-amber-600">
+                  Este movimiento parece una compra de activo fijo. Registra el activo para
+                  contabilizarlo correctamente.
+                </p>
+              </div>
+              {!showCapexForm ? (
+                <button
+                  onClick={() => setShowCapexForm(true)}
+                  disabled={resolving}
+                  className="w-full h-9 bg-accent text-white text-[13px] font-medium rounded-md hover:bg-accent/90 disabled:opacity-50"
+                >
+                  Registrar activo fijo
+                </button>
+              ) : (
+                <div className="border border-border rounded-lg p-3 space-y-2">
+                  <div>
+                    <label className="text-[11px] text-text-secondary">Nombre *</label>
+                    <input
+                      value={capexForm.name}
+                      onChange={(e) => setCapexForm((f) => ({ ...f, name: e.target.value }))}
+                      className="w-full border border-border rounded px-2 py-1 text-xs mt-0.5"
+                      placeholder="Maquinaria línea producción"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] text-text-secondary">Cuenta PGC</label>
+                      <input
+                        value={capexForm.assetAccountCode}
+                        onChange={(e) =>
+                          setCapexForm((f) => ({ ...f, assetAccountCode: e.target.value }))
+                        }
+                        className="w-full border border-border rounded px-2 py-1 text-xs font-mono mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-text-secondary">Vida útil (meses)</label>
+                      <input
+                        type="number"
+                        value={capexForm.usefulLifeMonths}
+                        onChange={(e) =>
+                          setCapexForm((f) => ({ ...f, usefulLifeMonths: Number(e.target.value) }))
+                        }
+                        className="w-full border border-border rounded px-2 py-1 text-xs font-mono mt-0.5"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={resolving || !capexForm.name}
+                      onClick={() =>
+                        onResolve({
+                          action: "register_fixed_asset",
+                          bankTransactionId: tx.id,
+                          reconciliationId: reco?.id,
+                          assetData: { ...capexForm, acquisitionCost: Math.abs(tx.amount) },
+                        })
+                      }
+                      className="flex-1 h-8 bg-accent text-white text-xs rounded hover:bg-accent/90 disabled:opacity-50"
+                    >
+                      {resolving ? "Registrando..." : "Confirmar"}
+                    </button>
+                    <button
+                      onClick={() => setShowCapexForm(false)}
+                      className="text-xs text-text-secondary px-2"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Investment detection — scenario 20 */}
+          {reco?.matchReason?.startsWith("investment_detected:") && (
+            <div className="space-y-2">
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                <p className="text-xs font-semibold text-purple-700 mb-1">
+                  Inversión financiera detectada
+                </p>
+                <p className="text-[11px] text-purple-600">
+                  Registra esta inversión (participación, préstamo, o instrumento financiero).
+                </p>
+              </div>
+              {!showInvestmentForm ? (
+                <button
+                  onClick={() => setShowInvestmentForm(true)}
+                  disabled={resolving}
+                  className="w-full h-9 bg-purple-600 text-white text-[13px] font-medium rounded-md hover:bg-purple-700 disabled:opacity-50"
+                >
+                  Registrar inversión
+                </button>
+              ) : (
+                <div className="border border-border rounded-lg p-3 space-y-2">
+                  <div>
+                    <label className="text-[11px] text-text-secondary">Nombre *</label>
+                    <input
+                      value={investForm.name}
+                      onChange={(e) => setInvestForm((f) => ({ ...f, name: e.target.value }))}
+                      className="w-full border border-border rounded px-2 py-1 text-xs mt-0.5"
+                      placeholder="Participación Empresa X SL"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] text-text-secondary">Tipo</label>
+                      <select
+                        value={investForm.type}
+                        onChange={(e) => setInvestForm((f) => ({ ...f, type: e.target.value }))}
+                        className="w-full border border-border rounded px-2 py-1 text-xs mt-0.5"
+                      >
+                        <option value="EQUITY_SUBSIDIARY">Filial (&gt;50%)</option>
+                        <option value="EQUITY_ASSOCIATE">Asociada (20-50%)</option>
+                        <option value="EQUITY_OTHER">Participación (&lt;20%)</option>
+                        <option value="LOAN_GRANTED">Préstamo concedido</option>
+                        <option value="FUND">Fondo</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-text-secondary">Cuenta PGC</label>
+                      <input
+                        value={investForm.pgcAccount}
+                        onChange={(e) =>
+                          setInvestForm((f) => ({ ...f, pgcAccount: e.target.value }))
+                        }
+                        className="w-full border border-border rounded px-2 py-1 text-xs font-mono mt-0.5"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] text-text-secondary">CIF participada</label>
+                      <input
+                        value={investForm.isinCif}
+                        onChange={(e) => setInvestForm((f) => ({ ...f, isinCif: e.target.value }))}
+                        className="w-full border border-border rounded px-2 py-1 text-xs font-mono mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-text-secondary">% participación</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={investForm.ownershipPct}
+                        onChange={(e) =>
+                          setInvestForm((f) => ({ ...f, ownershipPct: Number(e.target.value) }))
+                        }
+                        className="w-full border border-border rounded px-2 py-1 text-xs font-mono mt-0.5"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={resolving || !investForm.name}
+                      onClick={() =>
+                        onResolve({
+                          action: "register_investment",
+                          bankTransactionId: tx.id,
+                          reconciliationId: reco?.id,
+                          investmentData: { ...investForm, acquisitionCost: Math.abs(tx.amount) },
+                        })
+                      }
+                      className="flex-1 h-8 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 disabled:opacity-50"
+                    >
+                      {resolving ? "Registrando..." : "Confirmar"}
+                    </button>
+                    <button
+                      onClick={() => setShowInvestmentForm(false)}
+                      className="text-xs text-text-secondary px-2"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Classify manually */}
