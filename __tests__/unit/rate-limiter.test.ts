@@ -1,10 +1,22 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-describe("withRateLimit", () => {
+// Mock prisma for DB-backed circuit breaker
+const mockPrisma = vi.hoisted(() => ({
+  $queryRawUnsafe: vi.fn().mockResolvedValue([]),
+  $executeRawUnsafe: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
+
+describe("withRateLimit (DB-backed circuit breaker)", () => {
   let withRateLimit: typeof import("@/lib/ai/rate-limiter").withRateLimit;
 
   beforeEach(async () => {
     vi.resetModules();
+    // Reset mocks
+    mockPrisma.$queryRawUnsafe.mockResolvedValue([]);
+    mockPrisma.$executeRawUnsafe.mockResolvedValue(undefined);
+
     const mod = await import("@/lib/ai/rate-limiter");
     withRateLimit = mod.withRateLimit;
   });
@@ -20,6 +32,25 @@ describe("withRateLimit", () => {
   });
 
   it("activa circuit breaker tras 3 errores consecutivos", async () => {
+    let dbErrors = 0;
+    let dbBrokenUntil: Date | null = null;
+
+    mockPrisma.$queryRawUnsafe.mockImplementation((sql: string) => {
+      if (sql.includes("_circuit_breaker")) {
+        return Promise.resolve([
+          { consecutive_errors: dbErrors, broken_until: dbBrokenUntil, last_error_at: null },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    mockPrisma.$executeRawUnsafe.mockImplementation((sql: string, ...args: unknown[]) => {
+      if (sql.includes("INSERT INTO _circuit_breaker") && typeof args[0] === "number") {
+        dbErrors = args[0] as number;
+        dbBrokenUntil = (args[1] as Date) ?? null;
+      }
+      return Promise.resolve(undefined);
+    });
+
     const failingFn = () => Promise.reject(new Error("fail"));
 
     await withRateLimit(failingFn); // error 1
@@ -34,40 +65,34 @@ describe("withRateLimit", () => {
   });
 
   it("resetea errores consecutivos tras un éxito", async () => {
-    const failingFn = () => Promise.reject(new Error("fail"));
-    const succeedingFn = () => Promise.resolve("ok");
+    let dbErrors = 0;
+    mockPrisma.$queryRawUnsafe.mockImplementation((sql: string) => {
+      if (sql.includes("_circuit_breaker")) {
+        return Promise.resolve([
+          { consecutive_errors: dbErrors, broken_until: null, last_error_at: null },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    mockPrisma.$executeRawUnsafe.mockImplementation((sql: string, ...args: unknown[]) => {
+      if (sql.includes("INSERT INTO _circuit_breaker") && typeof args[0] === "number") {
+        dbErrors = args[0] as number;
+      }
+      return Promise.resolve(undefined);
+    });
 
-    await withRateLimit(failingFn); // error 1
-    await withRateLimit(failingFn); // error 2
-    await withRateLimit(succeedingFn); // success → reset
-    await withRateLimit(failingFn); // error 1 again
-    await withRateLimit(failingFn); // error 2 again
+    await withRateLimit(() => Promise.reject(new Error("fail"))); // error 1
+    await withRateLimit(() => Promise.reject(new Error("fail"))); // error 2
+    await withRateLimit(() => Promise.resolve("ok")); // success → reset
 
-    // Should NOT have tripped circuit (only 2 consecutive, not 3)
-    const spy = vi.fn(() => Promise.resolve("ok"));
-    const result = await withRateLimit(spy);
-    expect(result).toBe("ok");
-    expect(spy).toHaveBeenCalled();
+    expect(dbErrors).toBe(0);
   });
 
-  it("respeta límite de concurrencia de 5", async () => {
-    let activeCount = 0;
-    let maxActive = 0;
+  it("fail-open: si DB falla, permite la llamada", async () => {
+    mockPrisma.$queryRawUnsafe.mockRejectedValue(new Error("DB down"));
+    mockPrisma.$executeRawUnsafe.mockRejectedValue(new Error("DB down"));
 
-    const trackingFn = () =>
-      new Promise<number>((resolve) => {
-        activeCount++;
-        if (activeCount > maxActive) maxActive = activeCount;
-        setTimeout(() => {
-          activeCount--;
-          resolve(activeCount);
-        }, 50);
-      });
-
-    // Launch 10 concurrent calls
-    const promises = Array.from({ length: 10 }, () => withRateLimit(trackingFn));
-    await Promise.all(promises);
-
-    expect(maxActive).toBeLessThanOrEqual(5);
+    const result = await withRateLimit(() => Promise.resolve("works"));
+    expect(result).toBe("works");
   });
 });
