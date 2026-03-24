@@ -2,7 +2,7 @@ import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, type AuthContext } from "@/lib/auth/middleware";
 import { pygQuerySchema } from "@/lib/utils/validation";
-import { generatePyG, type PyGLevel } from "@/lib/reports/pyg-generator";
+import { generatePyG, type PyGLevel, type PyGComparison } from "@/lib/reports/pyg-generator";
 
 /**
  * GET /api/reports/pyg
@@ -16,7 +16,6 @@ import { generatePyG, type PyGLevel } from "@/lib/reports/pyg-generator";
  *   includeEbitda - Include EBITDA calculation (default: true)
  */
 export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-  const { company } = ctx;
   const searchParams = req.nextUrl.searchParams;
 
   const parsed = pygQuerySchema.safeParse(Object.fromEntries(searchParams.entries()));
@@ -40,8 +39,22 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   };
   const namedLevel = levelMap[level] ?? "titles";
 
+  // Build comparison options from query params
+  const compareBudget = searchParams.get("compareBudget") === "true";
+  const comparePriorYear = searchParams.get("comparePriorYear") === "true";
+  const comparePriorMonth = searchParams.get("comparePriorMonth") === "true";
+
+  const comparison: PyGComparison | undefined =
+    compareBudget || comparePriorYear || comparePriorMonth
+      ? {
+          budget: compareBudget || undefined,
+          priorYear: comparePriorYear || undefined,
+          priorMonth: comparePriorMonth || undefined,
+        }
+      : undefined;
+
   try {
-    const report = await generatePyG(ctx.db, from, to, namedLevel, includeEbitda);
+    const report = await generatePyG(ctx.db, from, to, namedLevel, includeEbitda, comparison);
 
     return NextResponse.json(report);
   } catch (err) {

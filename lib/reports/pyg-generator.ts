@@ -49,6 +49,23 @@ export interface PyGLineDetail {
   percentOverRevenue: number | null;
   /** Sub-items when level is "groups" or "accounts" */
   children?: PyGLineDetail[];
+  /** Comparison columns (only present when comparison is requested) */
+  budget?: number;
+  budgetVar?: number;
+  budgetVarPct?: number | null;
+  priorYear?: number;
+  priorYearVar?: number;
+  priorYearVarPct?: number | null;
+  priorMonth?: number;
+  priorMonthVar?: number;
+  priorMonthVarPct?: number | null;
+  pctOverRevenue?: number | null;
+}
+
+export interface PyGComparison {
+  budget?: boolean;
+  priorYear?: boolean;
+  priorMonth?: boolean;
 }
 
 export interface PyGReport {
@@ -104,7 +121,8 @@ export async function generatePyG(
   from: Date,
   to: Date,
   level: PyGLevel = "titles",
-  includeEbitda: boolean = true
+  includeEbitda: boolean = true,
+  comparison?: PyGComparison
 ): Promise<PyGReport> {
   // Fetch invoice lines with their PGC account mapping (accrual basis)
   const invoiceLines = await db.invoiceLine.findMany({
@@ -333,6 +351,81 @@ export async function generatePyG(
     });
   }
 
+  // =========================================================================
+  // Comparison columns
+  // =========================================================================
+
+  if (comparison) {
+    // Build a lookup: code → amount from a comparison PyG report
+    const buildLookup = (report: PyGReport): Map<string, number> => {
+      const map = new Map<string, number>();
+      for (const line of report.lines) {
+        map.set(line.code, line.amount);
+      }
+      return map;
+    };
+
+    // Budget comparison — query BudgetLine for matching period and accounts
+    if (comparison.budget) {
+      const budgetAmounts = await loadBudgetAmounts(db, from, to, lineTotals, lineAmounts);
+      for (const line of lines) {
+        const budgetAmt = budgetAmounts.get(line.code);
+        if (budgetAmt !== undefined) {
+          line.budget = roundTwo(budgetAmt);
+          line.budgetVar = roundTwo(line.amount - budgetAmt);
+          line.budgetVarPct = calculateVarPct(line.amount, budgetAmt);
+        }
+      }
+    }
+
+    // Prior year comparison — recursive call with dates shifted -12 months
+    if (comparison.priorYear) {
+      const priorFrom = new Date(from);
+      priorFrom.setFullYear(priorFrom.getFullYear() - 1);
+      const priorTo = new Date(to);
+      priorTo.setFullYear(priorTo.getFullYear() - 1);
+      const priorReport = await generatePyG(db, priorFrom, priorTo, level, includeEbitda);
+      const priorLookup = buildLookup(priorReport);
+      for (const line of lines) {
+        const priorAmt = priorLookup.get(line.code);
+        if (priorAmt !== undefined) {
+          line.priorYear = roundTwo(priorAmt);
+          line.priorYearVar = roundTwo(line.amount - priorAmt);
+          line.priorYearVarPct = calculateVarPct(line.amount, priorAmt);
+        }
+      }
+    }
+
+    // Prior month comparison — recursive call with prior month dates
+    if (comparison.priorMonth) {
+      const priorMonthFrom = new Date(from);
+      priorMonthFrom.setMonth(priorMonthFrom.getMonth() - 1);
+      const priorMonthTo = new Date(to);
+      priorMonthTo.setMonth(priorMonthTo.getMonth() - 1);
+      const priorMonthReport = await generatePyG(
+        db,
+        priorMonthFrom,
+        priorMonthTo,
+        level,
+        includeEbitda
+      );
+      const priorMonthLookup = buildLookup(priorMonthReport);
+      for (const line of lines) {
+        const priorAmt = priorMonthLookup.get(line.code);
+        if (priorAmt !== undefined) {
+          line.priorMonth = roundTwo(priorAmt);
+          line.priorMonthVar = roundTwo(line.amount - priorAmt);
+          line.priorMonthVarPct = calculateVarPct(line.amount, priorAmt);
+        }
+      }
+    }
+  }
+
+  // Always calculate pctOverRevenue on each line
+  for (const line of lines) {
+    line.pctOverRevenue = revenue !== 0 ? roundTwo((line.amount / Math.abs(revenue)) * 100) : null;
+  }
+
   return {
     from: from.toISOString().slice(0, 10),
     to: to.toISOString().slice(0, 10),
@@ -356,4 +449,103 @@ export async function generatePyG(
 
 function roundTwo(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * Calculate variation percentage: (actual - comparison) / |comparison| * 100.
+ * Returns null if comparison is 0 to avoid division by zero.
+ */
+export function calculateVarPct(actual: number, comparison: number): number | null {
+  if (comparison === 0) return null;
+  return roundTwo(((actual - comparison) / Math.abs(comparison)) * 100);
+}
+
+/**
+ * Calculate pctOverRevenue: amount / |revenue| * 100.
+ * Returns null if revenue is 0.
+ */
+export function calculatePctOverRevenue(amount: number, revenue: number): number | null {
+  if (revenue === 0) return null;
+  return roundTwo((amount / Math.abs(revenue)) * 100);
+}
+
+/**
+ * Calculates variation fields for comparison columns.
+ * Exported for testing.
+ */
+export function calculateVariations(
+  actual: number,
+  comparison: number
+): { variance: number; variancePct: number | null } {
+  return {
+    variance: roundTwo(actual - comparison),
+    variancePct: calculateVarPct(actual, comparison),
+  };
+}
+
+/**
+ * Load budget amounts aggregated per PGC line for the given period.
+ * Returns a map: pygLine code → budget amount.
+ */
+async function loadBudgetAmounts(
+  db: ScopedPrisma,
+  from: Date,
+  to: Date,
+  _lineTotals: Map<string, number>,
+  lineAmounts: Map<string, Map<string, { amount: number; accountName: string }>>
+): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+
+  // Find approved budgets for the year range
+  const fromYear = from.getFullYear();
+  const toYear = to.getFullYear();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const budgets = await (db as any).budget.findMany({
+    where: {
+      year: { gte: fromYear, lte: toYear },
+      status: "APPROVED",
+    },
+    include: { lines: true },
+  });
+
+  if (budgets.length === 0) return result;
+
+  // Build accountCode → pygLine mapping from the actual data
+  const accountToPygLine = new Map<string, string>();
+  for (const [pygLine, accounts] of Array.from(lineAmounts)) {
+    for (const accountCode of Array.from(accounts.keys())) {
+      accountToPygLine.set(accountCode, pygLine);
+    }
+  }
+
+  // Also fetch accounts to map budget line account codes to pygLine
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const accounts = await (db as any).account.findMany({
+    where: { pygLine: { not: null } },
+    select: { code: true, pygLine: true },
+  });
+  for (const acct of accounts) {
+    if (acct.pygLine) {
+      accountToPygLine.set(acct.code, acct.pygLine);
+    }
+  }
+
+  // Aggregate budget lines per pygLine for the matching months
+  for (const budget of budgets) {
+    for (const line of budget.lines) {
+      // Filter by month range
+      const lineMonth = line.month;
+      const lineYear = budget.year;
+      const lineDate = new Date(lineYear, lineMonth - 1, 1);
+      if (lineDate < from || lineDate > to) continue;
+
+      const pygLine = accountToPygLine.get(line.accountCode);
+      if (!pygLine) continue;
+
+      result.set(pygLine, (result.get(pygLine) ?? 0) + line.amount);
+    }
+  }
+
+  return result;
 }
