@@ -41,6 +41,7 @@ const SCOPED_MODELS = new Set([
   "thresholdCalibration",
   "inquiry",
   "investment",
+  "recurringAccrual",
   // NOT scoped (no companyId): InvoiceLine, BudgetLine, JournalEntryLine,
   //   BankTransactionClassification, DuplicateGroup, Payment, CompanyScope
   // NOT scoped (organizationId instead): IntercompanyLink, AgentRun

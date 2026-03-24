@@ -101,6 +101,7 @@ model Company {
   inquiries                Inquiry[]
   integrations             Integration[]
   investments              Investment[]
+  recurringAccruals        RecurringAccrual[]
   invoices                 Invoice[]
   journalEntries           JournalEntry[]
   matchingRules            MatchingRule[]
@@ -234,6 +235,8 @@ model JournalEntry {
   company      Company            @relation(fields: [companyId], references: [id])
   lines                  JournalEntryLine[]
   investmentTransactions InvestmentTransaction[]
+  recurringAccrual       RecurringAccrual?      @relation("AccrualEntries", fields: [recurringAccrualId], references: [id])
+  recurringAccrualId     String?
 
   @@unique([companyId, number])
   @@index([companyId, date])
@@ -283,6 +286,54 @@ model FixedAsset {
   depreciationAccount     Account            @relation("DepreciationAccount", fields: [depreciationAccountId], references: [id])
 
   @@index([companyId, status])
+}
+
+model RecurringAccrual {
+  id                String           @id @default(cuid())
+  description       String
+  contactId         String?
+  contact           Contact?         @relation(fields: [contactId], references: [id])
+
+  totalAnnualAmount Float
+  monthlyAmount     Float
+
+  expenseAccountCode String
+  accrualAccountCode String
+
+  frequency         AccrualFrequency @default(MONTHLY)
+  startDate         DateTime
+  endDate           DateTime?
+
+  linkedInvoiceId   String?
+  linkedInvoice     Invoice?         @relation("AccrualInvoice", fields: [linkedInvoiceId], references: [id])
+  autoReverse       Boolean          @default(true)
+
+  status            AccrualStatus    @default(ACTIVE)
+  lastAccruedDate   DateTime?
+  totalAccrued      Float            @default(0)
+
+  companyId         String
+  company           Company          @relation(fields: [companyId], references: [id])
+
+  journalEntries    JournalEntry[]   @relation("AccrualEntries")
+
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([companyId, status])
+}
+
+enum AccrualFrequency {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+enum AccrualStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
 }
 
 model Investment {
@@ -363,6 +414,7 @@ model Contact {
   company           Company     @relation(fields: [companyId], references: [id])
   inquiries         Inquiry[]
   invoices          Invoice[]
+  recurringAccruals RecurringAccrual[]
 
   @@unique([holdedId, companyId])
 }
@@ -393,6 +445,7 @@ model Invoice {
   companyId         String
   contactId         String?
   inquiries         Inquiry[]
+  linkedAccruals    RecurringAccrual[] @relation("AccrualInvoice")
   company           Company          @relation(fields: [companyId], references: [id])
   contact           Contact?         @relation(fields: [contactId], references: [id])
   creditNoteFor     Invoice?         @relation("CreditNotes", fields: [creditNoteForId], references: [id])

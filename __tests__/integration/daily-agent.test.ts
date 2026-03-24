@@ -25,6 +25,11 @@ vi.mock("@/lib/accounting/depreciation", () => ({
   runMonthlyDepreciation: mockRunDepreciation,
 }));
 
+const mockProcessAccruals = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/accounting/accruals", () => ({
+  processRecurringAccruals: mockProcessAccruals,
+}));
+
 const mockDetectIntercompany = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/reconciliation/detectors/intercompany-detector", () => ({
   detectIntercompany: mockDetectIntercompany,
@@ -81,6 +86,13 @@ function setupDefaults() {
     assetsProcessed: 0,
     entriesCreated: 0,
     totalDepreciation: 0,
+    errors: [],
+  });
+  mockProcessAccruals.mockResolvedValue({
+    accrualsProcessed: 0,
+    entriesCreated: 0,
+    totalAccrued: 0,
+    reversed: 0,
     errors: [],
   });
   mockDetectIntercompany.mockResolvedValue({

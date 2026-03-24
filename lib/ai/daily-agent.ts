@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, prefer-const */
 /**
  * Daily AI Agent Orchestrator.
  *
@@ -9,10 +10,11 @@ import { prisma } from "@/lib/db"; // GLOBAL-PRISMA: orchestrator creates scoped
 import { getScopedDb } from "@/lib/db-scoped";
 import { runReconciliation } from "@/lib/reconciliation/engine";
 import { runMonthlyDepreciation } from "@/lib/accounting/depreciation";
+import { processRecurringAccruals } from "@/lib/accounting/accruals";
 import { detectIntercompany } from "@/lib/reconciliation/detectors/intercompany-detector";
 import { generateForecast } from "@/lib/reports/forecast-generator";
 import { callAI } from "@/lib/ai/model-router";
-import { getCallBuffer, clearCallBuffer, type AICallRecord } from "@/lib/ai/model-router";
+import { getCallBuffer, clearCallBuffer } from "@/lib/ai/model-router";
 import {
   EXPLAIN_ANOMALY,
   TREASURY_ADVICE,
@@ -147,10 +149,16 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
           now.getFullYear(),
           now.getMonth() + 1
         );
+        // Recurring accruals
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const accrualResult = await processRecurringAccruals(companyDb, lastDay);
+
         return {
           assetsProcessed: depResult.assetsProcessed,
-          entriesCreated: depResult.entriesCreated,
+          entriesCreated: depResult.entriesCreated + accrualResult.entriesCreated,
           totalDepreciation: depResult.totalDepreciation,
+          accrualsProcessed: accrualResult.accrualsProcessed,
+          totalAccrued: accrualResult.totalAccrued,
         };
       })
     );
