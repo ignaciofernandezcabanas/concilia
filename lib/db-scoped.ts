@@ -42,6 +42,7 @@ const SCOPED_MODELS = new Set([
   "inquiry",
   "investment",
   "recurringAccrual",
+  "deferredEntry",
   // NOT scoped (no companyId): InvoiceLine, BudgetLine, JournalEntryLine,
   //   BankTransactionClassification, DuplicateGroup, Payment, CompanyScope
   // NOT scoped (organizationId instead): IntercompanyLink, AgentRun

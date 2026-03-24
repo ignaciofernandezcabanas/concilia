@@ -11,6 +11,7 @@ import { getScopedDb } from "@/lib/db-scoped";
 import { runReconciliation } from "@/lib/reconciliation/engine";
 import { runMonthlyDepreciation } from "@/lib/accounting/depreciation";
 import { processRecurringAccruals } from "@/lib/accounting/accruals";
+import { checkDeferredMatches } from "@/lib/accounting/deferred-entries";
 import { detectIntercompany } from "@/lib/reconciliation/detectors/intercompany-detector";
 import { generateForecast } from "@/lib/reports/forecast-generator";
 import { callAI } from "@/lib/ai/model-router";
@@ -153,12 +154,16 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
         const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         const accrualResult = await processRecurringAccruals(companyDb, lastDay);
 
+        // Deferred entries (advances) — check for matching invoices
+        const deferredMatches = await checkDeferredMatches(companyDb, company.id);
+
         return {
           assetsProcessed: depResult.assetsProcessed,
           entriesCreated: depResult.entriesCreated + accrualResult.entriesCreated,
           totalDepreciation: depResult.totalDepreciation,
           accrualsProcessed: accrualResult.accrualsProcessed,
           totalAccrued: accrualResult.totalAccrued,
+          deferredMatches,
         };
       })
     );

@@ -30,6 +30,11 @@ vi.mock("@/lib/accounting/accruals", () => ({
   processRecurringAccruals: mockProcessAccruals,
 }));
 
+const mockCheckDeferredMatches = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/accounting/deferred-entries", () => ({
+  checkDeferredMatches: mockCheckDeferredMatches,
+}));
+
 const mockDetectIntercompany = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/reconciliation/detectors/intercompany-detector", () => ({
   detectIntercompany: mockDetectIntercompany,
@@ -95,6 +100,7 @@ function setupDefaults() {
     reversed: 0,
     errors: [],
   });
+  mockCheckDeferredMatches.mockResolvedValue(0);
   mockDetectIntercompany.mockResolvedValue({
     isIntercompany: false,
     siblingCompanyId: null,

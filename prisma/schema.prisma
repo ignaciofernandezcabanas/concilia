@@ -102,6 +102,7 @@ model Company {
   integrations             Integration[]
   investments              Investment[]
   recurringAccruals        RecurringAccrual[]
+  deferredEntries          DeferredEntry[]
   invoices                 Invoice[]
   journalEntries           JournalEntry[]
   matchingRules            MatchingRule[]
@@ -336,6 +337,49 @@ enum AccrualStatus {
   CANCELLED
 }
 
+model DeferredEntry {
+  id                  String         @id @default(cuid())
+  type                DeferredType
+  contactId           String
+  contact             Contact        @relation("DeferredContact", fields: [contactId], references: [id])
+  amount              Float
+  description         String?
+  date                DateTime
+
+  deferredAccountCode String
+
+  bankTransactionId   String?
+  linkedInvoiceId     String?
+  linkedInvoice       Invoice?       @relation("DeferredInvoice", fields: [linkedInvoiceId], references: [id])
+
+  status              DeferredStatus @default(PENDING)
+  consumedAmount      Float          @default(0)
+  remainingAmount     Float
+
+  journalEntryId      String?
+  reversalEntryId     String?
+
+  companyId           String
+  company             Company        @relation(fields: [companyId], references: [id])
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([companyId, status])
+  @@index([contactId, status])
+}
+
+enum DeferredType {
+  ADVANCE_RECEIVED
+  ADVANCE_PAID
+}
+
+enum DeferredStatus {
+  PENDING
+  PARTIALLY_APPLIED
+  FULLY_APPLIED
+  CANCELLED
+}
+
 model Investment {
   id                String                @id @default(cuid())
   name              String
@@ -412,6 +456,7 @@ model Contact {
   paymentTermsDays  Int?
   preferredLanguage String?     @default("es")
   company           Company     @relation(fields: [companyId], references: [id])
+  deferredEntries   DeferredEntry[]  @relation("DeferredContact")
   inquiries         Inquiry[]
   invoices          Invoice[]
   recurringAccruals RecurringAccrual[]
@@ -445,6 +490,7 @@ model Invoice {
   companyId         String
   contactId         String?
   inquiries         Inquiry[]
+  deferredEntries   DeferredEntry[]  @relation("DeferredInvoice")
   linkedAccruals    RecurringAccrual[] @relation("AccrualInvoice")
   company           Company          @relation(fields: [companyId], references: [id])
   contact           Contact?         @relation(fields: [contactId], references: [id])
