@@ -49,6 +49,7 @@ export interface ResolvePayload {
   invoiceId?: string;
   differenceReason?: DifferenceReason;
   differenceAccountId?: string;
+  differenceType?: string;
 
   // For classify
   accountCode?: string;
@@ -304,7 +305,108 @@ export async function resolveItem(
           tx.invoice.findFirstOrThrow({ where: { id: payload.invoiceId!, companyId } }),
         ]);
 
-        const diff = Math.abs(Math.abs(bankTx.amount) - invoice.totalAmount);
+        const txAbs = Math.abs(bankTx.amount);
+        const diff = txAbs - invoice.totalAmount; // positive = overpaid, negative = underpaid
+        const absDiff = Math.abs(diff);
+        const AUTO_JUSTIFY_THRESHOLD = 5; // €5
+
+        // If difference > threshold and no differenceType provided → error
+        if (absDiff > AUTO_JUSTIFY_THRESHOLD && !payload.differenceType) {
+          return {
+            success: false,
+            action,
+            message: `Diferencia de ${absDiff.toFixed(2)}€ detectada. Indica el tipo de diferencia (differenceType) para continuar.`,
+          };
+        }
+
+        // REQUEST_CLARIFICATION → don't close, send email
+        if (payload.differenceType === "REQUEST_CLARIFICATION") {
+          const reco = await tx.reconciliation.create({
+            data: {
+              companyId,
+              type: "MANUAL",
+              confidenceScore: 1.0,
+              matchReason: "manual_match:pending_clarification",
+              status: "PENDING_CLARIFICATION",
+              invoiceAmount: invoice.totalAmount,
+              bankAmount: txAbs,
+              difference: diff,
+              differenceType: "REQUEST_CLARIFICATION",
+              differenceAmount: diff,
+              bankTransactionId: bankTx.id,
+              invoiceId: invoice.id,
+            },
+          });
+
+          await tx.bankTransaction.update({
+            where: { id: bankTx.id },
+            data: { status: "INVESTIGATING" },
+          });
+
+          return {
+            success: true,
+            action,
+            reconciliationId: reco.id,
+            message: `Match creado con diferencia de ${absDiff.toFixed(2)}€. Pendiente de aclaración del contacto.`,
+          };
+        }
+
+        // Create difference journal entry if difference > threshold
+        let differenceJournalEntryId: string | undefined;
+        if (absDiff > AUTO_JUSTIFY_THRESHOLD && payload.differenceType) {
+          const diffType = payload.differenceType as string;
+          const pgcMap: Record<string, string> = {
+            EARLY_PAYMENT_DISCOUNT: "706",
+            BANK_COMMISSION: "626",
+            WITHHOLDING_TAX: "473",
+            PARTIAL_WRITE_OFF: "650",
+            FX_DIFFERENCE: diff > 0 ? "768" : "668",
+            OVERPAYMENT_ADVANCE: "438",
+            NEGOTIATED_ADJUSTMENT: "706",
+          };
+          const diffAccount = pgcMap[diffType] ?? "659";
+
+          const diffEntry = await tx.journalEntry.create({
+            data: {
+              companyId,
+              number: 0, // will be assigned
+              date: bankTx.valueDate,
+              description: `Diferencia match: ${invoice.number} — ${diffType}`,
+              type: "ADJUSTMENT",
+              status: "DRAFT",
+              lines: {
+                create: [
+                  {
+                    debit: absDiff,
+                    credit: 0,
+                    accountId: diffAccount,
+                    description: `Diferencia ${diffType}`,
+                  },
+                  { debit: 0, credit: absDiff, accountId: "430", description: invoice.number },
+                ],
+              },
+            },
+          });
+          differenceJournalEntryId = diffEntry.id;
+        } else if (absDiff > 0.01 && absDiff <= AUTO_JUSTIFY_THRESHOLD) {
+          // Auto-justify small differences as 669 (otros gastos financieros)
+          await tx.journalEntry.create({
+            data: {
+              companyId,
+              number: 0,
+              date: bankTx.valueDate,
+              description: `Diferencia menor: ${invoice.number}`,
+              type: "ADJUSTMENT",
+              status: "POSTED",
+              lines: {
+                create: [
+                  { debit: absDiff, credit: 0, accountId: "669", description: "Diferencia menor" },
+                  { debit: 0, credit: absDiff, accountId: "430", description: invoice.number },
+                ],
+              },
+            },
+          });
+        }
 
         const reco = await tx.reconciliation.create({
           data: {
@@ -314,10 +416,13 @@ export async function resolveItem(
             matchReason: `manual_match`,
             status: "APPROVED",
             invoiceAmount: invoice.totalAmount,
-            bankAmount: Math.abs(bankTx.amount),
-            difference: diff > 0.01 ? diff : 0,
+            bankAmount: txAbs,
+            difference: absDiff > 0.01 ? diff : 0,
             differenceReason: payload.differenceReason ?? null,
             differenceAccountId: payload.differenceAccountId ?? null,
+            differenceType: (payload.differenceType as any) ?? null,
+            differenceAmount: absDiff > 0.01 ? diff : null,
+            differenceJournalEntryId: differenceJournalEntryId ?? null,
             bankTransactionId: bankTx.id,
             invoiceId: invoice.id,
             resolvedAt: new Date(),
@@ -330,18 +435,23 @@ export async function resolveItem(
           data: { status: "RECONCILED", detectedType: "MATCH_SIMPLE" },
         });
 
-        await updateInvoicePaymentStatus(invoice.id, Math.abs(bankTx.amount), tx);
+        await updateInvoicePaymentStatus(invoice.id, txAbs, tx);
 
         await createAuditLog(tx, userId, "reconciliation.manual_match", "Reconciliation", reco.id, {
           bankTransactionId: bankTx.id,
           invoiceId: invoice.id,
+          differenceType: payload.differenceType,
+          differenceAmount: diff,
         });
 
         return {
           success: true,
           action,
           reconciliationId: reco.id,
-          message: "Manual match created.",
+          message:
+            absDiff > AUTO_JUSTIFY_THRESHOLD
+              ? `Match creado con diferencia de ${absDiff.toFixed(2)}€ (${payload.differenceType}). Asiento en borrador.`
+              : "Manual match created.",
         };
       }
 

@@ -28,6 +28,11 @@ const mockPrisma = vi.hoisted(() => ({
   },
   account: {
     findFirstOrThrow: vi.fn(),
+    findFirst: vi.fn(),
+  },
+  journalEntry: {
+    create: vi.fn().mockResolvedValue({ id: "je_1" }),
+    findFirst: vi.fn(),
   },
   bankTransactionClassification: {
     create: vi.fn(),
@@ -287,13 +292,16 @@ describe("resolveItem — Unified Resolver", () => {
           action: "manual_match",
           bankTransactionId: "tx_1",
           invoiceId: "invoice_1",
+          differenceType: "BANK_COMMISSION",
         },
         "user_1",
         "company_1"
       );
 
       expect(mockPrisma.reconciliation.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ difference: 15 }) })
+        expect.objectContaining({
+          data: expect.objectContaining({ difference: -15, differenceType: "BANK_COMMISSION" }),
+        })
       );
     });
   });
