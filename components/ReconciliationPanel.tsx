@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Check, Search, Eye } from "lucide-react";
+import Link from "next/link";
+import { X, Check, Search, Eye, FileCheck } from "lucide-react";
 import InvoicePdfModal from "@/components/InvoicePdfModal";
 import { api, qs } from "@/lib/api-client";
 import { formatAmount, formatDate } from "@/lib/format";
@@ -592,6 +593,19 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
                 </div>
               )}
             </div>
+          )}
+
+          {/* Supporting document suggestion for equity/financing operations */}
+          {(tx.detectedType === "FINANCIAL_OPERATION" ||
+            reco?.matchReason?.includes("equity") ||
+            reco?.matchReason?.includes("supporting_doc")) && (
+            <Link
+              href="/documentos-soporte"
+              className="flex items-center gap-2 w-full h-9 px-3 border border-blue-200 bg-blue-50 text-blue-700 text-[13px] font-medium rounded-md hover:bg-blue-100"
+            >
+              <FileCheck size={14} />
+              Registrar documento soporte
+            </Link>
           )}
 
           {/* Classify manually */}

@@ -29,6 +29,7 @@ import {
   Mail,
   Receipt,
   Briefcase,
+  FileCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -53,6 +54,7 @@ const sections: NavSection[] = [
       { label: "Seguimientos", icon: Mail, href: "/seguimientos" },
       { label: "Movimientos", icon: Landmark, href: "/movimientos" },
       { label: "Facturas", icon: FileText, href: "/facturas" },
+      { label: "Docs. soporte", icon: FileCheck, href: "/documentos-soporte" },
     ],
   },
   {
@@ -73,7 +75,7 @@ const sections: NavSection[] = [
       { label: "Cashflow", icon: TrendingUp, href: "/cashflow" },
       { label: "Tesorería", icon: Wallet, href: "/tesoreria" },
       { label: "Cuentas a cobrar", icon: Clock, href: "/cuentas-cobrar" },
-      { label: "Fiscal", icon: Receipt, href: "/ajustes?tab=fiscal" },
+      { label: "Fiscal", icon: Receipt, href: "/fiscal" },
     ],
   },
   {
