@@ -297,7 +297,7 @@ export default function Conciliacion() {
                           <Badge value={tx.status} />
                         </span>
                         <span className="w-20 flex justify-end gap-1">
-                          {tx.status === "PENDING" && tx.reconciliation && (
+                          {tx.status === "PENDING" && tx.reconciliation ? (
                             <>
                               <button
                                 disabled={!!resolving}
@@ -331,6 +331,14 @@ export default function Conciliacion() {
                                 <X size={14} />
                               </button>
                             </>
+                          ) : tx.status === "PENDING" && !tx.reconciliation ? (
+                            <span className="text-[9px] text-accent font-medium">Clasificar</span>
+                          ) : tx.status === "CLASSIFIED" ? (
+                            <span className="text-[9px] font-mono text-text-tertiary">
+                              {(tx as Record<string, unknown>).classification ? "PGC" : "—"}
+                            </span>
+                          ) : (
+                            <span className="text-[9px] text-text-tertiary">Ver</span>
                           )}
                         </span>
                       </div>

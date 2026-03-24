@@ -94,16 +94,45 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
           </p>
           <div className="flex flex-col gap-1.5 text-[12px]">
             <Row label="Fecha" value={formatDate(tx.valueDate)} />
-            <Row label="Concepto" value={tx.conceptParsed || tx.concept || "—"} />
+            <div className="flex justify-between">
+              <span className="text-text-secondary shrink-0">Concepto</span>
+              <span className="text-text-primary text-right max-w-[220px] break-words text-[11px]">
+                {tx.concept || "—"}
+              </span>
+            </div>
             <Row
               label="Importe"
               value={formatAmount(tx.amount)}
               valueClass={tx.amount >= 0 ? "text-green-text" : "text-red-text"}
             />
-            {tx.counterpartName && <Row label="Contrapartida" value={tx.counterpartName} />}
-            {tx.counterpartIban && <Row label="IBAN" value={tx.counterpartIban} />}
+            {tx.status && <Row label="Estado" value={tx.status} />}
           </div>
         </div>
+
+        {/* Block — Counterparty */}
+        {(tx.counterpartName || tx.counterpartIban) && (
+          <div className="rounded-lg border border-border p-3">
+            <p className="text-[10px] text-text-tertiary uppercase font-semibold mb-2">
+              Contrapartida
+            </p>
+            <div className="flex flex-col gap-1 text-[12px]">
+              {tx.counterpartName && (
+                <div className="flex justify-between">
+                  <span className="text-text-secondary">Nombre</span>
+                  <span className="text-text-primary font-medium">{tx.counterpartName}</span>
+                </div>
+              )}
+              {tx.counterpartIban && (
+                <div className="flex justify-between">
+                  <span className="text-text-secondary">IBAN</span>
+                  <span className="text-text-primary font-mono text-[11px]">
+                    {tx.counterpartIban}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Block 2 — System proposal */}
         {reco && (
@@ -200,6 +229,17 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
                 {reco.resolution}
               </div>
             )}
+          </div>
+        )}
+
+        {/* No reconciliation — guide the controller */}
+        {!reco && tx.status === "PENDING" && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <p className="text-xs font-semibold text-amber-700 mb-1">Sin propuesta de match</p>
+            <p className="text-[11px] text-amber-600">
+              El sistema no encontró una factura que corresponda a este movimiento. Puedes
+              clasificarlo manualmente, buscar una factura, o ignorarlo.
+            </p>
           </div>
         )}
 
