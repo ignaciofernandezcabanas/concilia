@@ -100,6 +100,7 @@ model Company {
   fixedAssets              FixedAsset[]
   inquiries                Inquiry[]
   integrations             Integration[]
+  investments              Investment[]
   invoices                 Invoice[]
   journalEntries           JournalEntry[]
   matchingRules            MatchingRule[]
@@ -231,7 +232,8 @@ model JournalEntry {
   companyId    String
   createdById  String?
   company      Company            @relation(fields: [companyId], references: [id])
-  lines        JournalEntryLine[]
+  lines                  JournalEntryLine[]
+  investmentTransactions InvestmentTransaction[]
 
   @@unique([companyId, number])
   @@index([companyId, date])
@@ -281,6 +283,53 @@ model FixedAsset {
   depreciationAccount     Account            @relation("DepreciationAccount", fields: [depreciationAccountId], references: [id])
 
   @@index([companyId, status])
+}
+
+model Investment {
+  id                String                @id @default(cuid())
+  name              String
+  type              InvestmentType
+  pgcAccount        String
+  isinCif           String?
+  investeeCompanyId String?
+  acquisitionDate   DateTime
+  acquisitionCost   Float
+  sharesUnits       Float?
+  ownershipPct      Float?
+  valuationMethod   ValuationMethod       @default(COST)
+  currentValue      Float?
+  lastValuationDate DateTime?
+  supportingDocUrls String[]
+  status            InvestmentStatus      @default(ACTIVE)
+  notes             String?
+  companyId         String
+  company           Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transactions      InvestmentTransaction[]
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+}
+
+model InvestmentTransaction {
+  id                String           @id @default(cuid())
+  type              InvTxType
+  date              DateTime
+  amount            Float
+  pgcDebitAccount   String
+  pgcCreditAccount  String
+  notes             String?
+  investmentId      String
+  investment        Investment       @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+  bankTransactionId String?          @unique
+  bankTransaction   BankTransaction? @relation(fields: [bankTransactionId], references: [id])
+  journalEntryId    String?
+  journalEntry      JournalEntry?    @relation(fields: [journalEntryId], references: [id])
+  createdAt         DateTime         @default(now())
+
+  @@index([investmentId])
+  @@index([bankTransactionId])
 }
 
 model OwnBankAccount {
@@ -411,8 +460,13 @@ model BankTransaction {
   classification   BankTransactionClassification? @relation(fields: [classificationId], references: [id])
   company          Company                        @relation(fields: [companyId], references: [id])
   duplicateGroup   DuplicateGroup?                @relation(fields: [duplicateGroupId], references: [id])
-  inquiries        Inquiry[]
-  reconciliations  Reconciliation[]
+  inquiries              Inquiry[]
+  reconciliations        Reconciliation[]
+  investmentTransactions InvestmentTransaction[]
+
+  // Investment/CAPEX classification
+  economicCategory    EconomicCategory?
+  classificationNotes Json?
 
   @@unique([externalId, companyId])
   @@index([companyId, status])
@@ -860,6 +914,58 @@ enum AssetStatus {
   DISPOSED
 }
 
+// ── Investment enums ──
+
+enum InvestmentType {
+  EQUITY_SUBSIDIARY
+  EQUITY_ASSOCIATE
+  EQUITY_OTHER
+  DEBT_INSTRUMENT
+  LOAN_GRANTED
+  FUND
+}
+
+enum ValuationMethod {
+  COST
+  FAIR_VALUE
+  EQUITY_METHOD
+}
+
+enum InvestmentStatus {
+  ACTIVE
+  PARTIALLY_DIVESTED
+  FULLY_DIVESTED
+}
+
+enum InvTxType {
+  ACQUISITION
+  PARTIAL_DIVESTMENT
+  FULL_DIVESTMENT
+  DIVIDEND_RECEIVED
+  INTEREST_RECEIVED
+  CAPITAL_CALL
+  RETURN_OF_CAPITAL
+  VALUATION_ADJUSTMENT
+  IMPAIRMENT
+}
+
+enum EconomicCategory {
+  OPERATING_INCOME
+  OPERATING_EXPENSE
+  CAPEX_ACQUISITION
+  CAPEX_DISPOSAL
+  INVESTMENT_ACQUISITION
+  INVESTMENT_DIVESTMENT
+  INVESTMENT_RETURN
+  LOAN_GRANTED
+  LOAN_REPAYMENT_RECEIVED
+  FINANCING_IN
+  FINANCING_OUT
+  TAX_PAYMENT
+  INTERCOMPANY
+  UNCLASSIFIED
+}
+
 enum ContactType {
   CUSTOMER
   SUPPLIER
@@ -1010,6 +1116,9 @@ enum NotificationType {
   INQUIRY_ESCALATED
   INQUIRY_RESOLVED_AUTO
   INQUIRY_DOCUMENT_MISMATCH
+  DOCUMENT_REQUEST
+  INVESTMENT_DOCUMENT_RECEIVED
+  CAPEX_UNREGISTERED
 }
 
 enum AgentRunStatus {

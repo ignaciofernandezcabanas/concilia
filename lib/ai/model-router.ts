@@ -33,6 +33,8 @@ export type AITask =
   | "ic_elimination_explain"
   | "explain_group_anomaly"
   | "variance_consolidated"
+  | "classify_investment_capex"
+  | "explain_investment_bandeja"
   // Opus — síntesis compleja
   | "daily_briefing"
   | "weekly_briefing"
@@ -75,6 +77,16 @@ const TASK_CONFIG: Record<AITask, TaskConfig> = {
   ic_elimination_explain: { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.2 },
   explain_group_anomaly: { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.2 },
   variance_consolidated: { model: "claude-sonnet-4-20250514", maxTokens: 600, temperature: 0.2 },
+  classify_investment_capex: {
+    model: "claude-sonnet-4-20250514",
+    maxTokens: 600,
+    temperature: 0.1,
+  },
+  explain_investment_bandeja: {
+    model: "claude-haiku-4-5-20251001",
+    maxTokens: 200,
+    temperature: 0.2,
+  },
   // Opus
   daily_briefing: { model: "claude-opus-4-6", maxTokens: 1500, temperature: 0.3 },
   weekly_briefing: { model: "claude-opus-4-6", maxTokens: 2000, temperature: 0.3 },

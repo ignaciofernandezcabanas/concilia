@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * Scoped Prisma client that automatically injects companyId into queries.
  *
@@ -39,6 +40,7 @@ const SCOPED_MODELS = new Set([
   "learnedPattern",
   "thresholdCalibration",
   "inquiry",
+  "investment",
   // NOT scoped (no companyId): InvoiceLine, BudgetLine, JournalEntryLine,
   //   BankTransactionClassification, DuplicateGroup, Payment, CompanyScope
   // NOT scoped (organizationId instead): IntercompanyLink, AgentRun
@@ -61,7 +63,7 @@ export function getScopedDb(companyId: string): ScopedPrisma {
           }
           return query(args);
         },
-        async findFirst({ model, args, query }) {
+        async findFirst({ model: _model, args, query }) {
           if (SCOPED_MODELS.has(lcFirst(model))) {
             args.where = { ...args.where, companyId };
           }
@@ -94,10 +96,10 @@ export function getScopedDb(companyId: string): ScopedPrisma {
           }
           return query(args);
         },
-        async update({ model, args, query }) {
+        async update({ model: _model, args, query }) {
           return query(args);
         },
-        async updateMany({ model, args, query }) {
+        async updateMany({ model: _model, args, query }) {
           if (SCOPED_MODELS.has(lcFirst(model))) {
             args.where = { ...args.where, companyId };
           }
@@ -106,7 +108,7 @@ export function getScopedDb(companyId: string): ScopedPrisma {
         async delete({ model, args, query }) {
           return query(args);
         },
-        async deleteMany({ model, args, query }) {
+        async deleteMany({ model: _model, args, query }) {
           if (SCOPED_MODELS.has(lcFirst(model))) {
             args.where = { ...args.where, companyId };
           }
@@ -143,7 +145,7 @@ export function getGroupDb(companyIds: string[]): ScopedPrisma {
           }
           return query(args);
         },
-        async findFirst({ model, args, query }) {
+        async findFirst({ model: _model, args, query }) {
           if (SCOPED_MODELS.has(lcFirst(model))) {
             args.where = { ...args.where, companyId: { in: companyIds } };
           }

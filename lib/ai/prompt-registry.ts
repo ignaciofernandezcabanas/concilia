@@ -722,3 +722,50 @@ export const EVALUATE_INQUIRY_RESPONSE = {
     summary: z.string(),
   }),
 };
+
+// ════════════════════════════════════════════════════════════
+// CLASSIFY INVESTMENT/CAPEX (Sonnet)
+// ════════════════════════════════════════════════════════════
+
+export const CLASSIFY_INVESTMENT_CAPEX = {
+  task: "classify_investment_capex" as const,
+  version: "1.0",
+  system:
+    `Eres un controller financiero experto en PGC español 2007.\n` +
+    `Determina si el movimiento es: Operativo, CAPEX (grupo 2xx), Inversión financiera (24x/25x/54x), o Financiación (17x/52x).\n` +
+    `Razona en 3 pasos. Responde SOLO en JSON.`,
+  buildUser: (data: {
+    amount: number;
+    concept: string;
+    counterpartyName: string | null;
+    counterpartyHistory: string;
+    existingInvestments: string;
+  }) =>
+    `<bank_transaction>\nImporte: ${data.amount} EUR\nConcepto: ${data.concept}\nContrapartida: ${data.counterpartyName ?? "Desconocido"}\n</bank_transaction>\n` +
+    `<context>\nHistorial: ${data.counterpartyHistory}\nInversiones: ${data.existingInvestments || "ninguna"}\n</context>`,
+  schema: z.object({
+    category: z.string(),
+    suggestedPgcAccount: z.string(),
+    reasoning: z.string(),
+    confidence: z.number().min(0).max(1),
+    requiredDocumentTypes: z.array(z.string()),
+  }),
+};
+
+// ════════════════════════════════════════════════════════════
+// EXPLAIN INVESTMENT BANDEJA (Haiku)
+// ════════════════════════════════════════════════════════════
+
+export const EXPLAIN_INVESTMENT_BANDEJA = {
+  task: "explain_investment_bandeja" as const,
+  version: "1.0",
+  system: `Eres el controller. Explica en 2 frases: 1) qué tipo de operación parece 2) qué documento necesitas. Terminología PGC española.`,
+  buildUser: (data: {
+    amount: number;
+    concept: string;
+    suggestedCategory: string;
+    suggestedPgcAccount: string;
+    requiredDocuments: string[];
+  }) =>
+    `<movement>\nImporte: ${data.amount} EUR\nConcepto: ${data.concept}\nTipo: ${data.suggestedCategory}\nCuenta PGC: ${data.suggestedPgcAccount}\nDocumentos: ${data.requiredDocuments.join(", ")}\n</movement>`,
+};
