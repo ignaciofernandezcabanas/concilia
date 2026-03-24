@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { useState, useMemo } from "react";
@@ -103,7 +104,26 @@ export default function PyGPage() {
               onPrev={() => setOffset((o) => o - 1)}
               onNext={() => setOffset((o) => o + 1)}
             />
-            <button className="flex items-center gap-1.5 px-3 h-8 border border-subtle rounded-md text-[13px] text-text-primary hover:bg-hover">
+            <button
+              onClick={() => {
+                if (!totalData?.lines) return;
+                const csv = [
+                  "Código;Concepto;Importe",
+                  ...totalData.lines.map(
+                    (l: { code: string; label?: string; amount: number }) =>
+                      `${l.code};${l.label ?? ""};${l.amount.toFixed(2)}`
+                  ),
+                ].join("\n");
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `pyg_${period.from}_${period.to}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex items-center gap-1.5 px-3 h-8 border border-subtle rounded-md text-[13px] text-text-primary hover:bg-hover"
+            >
               <Download size={14} />
               Exportar
             </button>

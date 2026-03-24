@@ -37,6 +37,18 @@ export default function Dashboard() {
     `/api/reports/dashboard${qs({ from, to })}`
   );
 
+  const { data: agingData } = useFetch<{ dso?: number }>(`/api/reports/aging?type=receivable`);
+  const dsoValue = agingData?.dso;
+  const dsoDisplay = dsoValue != null ? `${Math.round(dsoValue)}` : "—";
+  const dsoColor =
+    dsoValue == null
+      ? "text-text-tertiary"
+      : dsoValue < 45
+        ? "text-green-text"
+        : dsoValue < 60
+          ? "text-amber"
+          : "text-red-text";
+
   const { data: briefingData } = useFetch<{ data: BriefingNotification[] }>(
     `/api/notifications${qs({ type: "DAILY_BRIEFING", limit: 1 })}`
   );
@@ -132,10 +144,10 @@ export default function Dashboard() {
               />
               <KPICard
                 label="DSO"
-                value="—"
-                icon={<Clock size={14} className="text-text-tertiary" />}
+                value={dsoDisplay}
+                icon={<Clock size={14} className={dsoColor} />}
                 subtitle="días medios cobro"
-                valueClass="text-text-tertiary"
+                valueClass={dsoColor}
               />
               <KPICard
                 label="Bandeja"

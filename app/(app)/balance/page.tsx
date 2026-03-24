@@ -58,7 +58,23 @@ export default function BalancePage() {
               onPrev={() => setOffset((o) => o - 1)}
               onNext={() => setOffset((o) => o + 1)}
             />
-            <button className="flex items-center gap-1.5 px-3 h-8 border border-subtle rounded-md text-[13px] text-text-primary hover:bg-hover">
+            <button
+              onClick={() => {
+                if (!data?.lines) return;
+                const csv = [
+                  "Código;Importe",
+                  ...data.lines.map((l) => `${l.code};${l.amount.toFixed(2)}`),
+                ].join("\n");
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `balance_${period.to}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex items-center gap-1.5 px-3 h-8 border border-subtle rounded-md text-[13px] text-text-primary hover:bg-hover"
+            >
               <Download size={14} />
               Exportar
             </button>
@@ -68,12 +84,42 @@ export default function BalancePage() {
         {loading ? (
           <LoadingSpinner />
         ) : (
-          <PgcTable
-            structure={BALANCE_STRUCTURE}
-            data={dataMap}
-            columns={columns}
-            drilldown={{ report: "balance", asOf: period.to }}
-          />
+          <>
+            <PgcTable
+              structure={BALANCE_STRUCTURE}
+              data={dataMap}
+              columns={columns}
+              drilldown={{ report: "balance", asOf: period.to }}
+            />
+
+            {/* Balance validation */}
+            {data?.totals && (
+              <div
+                className={`flex items-center justify-between px-5 py-2.5 rounded-lg text-sm ${
+                  Math.abs((data.totals.totalActivo ?? 0) - (data.totals.totalPasivo ?? 0)) < 0.01
+                    ? "bg-green-50 text-green-700"
+                    : "bg-red-50 text-red-700"
+                }`}
+              >
+                <span className="font-medium">
+                  {Math.abs((data.totals.totalActivo ?? 0) - (data.totals.totalPasivo ?? 0)) < 0.01
+                    ? "Balance cuadrado ✓"
+                    : `Balance descuadrado: diferencia de ${((data.totals.totalActivo ?? 0) - (data.totals.totalPasivo ?? 0)).toLocaleString("es-ES", { minimumFractionDigits: 2 })} €`}
+                </span>
+                <span className="font-mono text-xs">
+                  Activo:{" "}
+                  {(data.totals.totalActivo ?? 0).toLocaleString("es-ES", {
+                    minimumFractionDigits: 2,
+                  })}{" "}
+                  € | Pasivo + PN:{" "}
+                  {(data.totals.totalPasivo ?? 0).toLocaleString("es-ES", {
+                    minimumFractionDigits: 2,
+                  })}{" "}
+                  €
+                </span>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
