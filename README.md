@@ -8,31 +8,65 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 
 ### Conciliación bancaria
 
-- **Motor de 4 fases**: detectors → matchers → classifiers → priority
-- **18 escenarios**: cobros, pagos, parciales, agrupados, diferencias, devoluciones, duplicados, intercompañía, notas de crédito
+- **Motor de 5 fases**: investment/CAPEX pre-detection → detectors → matchers → classifiers → priority
+- **22 escenarios**: cobros, pagos, parciales, agrupados, diferencias (con 9 tipos), devoluciones, duplicados, intercompañía, notas de crédito, CAPEX, inversiones financieras, nóminas
 - **Classification cascade**: reglas determinísticas → Haiku (rápido) → Sonnet (CoT) → bandeja
 - **Auto-aprobación inteligente**: doble umbral (materialidad + confianza por categoría)
+- **Match con diferencia**: descuento, comisión, retención IRPF, FX, anticipo, aclaración por email
+- **Multi-divisa**: 31 divisas con tipos ECB, matchers FX-aware (2% exact, 7% fuzzy)
 
 ### Agente AI diario
 
-- **11 steps por organización**: sync, engine, amortizaciones, intercompañía, provisiones, recordatorios, tesorería, anomalías, fiscal, cierre, briefing
+- **11 steps por organización**: sync, engine, auto_entries (amortización + accruals + anticipos), intercompañía, provisiones, inquiry follow-up, recordatorios, tesorería, anomalías, fiscal, briefing
 - **Confidence engine**: 16 categorías con scoring basado en historial, system checks, y materialidad
 - **Feedback loop cerrado**: decisión controller → calibración → ajuste persistido → afecta futuras decisiones
 - **Context retrieval**: inyecta decisiones previas relevantes (IBAN/concepto/patrones) en los prompts del LLM
 - **Rate limits**: max 1 run/org/día, 20 LLM calls/company, circuit breaker (3 fallos → pausa 60s)
 
+### Agente de seguimiento por email
+
+- **Solicitud de documentos**: el motor detecta items sin factura → genera borrador → controller aprueba → envía
+- **Response evaluator**: 3 fases (adjuntos Haiku + texto Sonnet + decisión reglas) con 13 acciones posibles
+- **Follow-ups automáticos**: escalado 3→5→7 días, máximo 3 intentos antes de escalar al controller
+- **Redirección**: si el contacto dice "pregunta a María", crea nueva inquiry para el nuevo contacto
+- **El AI NUNCA envía emails automáticamente** — siempre requiere aprobación del controller
+
 ### Reportes financieros (PGC)
 
 - **Balance de Situación** — activo corriente/no corriente, patrimonio neto, pasivo
-- **Pérdidas y Ganancias** — 17 líneas PGC + EBITDA + drill-down por cuenta
-- **Estado de Flujos de Efectivo** — método directo (tesorería) + indirecto (EFE formal)
+- **Pérdidas y Ganancias** — 17 líneas PGC + EBITDA + drill-down + comparativas (presupuesto, año anterior, mes anterior, % sobre ventas)
+- **Estado de Flujos de Efectivo** — método directo (tesorería) + indirecto (EFE formal) + bloque B inversiones
+- **Working Capital Bridge** — waterfall: resultado neto → EBITDA → variación WC → CAPEX → cash neto + reconciliación con banco
 - **Previsión de tesorería** — forecast semanal con probabilidades por fuente
-- **Libro Mayor** — movimientos por cuenta desde 3 fuentes (asientos, txs clasificadas, facturas)
+- **Libro Mayor** — movimientos por cuenta desde 3 fuentes
 - **Balance de Sumas y Saldos** — trial balance desde asientos contables
-- **Informe de Antigüedad** — aging AR/AP con buckets y DSO/DPO
+- **Informe de Antigüedad** — aging AR/AP con buckets, DSO/DPO, y tracker de impagados con criterio fiscal
 - **Informe de Conciliación** — saldo contable vs bancario con diferencias
 - **Reporte consolidado** — PyG y Balance agregado multi-sociedad
-- **Fiscal**: IVA (Modelo 303) + Retenciones (Modelo 111/115)
+- **Fiscal**: IVA (Modelo 303) + Retenciones (Modelo 111/115) + reconciliación fiscal vs banco
+
+### Contabilidad
+
+- **Asientos contables** (journal entries): DRAFT → POSTED → REVERSED con validación de balance
+- **Activos fijos**: registro, depreciación lineal automática, NBV tracking
+- **Periodificaciones recurrentes**: devengos mensuales/trimestrales/anuales con auto-reversión al vincular factura
+- **Anticipos**: registro de anticipos de clientes (438) y a proveedores (407), vinculación automática con facturas
+- **Insolvencias**: tracker con criterio fiscal español (6 meses + reclamación para deducibilidad, burofax/judicial/notarial)
+- **Presupuestos**: por cuenta PGC y mes, con lifecycle DRAFT → APPROVED → CLOSED
+- **Periodos contables**: OPEN → SOFT_CLOSED → CLOSED → LOCKED. Soft close permite reporting provisional
+
+### Reconciliaciones fiscales
+
+- **IVA**: reconcilia IVA teórico (desde facturas) vs pagos reales a AEAT en banco. Detecta: timing, descuadre, pago faltante.
+- **Retenciones**: reconcilia retenciones calculadas (modelo 111/115) vs pagos a AEAT.
+- **Insolvencias**: distingue provisión contable vs provisión fiscalmente deducible (art. 13 LIS).
+
+### Multi-divisa
+
+- **31 divisas** con tipos de cambio diarios del BCE (ECB)
+- **Matchers FX-aware**: exact match con 2% tolerancia, fuzzy con 7% para cross-currency
+- **Diferencias de cambio**: 668 (negativas) / 768 (positivas) con asiento automático
+- **Dropdown UI**: EUR + 30 divisas más comunes para pymes españolas
 
 ### Multi-empresa
 
@@ -40,14 +74,8 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 - **Context switcher** en sidebar: cambiar entre sociedades al instante
 - **Vista consolidada** para OWNER/ADMIN (read-only multi-company)
 - **Detección intercompañía**: identifica transferencias entre sociedades del grupo
+- **Gestión de sociedades**: métodos de consolidación (FULL, EQUITY, PROPORTIONAL), % participación
 - **Onboarding**: empresa individual vs grupo de empresas
-
-### Contabilidad
-
-- **Asientos contables** (journal entries): DRAFT → POSTED → REVERSED con validación de balance
-- **Activos fijos**: registro, depreciación lineal automática, NBV tracking
-- **Presupuestos**: por cuenta PGC y mes, con lifecycle DRAFT → APPROVED → CLOSED
-- **Periodos contables**: OPEN → CLOSED → LOCKED con guard en operaciones
 
 ### Data Entry
 
@@ -67,31 +95,42 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 - **Calibración persistida**: ConfidenceAdjustment en DB, no in-memory
 - **Model router**: Haiku/Sonnet/Opus con routing por tarea, prompt registry centralizado
 
+### Nóminas
+
+- **Detector automático**: identifica SALARY, SS_COMPANY, SS_EMPLOYEE, IRPF por concepto, IBAN, y patrón recurrente
+- **Verificación mensual**: comprueba que todos los componentes de nómina (salario + SS + IRPF) están presentes
+- **Cuentas PGC**: 640 (sueldos), 642 (SS empresa), 476 (SS empleado), 4751 (IRPF)
+
 ### Integraciones
 
 - **Holded**: sync de contactos, facturas, cuentas, pagos
 - **Google Drive / OneDrive**: almacenamiento de facturas con archivado trimestral
-- **Gmail / Outlook**: detección de facturas (read-only)
+- **Gmail / Outlook**: detección de facturas + envío de emails de seguimiento
 - **OAuth**: Google + Microsoft login
+- **ECB**: tipos de cambio diarios para 31 divisas
 
 ### Seguridad
 
-- **Scoped Prisma client**: auto-inyecta companyId en todas las queries (22 modelos)
+- **Scoped Prisma client**: auto-inyecta companyId en todas las queries (28 modelos)
 - **HTTP rate limiting**: 4 tiers (read 100/min, write 30/min, auth 5/min, engine 3/min)
 - **Prompt injection defense**: datos de usuario siempre en XML tags
 - **Output validation**: Zod schemas + system checks post-LLM
 - **Error sanitization**: producción nunca expone detalles internos
 - **AES-256-GCM encryption**: para credenciales almacenadas
 
-### Frontend (19 páginas)
+### Frontend (23 páginas)
 
 - **Dashboard**: briefing diario + 6 KPIs + 3 acciones rápidas
-- **Bandeja**: conciliación con batch actions y barra de confianza
+- **Conciliación**: bandeja con batch actions, barra de confianza, detalle de match
+- **Seguimientos**: gestión de inquiries (borradores, esperando respuesta, follow-ups, escalados)
 - **Asientos**: journal entries con expansión de líneas, modal de creación, aprobación AI
 - **Plan de cuentas**: árbol PGC, libro mayor con saldo running, balance de sumas y saldos
 - **Activos fijos**: registro con barra de amortización visual, alta con cuentas PGC
+- **Periodificaciones**: devengos recurrentes con progreso, vinculación con facturas
 - **Tesorería**: forecast 13 semanas con gráfico SVG inline, detalle semanal expandible
-- **Cuentas a cobrar/pagar**: aging con 5 buckets, DSO/DPO, riesgo por contacto
+- **Cuentas a cobrar/pagar**: aging con 5 buckets, DSO/DPO, riesgo, tracker de impagados
+- **Inversiones**: portfolio de participaciones, préstamos, dividendos
+- **Fiscal**: IVA, retenciones, reconciliación fiscal vs banco
 - **Intercompañía**: operaciones entre sociedades, confirmación/eliminación
 - **Consolidado**: PyG/Balance multi-sociedad con totales
 
@@ -102,12 +141,12 @@ git clone https://github.com/ignaciofernandezcabanas/concilia.git
 cd concilia
 cp .env.example .env   # Rellena con tus credenciales
 npm install
-npx prisma db push     # Crear tablas
+npx prisma migrate dev # Crear tablas
 npx prisma db seed     # Cargar PGC + datos demo
 npm run dev
 ```
 
-Requiere: Node.js 18+, [Supabase](https://supabase.com) (PostgreSQL + Auth), [Anthropic API key](https://console.anthropic.com).
+Requiere: Node.js 22+, [Supabase](https://supabase.com) (PostgreSQL + Auth), [Anthropic API key](https://console.anthropic.com).
 
 ### Variables de entorno
 
@@ -131,21 +170,24 @@ CRON_SECRET=...              # Para cron endpoints en dev
 | Base de datos  | Supabase (PostgreSQL managed)                                       |
 | Auth           | Supabase Auth (email + OAuth)                                       |
 | AI             | Anthropic API — Haiku (NLP), Sonnet (razonamiento), Opus (síntesis) |
+| FX Rates       | ECB Statistical Data Warehouse API (31 divisas)                     |
 | Fuzzy matching | Fuse.js                                                             |
 | Validación     | Zod                                                                 |
 | Styling        | Tailwind CSS                                                        |
 | Cron           | Upstash QStash / CRON_SECRET                                        |
 | Storage        | Google Drive / OneDrive (abstracción unificada)                     |
+| CI/CD          | GitHub Actions (Node 22)                                            |
+| Pre-commit     | Husky + lint-staged (Prettier + ESLint)                             |
 
 ## Arquitectura
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │                    Frontend (Next.js)                 │
-│  Dashboard · Conciliación · Facturas · Movimientos   │
-│  Reportes · Ajustes · Automatización                 │
+│  Dashboard · Conciliación · Seguimientos · Facturas  │
+│  Reportes · Fiscal · Inversiones · Ajustes           │
 └──────────────────────┬──────────────────────────────┘
-                       │ API Routes (59 endpoints)
+                       │ API Routes (84 endpoints)
 ┌──────────────────────┴──────────────────────────────┐
 │                  withAuth Middleware                   │
 │  JWT verification · Rate limiting · Scoped DB         │
@@ -155,14 +197,14 @@ CRON_SECRET=...              # Para cron endpoints en dev
     │                  │                  │
 ┌───┴───┐      ┌───────┴───────┐   ┌─────┴─────┐
 │Engine │      │  AI Agent     │   │ Reports   │
-│4 fases│      │  11 steps     │   │ PGC + EFE │
-│       │      │  daily cron   │   │ forecast  │
+│5 fases│      │  11 steps     │   │ PGC + EFE │
+│22 esc.│      │  daily cron   │   │ WC Bridge │
 └───┬───┘      └───────┬───────┘   └───────────┘
     │                  │
 ┌───┴──────────────────┴───┐
 │     Model Router          │
 │  Haiku · Sonnet · Opus    │
-│  Prompt Registry          │
+│  Prompt Registry (20+)    │
 │  Rate Limiter + Breaker   │
 └───────────┬───────────────┘
             │
@@ -174,65 +216,40 @@ CRON_SECRET=...              # Para cron endpoints en dev
 └───────────┬───────────────┘
             │
 ┌───────────┴───────────────┐
-│  Scoped Prisma (22 models) │
+│  Scoped Prisma (28 models) │
 │  Multi-tenant isolation    │
 │  Auto companyId injection  │
+│  FX-aware matchers         │
 └───────────────────────────┘
 ```
-
-## Endpoints principales
-
-| Method | Path                              | Descripción                          |
-| ------ | --------------------------------- | ------------------------------------ |
-| GET    | /api/invoices                     | Listar facturas (filtrado, paginado) |
-| POST   | /api/invoices/import              | Importar PDFs (extracción con IA)    |
-| GET    | /api/transactions                 | Listar movimientos bancarios         |
-| POST   | /api/transactions/import          | Importar CSV                         |
-| POST   | /api/reconciliation/run           | Ejecutar motor de conciliación       |
-| POST   | /api/reconciliation/[id]/resolve  | Resolver item (12 acciones)          |
-| POST   | /api/reconciliation/batch-resolve | Resolver múltiples items             |
-| GET    | /api/reports/pyg                  | Pérdidas y Ganancias                 |
-| GET    | /api/reports/balance              | Balance de Situación                 |
-| GET    | /api/reports/cashflow             | Estado de Flujos de Efectivo         |
-| GET    | /api/reports/forecast             | Previsión de tesorería               |
-| GET    | /api/reports/aging                | Informe de antigüedad AR/AP          |
-| GET    | /api/reports/ledger               | Libro Mayor por cuenta               |
-| GET    | /api/reports/trial-balance        | Balance de Sumas y Saldos            |
-| GET    | /api/reports/consolidated         | Reportes consolidados multi-sociedad |
-| GET    | /api/fiscal                       | IVA (303) y Retenciones (111/115)    |
-| POST   | /api/journal-entries              | Crear asiento contable               |
-| GET    | /api/fixed-assets                 | Activos fijos con amortización       |
-| GET    | /api/budgets                      | Presupuestos por cuenta y mes        |
-| GET    | /api/settings/automation          | Configuración del agente AI          |
-| GET    | /api/settings/automation/learning | Métricas de aprendizaje              |
-| GET    | /api/agent-runs                   | Historial de ejecuciones del agente  |
-| POST   | /api/cron/daily-agent             | Agente AI diario (cron)              |
 
 ## Testing
 
 ```bash
-npx vitest run              # 308 tests, 25 archivos
+npx vitest run              # 508 tests, 61 archivos
 npx tsc --noEmit            # Type-check completo
 ```
 
-Cobertura: motor de conciliación, detectors, matchers, classifiers, resolver (12 acciones), confidence engine (16 categorías), cascade (4 niveles), agente diario (11 steps), context retriever, calibrador, rate limiting, data isolation, seguridad.
+Cobertura: motor de conciliación (5 fases, 22 escenarios), detectors (7 tipos incl. investment + payroll), matchers (FX-aware), classifiers, resolver (16 acciones), confidence engine (16 categorías), cascade, agente diario (11 steps), context retriever, calibrador, rate limiting, data isolation, seguridad, accruals, deferred entries, bad debt, VAT/withholding reconciliation, WC bridge, PyG comparativas, FX calculations.
 
 ## Documentación técnica
 
-Ver [CLAUDE.md](CLAUDE.md) para detalles del motor de conciliación, 18 escenarios, sistema de reglas, y decisiones de diseño.
+Ver [CLAUDE.md](CLAUDE.md) para detalles del motor de conciliación, 22 escenarios, sistema de reglas, y decisiones de diseño.
 
 ## Estadísticas
 
-- **~32.300 líneas** de TypeScript
-- **34 modelos** Prisma
-- **59 endpoints** API
-- **19 páginas** frontend
-- **16 componentes** React
-- **352 tests** en 30 archivos
+- **~41.700 líneas** de TypeScript
+- **41 modelos** Prisma, **53 enums**
+- **84 endpoints** API
+- **23 páginas** frontend
+- **17 componentes** React
+- **508 tests** en 61 archivos
 - **16 categorías** de confianza
-- **12 acciones** de resolución
+- **16 acciones** de resolución
+- **22 escenarios** de conciliación
 - **11 steps** del agente diario
-- **3 modelos AI** (Haiku/Sonnet/Opus) con 16 tareas
+- **31 divisas** soportadas (ECB)
+- **3 modelos AI** (Haiku/Sonnet/Opus) con 20+ tareas
 
 ## Licencia
 
