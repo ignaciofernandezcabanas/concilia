@@ -83,6 +83,7 @@ export default function SeguimientosPage() {
   const [filter, setFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
+  const [search, setSearch] = useState("");
 
   const fetchInquiries = useCallback(async () => {
     try {
@@ -126,13 +127,45 @@ export default function SeguimientosPage() {
     setActing(false);
   };
 
+  // Search filter
+  const filtered = search
+    ? inquiries.filter(
+        (i) =>
+          (i.contact?.name ?? "").toLowerCase().includes(search.toLowerCase()) ||
+          (i.subject ?? "").toLowerCase().includes(search.toLowerCase())
+      )
+    : inquiries;
+
   // Group by actionable status
-  const drafts = inquiries.filter((i) => ["DRAFT", "FOLLOW_UP_DRAFT"].includes(i.status));
-  const waiting = inquiries.filter((i) => i.status === "SENT");
-  const needsAction = inquiries.filter((i) =>
+  const drafts = filtered.filter((i) => ["DRAFT", "FOLLOW_UP_DRAFT"].includes(i.status));
+  const waiting = filtered.filter((i) => i.status === "SENT");
+  const needsAction = filtered.filter((i) =>
     ["FOLLOW_UP_NEEDED", "RESPONSE_RECEIVED", "ESCALATED"].includes(i.status)
   );
-  const resolved = inquiries.filter((i) => ["RESOLVED", "CANCELLED"].includes(i.status));
+  const resolved = filtered.filter((i) => ["RESOLVED", "CANCELLED"].includes(i.status));
+
+  // Helper: is inquiry overdue?
+  const isOverdue = (inq: Inquiry) => {
+    if (inq.status !== "SENT" || !inq.sentAt) return false;
+    const daysSince = Math.floor((Date.now() - new Date(inq.sentAt).getTime()) / 86400000);
+    return daysSince >= (inq.followUpNumber > 0 ? 5 : 3);
+  };
+
+  // Resolve escalated inquiry
+  const resolveInquiry = async (id: string, status: string) => {
+    setActing(true);
+    try {
+      await fetch(`/api/inquiries/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      fetchInquiries();
+    } catch {
+      /* ignore */
+    }
+    setActing(false);
+  };
 
   const selected = selectedId ? inquiries.find((i) => i.id === selectedId) : null;
 
@@ -192,11 +225,15 @@ export default function SeguimientosPage() {
                   {cfg.label}
                 </span>
                 {inquiry.sentAt && (
-                  <span className="text-[10px] text-text-tertiary">
-                    Enviado {daysAgo(inquiry.sentAt)}
+                  <span
+                    className={`text-[10px] ${isOverdue(inquiry) ? "text-red-600 font-medium" : "text-text-tertiary"}`}
+                  >
+                    {isOverdue(inquiry)
+                      ? `Sin respuesta ${daysAgo(inquiry.sentAt)}`
+                      : `Enviado ${daysAgo(inquiry.sentAt)}`}
                   </span>
                 )}
-                {inquiry.status === "SENT" && inquiry.nextFollowUpDate && (
+                {inquiry.status === "SENT" && inquiry.nextFollowUpDate && !isOverdue(inquiry) && (
                   <span className="text-[10px] text-text-tertiary">
                     Follow-up {daysUntil(inquiry.nextFollowUpDate)}
                   </span>
@@ -253,6 +290,16 @@ export default function SeguimientosPage() {
       </div>
 
       {/* Filters */}
+      {/* Search */}
+      <div className="mb-4">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por contacto o asunto..."
+          className="w-full max-w-sm border border-border rounded-lg px-3 py-2 text-sm"
+        />
+      </div>
+
       <div className="flex gap-2 mb-6 flex-wrap">
         {[
           { key: "all", label: "Todos", count: inquiries.length },
@@ -344,16 +391,48 @@ export default function SeguimientosPage() {
 
             <div className="px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
               {/* Context */}
-              {selected.bankTransaction && (
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-text-tertiary mb-1">Movimiento bancario</p>
-                  <p className="text-sm font-mono">
-                    {Math.abs(selected.bankTransaction.amount).toFixed(2)} EUR —{" "}
-                    {selected.bankTransaction.concept}
-                  </p>
-                  <p className="text-xs text-text-secondary">
-                    {new Date(selected.bankTransaction.valueDate).toLocaleDateString("es-ES")}
-                  </p>
+              {/* Reconciliation context */}
+              {(selected.bankTransaction || selected.invoice) && (
+                <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                  {selected.bankTransaction && (
+                    <div>
+                      <p className="text-[10px] text-text-tertiary uppercase">
+                        Movimiento bancario
+                      </p>
+                      <p className="text-sm font-mono">
+                        {Math.abs(selected.bankTransaction.amount).toFixed(2)} EUR —{" "}
+                        {selected.bankTransaction.concept}
+                      </p>
+                      <p className="text-xs text-text-secondary">
+                        {new Date(selected.bankTransaction.valueDate).toLocaleDateString("es-ES")}
+                      </p>
+                    </div>
+                  )}
+                  {selected.invoice && (
+                    <div>
+                      <p className="text-[10px] text-text-tertiary uppercase">Factura vinculada</p>
+                      <p className="text-sm">
+                        <span className="font-medium text-accent">#{selected.invoice.number}</span>
+                        <span className="font-mono ml-2">
+                          {selected.invoice.totalAmount.toFixed(2)} EUR
+                        </span>
+                      </p>
+                    </div>
+                  )}
+                  {selected.bankTransaction && selected.invoice && (
+                    <div className="border-t border-border pt-2">
+                      <p className="text-[10px] text-text-tertiary uppercase">Diferencia</p>
+                      <p className="text-sm font-mono font-semibold text-amber-700">
+                        {(
+                          Math.abs(selected.bankTransaction.amount) - selected.invoice.totalAmount
+                        ).toFixed(2)}{" "}
+                        EUR
+                      </p>
+                    </div>
+                  )}
+                  <a href="/conciliacion" className="text-[10px] text-accent hover:underline">
+                    Ver en conciliación →
+                  </a>
                 </div>
               )}
 
@@ -473,29 +552,47 @@ export default function SeguimientosPage() {
                         <p className="text-xs font-semibold text-amber-700">Requiere tu decisión</p>
                         <div className="space-y-1.5">
                           <button
-                            onClick={() => {
-                              /* TODO: accept explanation */
+                            disabled={acting}
+                            onClick={async () => {
+                              await resolveInquiry(selected.id, "RESOLVED");
+                              setSelectedId(null);
                             }}
-                            className="w-full text-left text-xs px-3 py-2 rounded border border-border hover:bg-white"
+                            className="w-full text-left text-xs px-3 py-2 rounded border border-green-200 bg-green-50 hover:bg-green-100 text-green-700 disabled:opacity-50"
                           >
                             Aceptar la explicación y cerrar
                           </button>
                           <button
-                            onClick={() => {
-                              /* TODO: reply manually */
+                            disabled={acting}
+                            onClick={async () => {
+                              setActing(true);
+                              try {
+                                await fetch("/api/inquiries/generate", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    bankTransactionId: selected.bankTransaction?.id,
+                                    invoiceId: selected.invoice?.id,
+                                    triggerType: selected.triggerType,
+                                    tone: "FORMAL",
+                                  }),
+                                });
+                                fetchInquiries();
+                              } catch {
+                                /* ignore */
+                              }
+                              setActing(false);
+                              setSelectedId(null);
                             }}
-                            className="w-full text-left text-xs px-3 py-2 rounded border border-border hover:bg-white"
+                            className="w-full text-left text-xs px-3 py-2 rounded border border-border hover:bg-hover disabled:opacity-50"
                           >
                             Responder pidiendo más detalles
                           </button>
-                          <button
-                            onClick={() => {
-                              /* TODO: classify manually */
-                            }}
-                            className="w-full text-left text-xs px-3 py-2 rounded border border-border hover:bg-white"
+                          <a
+                            href="/conciliacion"
+                            className="block w-full text-left text-xs px-3 py-2 rounded border border-border hover:bg-hover text-text-primary"
                           >
-                            Clasificar el movimiento manualmente
-                          </button>
+                            Ir a conciliación y clasificar manualmente
+                          </a>
                         </div>
                       </div>
                     )}
