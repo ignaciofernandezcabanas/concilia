@@ -49,7 +49,16 @@ vi.mock("@/lib/reconciliation/detectors/return-detector", () => ({
 vi.mock("@/lib/reconciliation/detectors/financial-detector", () => ({
   detectFinancialOp: mockDetectFinancial,
 }));
-vi.mock("@/lib/reconciliation/matchers/exact-match", () => ({ findExactMatch: mockFindExact }));
+const mockFindSupportingDoc = vi.hoisted(() => vi.fn());
+const mockDetectEquity = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/reconciliation/detectors/equity-detector", () => ({
+  detectEquityMovement: mockDetectEquity,
+}));
+vi.mock("@/lib/reconciliation/matchers/exact-match", () => ({
+  findExactMatch: mockFindExact,
+  findSupportingDocMatch: mockFindSupportingDoc,
+}));
 vi.mock("@/lib/reconciliation/matchers/grouped-match", () => ({
   findGroupedMatch: mockFindGrouped,
 }));
@@ -107,7 +116,9 @@ function setupDefaults(txList = [buildBankTransaction()]) {
     suggestedPrincipal: null,
     suggestedInterest: null,
   });
+  mockDetectEquity.mockResolvedValue(null);
   mockFindExact.mockResolvedValue([]);
+  mockFindSupportingDoc.mockResolvedValue(null);
   mockFindGrouped.mockResolvedValue(null);
   mockFindFuzzy.mockResolvedValue([]);
   mockFindLlm.mockResolvedValue(null);

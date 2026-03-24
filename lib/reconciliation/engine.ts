@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { ScopedPrisma } from "@/lib/db-scoped";
 import type {
   BankTransaction,
@@ -15,8 +16,9 @@ import { detectDuplicates } from "./detectors/duplicate-detector";
 import { detectReturn } from "./detectors/return-detector";
 import { detectFinancialOp } from "./detectors/financial-detector";
 import { detectInvestmentOrCapex } from "./detectors/investment-detector";
+import { detectEquityMovement } from "./detectors/equity-detector";
 
-import { findExactMatch } from "./matchers/exact-match";
+import { findExactMatch, findSupportingDocMatch } from "./matchers/exact-match";
 import { findGroupedMatch } from "./matchers/grouped-match";
 import { findFuzzyMatch } from "./matchers/fuzzy-match";
 import { findLlmMatch } from "./matchers/llm-match";
@@ -255,6 +257,44 @@ async function processTransaction(
   }
 
   // =====================================================================
+  // PHASE 0c: EQUITY PRE-CLASSIFICATION
+  // =====================================================================
+  // Detects equity-related movements (dividends, capital, subsidies, etc.)
+  // If detected and no matching SupportingDocument → DECISION priority.
+
+  const equityResult = await detectEquityMovement(tx, db).catch(() => null);
+  if (equityResult?.detected) {
+    // Check if a matching SupportingDocument already exists
+    const existingDoc = await (db as unknown as Record<string, any>).supportingDocument
+      ?.findFirst?.({
+        where: {
+          type: equityResult.suggestedType,
+          status: { in: ["POSTED", "PENDING_APPROVAL"] },
+          expectedDirection: tx.amount > 0 ? "INFLOW" : "OUTFLOW",
+          expectedAmount: {
+            gte: Math.abs(tx.amount) * 0.95,
+            lte: Math.abs(tx.amount) * 1.05,
+          },
+        },
+      })
+      .catch(() => null);
+
+    if (!existingDoc) {
+      await createReconciliation(db, tx, companyId, {
+        type: "MANUAL",
+        confidence: 0.0,
+        matchReason: `equity_detected:${equityResult.suggestedType}`,
+        detectedType: "UNIDENTIFIED",
+        autoApprove: false,
+      });
+      await updateTxStatus(db, tx.id, "PENDING", "UNIDENTIFIED", "DECISION");
+      result.needsReview++;
+      return;
+    }
+    // If a SupportingDocument exists, let it fall through to Phase 2 matching
+  }
+
+  // =====================================================================
   // PHASE 1: DETECTORS
   // =====================================================================
 
@@ -433,7 +473,37 @@ async function processTransaction(
     };
   }
 
-  // 2a-bis. Partial payment detection (amount < invoice but same contact)
+  // 2a-bis. SupportingDocument match (fallback when no invoice match)
+  if (!matchOutcome) {
+    const docMatch = await findSupportingDocMatch(tx, db);
+    if (docMatch) {
+      // Create reconciliation linked to the supporting document
+      await db.reconciliation.create({
+        data: {
+          type: "EXACT_MATCH",
+          confidenceScore: docMatch.confidence,
+          matchReason: docMatch.matchReason,
+          status: "PROPOSED",
+          bankTransactionId: tx.id,
+          companyId,
+          supportingDocumentId: docMatch.supportingDocumentId,
+          bankAmount: Math.abs(tx.amount),
+        },
+      });
+      const priority = assignPriority(
+        tx,
+        "MATCH_SIMPLE",
+        docMatch.confidence,
+        materialityThreshold
+      );
+      await updateTxStatus(db, tx.id, "PENDING", "MATCH_SIMPLE", priority);
+      result.matched++;
+      result.needsReview++;
+      return;
+    }
+  }
+
+  // 2a-ter. Partial payment detection (amount < invoice but same contact)
   if (!matchOutcome) {
     const absTxAmount = Math.abs(tx.amount);
     const isIncome = tx.amount > 0;

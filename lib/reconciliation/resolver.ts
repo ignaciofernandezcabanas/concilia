@@ -186,6 +186,14 @@ export async function resolveItem(
         // Negative feedback: deactivate bad rules on approve with changes
         // (handled externally since approve = no correction)
 
+        // Mark supporting document as reconciled if linked
+        if (reco.supportingDocumentId) {
+          await tx.supportingDocument.update({
+            where: { id: reco.supportingDocumentId },
+            data: { status: "RECONCILED" },
+          });
+        }
+
         await createAuditLog(tx, userId, "reconciliation.approve", "Reconciliation", reco.id, {
           bankTransactionId: reco.bankTransactionId,
           invoiceId: reco.invoiceId,

@@ -8,6 +8,13 @@ export interface ExactMatchResult {
   matchReason: string;
 }
 
+export interface SupportingDocMatchResult {
+  type: "EXACT_MATCH";
+  confidence: number;
+  supportingDocumentId: string;
+  matchReason: string;
+}
+
 /**
  * Finds invoices that exactly match a bank transaction by amount and contact.
  *
@@ -169,4 +176,52 @@ export async function findExactMatch(
   });
 
   return scored;
+}
+
+/**
+ * Searches for SupportingDocuments that match a bank transaction by amount
+ * and expected direction. Used as a fallback when no invoice match is found.
+ */
+export async function findSupportingDocMatch(
+  tx: BankTransaction,
+  db: ScopedPrisma
+): Promise<SupportingDocMatchResult | null> {
+  const expectedDirection = tx.amount > 0 ? "INFLOW" : "OUTFLOW";
+  const absAmount = Math.abs(tx.amount);
+
+  const txDate = tx.valueDate;
+  const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
+  const minDate = new Date(txDate.getTime() - ninetyDaysMs);
+  const maxDate = new Date(txDate.getTime() + ninetyDaysMs);
+
+  const docMatches =
+    (await (db as any).supportingDocument
+      ?.findMany?.({
+        where: {
+          status: "POSTED",
+          expectedDirection,
+          expectedAmount: {
+            gte: absAmount * 0.99,
+            lte: absAmount * 1.01,
+          },
+          date: {
+            gte: minDate,
+            lte: maxDate,
+          },
+        },
+      })
+      .catch(() => [])) ?? [];
+
+  const unreconciledDocs = docMatches.filter((d: any) => d.status !== "RECONCILED");
+
+  if (unreconciledDocs.length === 1) {
+    return {
+      type: "EXACT_MATCH",
+      confidence: 0.93,
+      supportingDocumentId: unreconciledDocs[0].id,
+      matchReason: `Documento soporte: ${unreconciledDocs[0].description}`,
+    };
+  }
+
+  return null;
 }
