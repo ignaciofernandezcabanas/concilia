@@ -44,6 +44,7 @@ const SCOPED_MODELS = new Set([
   "recurringAccrual",
   "deferredEntry",
   "badDebtTracker",
+  "exchangeRateDifference",
   // NOT scoped (no companyId): InvoiceLine, BudgetLine, JournalEntryLine,
   //   BankTransactionClassification, DuplicateGroup, Payment, CompanyScope
   // NOT scoped (organizationId instead): IntercompanyLink, AgentRun

@@ -103,6 +103,7 @@ model Company {
   investments              Investment[]
   recurringAccruals        RecurringAccrual[]
   badDebtTrackers          BadDebtTracker[]
+  exchangeRateDifferences  ExchangeRateDifference[]
   deferredEntries          DeferredEntry[]
   invoices                 Invoice[]
   journalEntries           JournalEntry[]
@@ -410,6 +411,28 @@ model BadDebtTracker {
   @@index([companyId, status])
 }
 
+model ExchangeRateDifference {
+  id                String          @id @default(cuid())
+  reconciliationId  String?
+  reconciliation    Reconciliation? @relation(fields: [reconciliationId], references: [id])
+  originalCurrency  String
+  originalAmount    Float
+  bookRate          Float
+  settlementRate    Float
+  differenceEur     Float
+  differenceType    FxDifferenceType
+  journalEntryId    String?
+  companyId         String
+  company           Company         @relation(fields: [companyId], references: [id])
+  createdAt         DateTime        @default(now())
+  @@index([companyId])
+}
+
+enum FxDifferenceType {
+  GAIN
+  LOSS
+}
+
 enum ClaimType {
   BUROFAX
   JUDICIAL
@@ -520,6 +543,9 @@ model Invoice {
   netAmount         Float?
   vatAmount         Float?
   currency          String           @default("EUR")
+  originalCurrency    String?   @default("EUR")
+  originalAmount      Float?
+  exchangeRate        Float?
   description       String?
   status            InvoiceStatus    @default(PENDING)
   amountPaid        Float            @default(0)
@@ -589,6 +615,9 @@ model BankTransaction {
   counterpartName  String?
   reference        String?
   balanceAfter     Float?
+  originalCurrency String?                        @default("EUR")
+  originalAmount   Float?
+  exchangeRate     Float?
   status           BankTransactionStatus          @default(PENDING)
   priority         TransactionPriority            @default(ROUTINE)
   detectedType     DetectedType?
@@ -655,10 +684,11 @@ model Reconciliation {
   companyId           String
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
-  inquiries           Inquiry[]
-  bankTransaction     BankTransaction?     @relation(fields: [bankTransactionId], references: [id])
-  company             Company              @relation(fields: [companyId], references: [id])
-  invoice             Invoice?             @relation(fields: [invoiceId], references: [id])
+  inquiries                 Inquiry[]
+  exchangeRateDifference    ExchangeRateDifference[]
+  bankTransaction           BankTransaction?     @relation(fields: [bankTransactionId], references: [id])
+  company                   Company              @relation(fields: [companyId], references: [id])
+  invoice                   Invoice?             @relation(fields: [invoiceId], references: [id])
 
   // Match con diferencia
   differenceType                DifferenceType?

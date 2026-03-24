@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import Fuse from "fuse.js";
 import type { ScopedPrisma } from "@/lib/db-scoped";
 import type { BankTransaction, Invoice, Contact, DifferenceReason } from "@prisma/client";
@@ -12,6 +14,7 @@ export interface FuzzyMatchResult {
 }
 
 const AMOUNT_TOLERANCE = 0.05; // 5%
+const AMOUNT_TOLERANCE_FX = 0.07; // 7% for cross-currency matches
 
 /**
  * Finds invoices that approximately match a bank transaction using
@@ -34,9 +37,14 @@ export async function findFuzzyMatch(
     ? (["ISSUED", "CREDIT_RECEIVED"] as const)
     : (["RECEIVED", "CREDIT_ISSUED"] as const);
 
+  // Use wider tolerance for cross-currency transactions
+  const txCurrency = (tx as any).originalCurrency ?? "EUR";
+  const isCrossCurrency = txCurrency !== "EUR";
+  const tolerance = isCrossCurrency ? AMOUNT_TOLERANCE_FX : AMOUNT_TOLERANCE;
+
   // Amount tolerance bounds
-  const amountMin = absAmount * (1 - AMOUNT_TOLERANCE);
-  const amountMax = absAmount * (1 + AMOUNT_TOLERANCE);
+  const amountMin = absAmount * (1 - tolerance);
+  const amountMax = absAmount * (1 + tolerance);
 
   // Find invoices within the amount tolerance
   const candidates = await db.invoice.findMany({

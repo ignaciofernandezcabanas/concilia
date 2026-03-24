@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { ScopedPrisma } from "@/lib/db-scoped";
 import type { BankTransaction, Invoice, Contact } from "@prisma/client";
 
@@ -80,7 +81,47 @@ export async function findExactMatch(
     orderBy: { issueDate: "desc" },
   });
 
+  // If no exact EUR match, try cross-currency match with 2% tolerance
   if (invoices.length === 0) {
+    const txCurrency = (tx as any).originalCurrency ?? "EUR";
+    const FX_TOLERANCE = 0.02;
+    const amountMin = absAmount * (1 - FX_TOLERANCE);
+    const amountMax = absAmount * (1 + FX_TOLERANCE);
+
+    const fxCandidates = await db.invoice.findMany({
+      where: {
+        contactId: { in: contactIds },
+        type: { in: [...invoiceTypes] },
+        status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
+        totalAmount: { gte: amountMin, lte: amountMax },
+      },
+      include: {
+        contact: true,
+      },
+      orderBy: { issueDate: "desc" },
+    });
+
+    // Only consider candidates where currencies actually differ
+    const crossCurrencyMatches = fxCandidates.filter((inv) => {
+      const invCurrency = (inv as any).originalCurrency ?? inv.currency ?? "EUR";
+      return invCurrency !== txCurrency || (invCurrency !== "EUR" && txCurrency !== "EUR");
+    });
+
+    if (crossCurrencyMatches.length > 0) {
+      const txDate = tx.valueDate.getTime();
+      return crossCurrencyMatches.map((invoice) => {
+        const daysDiff = Math.abs((invoice.issueDate.getTime() - txDate) / (24 * 60 * 60 * 1000));
+        const dateProximityBonus = Math.max(0, 0.04 * (1 - daysDiff / 365));
+        // Cross-currency exact matches get slightly lower confidence (0.90-0.94)
+        const confidence = Math.min(0.94, 0.9 + dateProximityBonus);
+        return {
+          invoice,
+          confidence: Math.round(confidence * 100) / 100,
+          matchReason: "exact_amount_fx_tolerance",
+        };
+      });
+    }
+
     return [];
   }
 
