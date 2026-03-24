@@ -102,6 +102,7 @@ model Company {
   integrations             Integration[]
   investments              Investment[]
   recurringAccruals        RecurringAccrual[]
+  badDebtTrackers          BadDebtTracker[]
   deferredEntries          DeferredEntry[]
   invoices                 Invoice[]
   journalEntries           JournalEntry[]
@@ -380,6 +381,50 @@ enum DeferredStatus {
   CANCELLED
 }
 
+model BadDebtTracker {
+  id                String        @id @default(cuid())
+  invoiceId         String        @unique
+  invoice           Invoice       @relation(fields: [invoiceId], references: [id])
+
+  overdueDate       DateTime
+  overdueMonths     Int
+
+  claimType         ClaimType?
+  claimDate         DateTime?
+  claimReference    String?
+
+  provisionAmount   Float
+  isTaxDeductible   Boolean       @default(false)
+  taxDeductibleDate DateTime?
+
+  provisionEntryId  String?
+  reversalEntryId   String?
+
+  status            BadDebtStatus @default(MONITORING)
+
+  companyId         String
+  company           Company       @relation(fields: [companyId], references: [id])
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([companyId, status])
+}
+
+enum ClaimType {
+  BUROFAX
+  JUDICIAL
+  NOTARIAL
+  DEBTOR_INSOLVENCY
+}
+
+enum BadDebtStatus {
+  MONITORING
+  PROVISION_ACCOUNTING
+  PROVISION_TAX
+  RECOVERED
+  WRITTEN_OFF
+}
+
 model Investment {
   id                String                @id @default(cuid())
   name              String
@@ -489,6 +534,7 @@ model Invoice {
   syncedAt          DateTime?
   companyId         String
   contactId         String?
+  badDebtTracker    BadDebtTracker?
   inquiries         Inquiry[]
   deferredEntries   DeferredEntry[]  @relation("DeferredInvoice")
   linkedAccruals    RecurringAccrual[] @relation("AccrualInvoice")
