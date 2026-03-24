@@ -368,12 +368,16 @@ function EFEView({ data }: { data: EFEReport | null }) {
               const lineKey = `${section.code}:${i}`;
               const isOpen = expanded.has(lineKey);
               const hasTxs = child.transactions && child.transactions.length > 0;
+              const isSubtotal = /^\d+\./.test(child.label.trim()); // "1.", "2.", etc.
+              const isSubItem = child.label.startsWith("  "); // indented = sub-item
 
               return (
                 <div key={lineKey}>
                   {/* Line row */}
                   <div
-                    className={`flex items-center h-9 px-6 pl-12 border-b border-border-light ${
+                    className={`flex items-center h-9 px-6 border-b border-border-light ${
+                      isSubtotal ? "bg-subtotal font-semibold" : ""
+                    } ${isSubItem ? "pl-16" : "pl-12"} ${
                       hasTxs ? "cursor-pointer hover:bg-hover" : ""
                     } transition-colors`}
                     onClick={() => hasTxs && toggle(lineKey)}
@@ -385,19 +389,22 @@ function EFEView({ data }: { data: EFEReport | null }) {
                         ) : (
                           <ChevronRight size={14} className="text-text-tertiary" />
                         ))}
-                      {child.label}
+                      <span>{child.label.trim()}</span>
                       {hasTxs && (
-                        <span className="text-[10px] text-text-tertiary">
+                        <span className="text-[10px] text-text-tertiary font-normal">
                           ({child.transactions!.length})
                         </span>
                       )}
                     </span>
                     <span
                       className={`font-mono ${
-                        child.amount >= 0 ? "text-green-text" : "text-red-text"
+                        child.amount === 0
+                          ? "text-text-tertiary"
+                          : child.amount > 0
+                            ? "text-green-text"
+                            : "text-red-text"
                       }`}
                     >
-                      {child.amount >= 0 ? "" : ""}
                       {fmtN(child.amount)} €
                     </span>
                   </div>
