@@ -33,7 +33,7 @@ export function createServerClient(): SupabaseClient {
 
 /**
  * Browser-side Supabase configuration.
- * Use in client components with createBrowserClient from @supabase/auth-helpers-nextjs.
+ * Use in client components via createBrowserSupabaseClient().
  */
 export const browserConfig = {
   supabaseUrl,
