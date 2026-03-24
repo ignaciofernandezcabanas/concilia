@@ -95,6 +95,15 @@ npx prisma db seed     # PGC accounts + datos demo
 npm run dev
 ```
 
+## CI/CD
+
+GitHub Actions pipeline (`.github/workflows/ci.yml`):
+
+- **Trigger**: push to `main` + PRs to `main`
+- **Steps**: `npm ci` → `prisma generate` → `tsc --noEmit` → `lint` → `test` → `build` (build only on push to main)
+- **Env vars**: placeholders — no real DB connection needed for CI. Prisma generates client from schema only.
+- **No GitHub secrets required** — all env vars are build-time placeholders.
+
 ## Convenciones y Patrones
 
 ### Scoped DB (CRÍTICO)
