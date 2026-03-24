@@ -63,7 +63,7 @@ export function getScopedDb(companyId: string): ScopedPrisma {
           }
           return query(args);
         },
-        async findFirst({ model: _model, args, query }) {
+        async findFirst({ model, args, query }) {
           if (SCOPED_MODELS.has(lcFirst(model))) {
             args.where = { ...args.where, companyId };
           }
@@ -96,10 +96,10 @@ export function getScopedDb(companyId: string): ScopedPrisma {
           }
           return query(args);
         },
-        async update({ model: _model, args, query }) {
+        async update({ model, args, query }) {
           return query(args);
         },
-        async updateMany({ model: _model, args, query }) {
+        async updateMany({ model, args, query }) {
           if (SCOPED_MODELS.has(lcFirst(model))) {
             args.where = { ...args.where, companyId };
           }
@@ -108,7 +108,7 @@ export function getScopedDb(companyId: string): ScopedPrisma {
         async delete({ model, args, query }) {
           return query(args);
         },
-        async deleteMany({ model: _model, args, query }) {
+        async deleteMany({ model, args, query }) {
           if (SCOPED_MODELS.has(lcFirst(model))) {
             args.where = { ...args.where, companyId };
           }
@@ -145,7 +145,7 @@ export function getGroupDb(companyIds: string[]): ScopedPrisma {
           }
           return query(args);
         },
-        async findFirst({ model: _model, args, query }) {
+        async findFirst({ model, args, query }) {
           if (SCOPED_MODELS.has(lcFirst(model))) {
             args.where = { ...args.where, companyId: { in: companyIds } };
           }

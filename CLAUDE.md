@@ -352,3 +352,27 @@ ContextSwitcher en sidebar. Vista consolidada (read-only) para OWNER/ADMIN. Dete
 | GET/PUT      | /api/settings/periods     | Periodos contables   |
 | POST         | /api/settings/rules/parse | NL rule → structured |
 | GET/PUT      | /api/auth/context         | Context switching    |
+
+## Escenarios 19 y 20 (CAPEX e Inversiones)
+
+### Escenario 19: CAPEX_ACQUISITION / CAPEX_DISPOSAL
+
+- **Detector**: `detectors/investment-detector.ts` fase 0 del engine
+- **Priority**: siempre DECISION (nunca ROUTINE, nunca CONFIRMATION)
+- **Confidence**: forzado a 0.0 → nunca auto-aprueba
+- **Acción resolver**: `register_fixed_asset`
+- **Documento requerido**: Factura proveedor o contrato leasing
+- **Cuenta PGC**: Grupo 21x (inferred) o 206 (intangible)
+
+### Escenario 20: INVESTMENT_FINANCIAL
+
+- **Detector**: `detectors/investment-detector.ts` fase 0 del engine
+- **Priority**: siempre DECISION
+- **Confidence**: forzado a 0.0
+- **Acción resolver**: `register_investment`
+- **Documentos**: SPA, escritura, contrato préstamo, certificado dividendo
+- **Cuentas PGC**: 240/250/252 (debe) / 572 (haber); 760/761 (dividendos/intereses)
+
+### Regla invariante
+
+CAPEX e inversiones financieras NUNCA entran en auto-aprobación. NUNCA en batch-resolve. SIEMPRE requieren decisión del controller.

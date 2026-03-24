@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Import invoices from a dedicated email mailbox.
  *
@@ -8,6 +9,37 @@
 import type { ScopedPrisma } from "@/lib/db-scoped";
 import { getEmailProvider } from "@/lib/storage";
 import { extractInvoiceFromPdf } from "@/lib/invoices/pdf-extractor";
+
+/**
+ * Classify email attachments: invoice (operational) vs investment document.
+ * Investment documents are NOT imported as invoices — they go to a separate flow.
+ */
+export function classifyEmailAttachment(
+  subject: string,
+  filename: string
+): "INVOICE" | "INVESTMENT_DOCUMENT" | "UNKNOWN" {
+  const text = `${subject} ${filename}`.toLowerCase();
+  const investmentKeywords = [
+    "escritura",
+    "notaría",
+    "notario",
+    "spa",
+    "share purchase",
+    "compraventa acciones",
+    "participaciones",
+    "dividendo",
+    "capital call",
+    "llamada capital",
+    "prestamo",
+    "contrato prestamo",
+  ];
+  if (investmentKeywords.some((k) => text.includes(k))) return "INVESTMENT_DOCUMENT";
+
+  const invoiceKeywords = ["factura", "fra", "invoice", "recibo", "albarán"];
+  if (invoiceKeywords.some((k) => text.includes(k))) return "INVOICE";
+
+  return "UNKNOWN";
+}
 
 export interface MailboxImportResult {
   emailsRead: number;

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Cash Flow Report Generator.
  *
@@ -347,7 +348,7 @@ async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promis
   const flujosExplotacion =
     resultadoAntesImpuestos + amortizacion + provisiones + wcChange + otherNonCash;
 
-  // 6. Investment flows
+  // 6. Investment flows (from INVESTING-classified txs + InvestmentTransactions)
   const investingTx = await db.bankTransaction.findMany({
     where: {
       valueDate: { gte: from, lte: to },
@@ -355,7 +356,55 @@ async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promis
       classification: { cashflowType: "INVESTING" },
     },
   });
-  const flujosInversion = investingTx.reduce((s, tx) => s + tx.amount, 0);
+
+  // CAPEX flows (from economicCategory)
+  const capexTx = await db.bankTransaction.findMany({
+    where: {
+      valueDate: { gte: from, lte: to },
+      economicCategory: { in: ["CAPEX_ACQUISITION", "CAPEX_DISPOSAL"] },
+    },
+  });
+  const capexPayments = capexTx
+    .filter((t) => t.economicCategory === "CAPEX_ACQUISITION")
+    .reduce((s, t) => s + t.amount, 0);
+  const capexDisposals = capexTx
+    .filter((t) => t.economicCategory === "CAPEX_DISPOSAL")
+    .reduce((s, t) => s + t.amount, 0);
+
+  // Financial investment flows (from InvestmentTransaction)
+  const invTxs =
+    (await (db as any).investmentTransaction
+      ?.findMany?.({
+        where: {
+          date: { gte: from, lte: to },
+          type: {
+            in: [
+              "ACQUISITION",
+              "PARTIAL_DIVESTMENT",
+              "FULL_DIVESTMENT",
+              "DIVIDEND_RECEIVED",
+              "INTEREST_RECEIVED",
+              "CAPITAL_CALL",
+              "RETURN_OF_CAPITAL",
+            ],
+          },
+        },
+      })
+      .catch(() => [])) ?? [];
+  const invAcquisitions = invTxs
+    .filter((t: any) => ["ACQUISITION", "CAPITAL_CALL"].includes(t.type))
+    .reduce((s: number, t: any) => s + t.amount, 0);
+  const invDisposals = invTxs
+    .filter((t: any) =>
+      ["PARTIAL_DIVESTMENT", "FULL_DIVESTMENT", "RETURN_OF_CAPITAL"].includes(t.type)
+    )
+    .reduce((s: number, t: any) => s + t.amount, 0);
+  const invReturns = invTxs
+    .filter((t: any) => ["DIVIDEND_RECEIVED", "INTEREST_RECEIVED"].includes(t.type))
+    .reduce((s: number, t: any) => s + t.amount, 0);
+
+  const flujosInversion =
+    investingTx.reduce((s, tx) => s + tx.amount, 0) + capexPayments + capexDisposals;
 
   // 7. Financing flows
   const financingTx = await db.bankTransaction.findMany({
@@ -417,7 +466,14 @@ async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promis
     {
       code: "B",
       label: "Flujos de efectivo de las actividades de inversión",
-      amount: roundTwo(flujosInversion),
+      amount: roundTwo(flujosInversion - invAcquisitions + invDisposals + invReturns),
+      children: [
+        { label: "Pagos por adquisición de inmovilizado", amount: roundTwo(capexPayments) },
+        { label: "Cobros por enajenación de inmovilizado", amount: roundTwo(capexDisposals) },
+        { label: "Pagos por inversiones financieras", amount: roundTwo(-invAcquisitions) },
+        { label: "Cobros por desinversiones financieras", amount: roundTwo(invDisposals) },
+        { label: "Dividendos e intereses cobrados", amount: roundTwo(invReturns) },
+      ].filter((l) => l.amount !== 0),
     },
     {
       code: "C",

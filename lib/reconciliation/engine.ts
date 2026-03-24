@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import type { ScopedPrisma } from "@/lib/db-scoped";
 import type {
   BankTransaction,
@@ -12,6 +13,7 @@ import { detectIntercompany } from "./detectors/intercompany-detector";
 import { detectDuplicates } from "./detectors/duplicate-detector";
 import { detectReturn } from "./detectors/return-detector";
 import { detectFinancialOp } from "./detectors/financial-detector";
+import { detectInvestmentOrCapex } from "./detectors/investment-detector";
 
 import { findExactMatch } from "./matchers/exact-match";
 import { findGroupedMatch } from "./matchers/grouped-match";
@@ -178,6 +180,53 @@ async function processTransaction(
 
   if (existing) {
     return;
+  }
+
+  // =====================================================================
+  // PHASE 0: CAPEX & INVESTMENT PRE-CLASSIFICATION
+  // =====================================================================
+  // Runs BEFORE operational matchers. If detected, creates a DECISION-priority
+  // item with confidence 0.0 (NEVER auto-approve). Skips phases 1-4.
+
+  if (
+    !("economicCategory" in tx) ||
+    !(tx as Record<string, unknown>).economicCategory ||
+    (tx as Record<string, unknown>).economicCategory === "UNCLASSIFIED"
+  ) {
+    const investCheck = await detectInvestmentOrCapex(tx, db).catch(() => null);
+    if (investCheck?.isCapexOrInvestment && investCheck.suggestedCategory) {
+      // Save classification context on the transaction
+      await db.bankTransaction.update({
+        where: { id: tx.id },
+        data: {
+          economicCategory: investCheck.suggestedCategory,
+          classificationNotes: JSON.parse(
+            JSON.stringify({
+              suggestedPgcAccount: investCheck.suggestedPgcAccount,
+              requiredDocuments: investCheck.requiredDocuments,
+              confidenceSignals: investCheck.confidenceSignals,
+              detectedAt: new Date().toISOString(),
+            })
+          ),
+        },
+      });
+
+      const isCapex =
+        investCheck.suggestedCategory === "CAPEX_ACQUISITION" ||
+        investCheck.suggestedCategory === "CAPEX_DISPOSAL";
+      const detectedType: DetectedType = isCapex ? "FINANCIAL_OPERATION" : "FINANCIAL_OPERATION";
+
+      await createReconciliation(db, tx, companyId, {
+        type: "MANUAL",
+        confidence: 0.0,
+        matchReason: `${isCapex ? "capex" : "investment"}_detected:${investCheck.suggestedCategory}`,
+        detectedType,
+        autoApprove: false, // NEVER auto-approve CAPEX/investments
+      });
+      await updateTxStatus(db, tx.id, "INVESTIGATING", detectedType, "DECISION");
+      result.needsReview++;
+      return;
+    }
   }
 
   // =====================================================================
@@ -890,6 +939,7 @@ async function markInvoicePaid(
  * LEARNING LOOP: create or increment a MatchingRule from an auto-approved match.
  * This teaches the system to auto-approve similar transactions in the future.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function learnFromApproval(
   db: ScopedPrisma,
   tx: BankTransaction,

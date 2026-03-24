@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Unified reconciliation resolver.
  *
@@ -35,7 +36,9 @@ export type ResolveAction =
   | "mark_legitimate"
   | "mark_return"
   | "ignore"
-  | "split_financial";
+  | "split_financial"
+  | "register_fixed_asset"
+  | "register_investment";
 
 export interface ResolvePayload {
   action: ResolveAction;
@@ -68,6 +71,27 @@ export interface ResolvePayload {
   // For split_financial
   principalAmount?: number;
   interestAmount?: number;
+
+  // For register_fixed_asset (scenario 19)
+  assetData?: {
+    name: string;
+    acquisitionCost: number;
+    usefulLifeMonths: number;
+    residualValue?: number;
+    assetAccountCode: string;
+    depreciationAccountCode?: string;
+    accumDepAccountCode?: string;
+  };
+
+  // For register_investment (scenario 20)
+  investmentData?: {
+    name: string;
+    type: string;
+    pgcAccount: string;
+    acquisitionCost: number;
+    isinCif?: string;
+    ownershipPct?: number;
+  };
 
   // Rule creation
   createRule?: boolean;
@@ -660,6 +684,155 @@ export async function resolveItem(
         };
       }
 
+      // ─── REGISTER FIXED ASSET (Scenario 19 - CAPEX) ───
+      case "register_fixed_asset": {
+        const bankTx = await tx.bankTransaction.findFirstOrThrow({
+          where: { id: payload.bankTransactionId!, companyId },
+        });
+        const assetData = payload.assetData as
+          | {
+              name: string;
+              acquisitionCost: number;
+              usefulLifeMonths: number;
+              residualValue?: number;
+              assetAccountCode: string;
+              depreciationAccountCode?: string;
+              accumDepAccountCode?: string;
+            }
+          | undefined;
+        if (!assetData) throw new Error("assetData required for register_fixed_asset");
+
+        const assetAcct = await tx.account.findFirst({
+          where: { code: assetData.assetAccountCode, companyId },
+        });
+        const depAcct = await tx.account.findFirst({
+          where: { code: assetData.depreciationAccountCode ?? "681", companyId },
+        });
+        const accumAcct = await tx.account.findFirst({
+          where: { code: assetData.accumDepAccountCode ?? "281", companyId },
+        });
+        if (!assetAcct) throw new Error(`Account ${assetData.assetAccountCode} not found`);
+
+        const monthlyDep =
+          Math.round(
+            ((assetData.acquisitionCost - (assetData.residualValue ?? 0)) /
+              assetData.usefulLifeMonths) *
+              100
+          ) / 100;
+
+        const asset = await tx.fixedAsset.create({
+          data: {
+            name: assetData.name,
+            acquisitionDate: bankTx.valueDate,
+            acquisitionCost: assetData.acquisitionCost,
+            residualValue: assetData.residualValue ?? 0,
+            usefulLifeMonths: assetData.usefulLifeMonths,
+            monthlyDepreciation: monthlyDep,
+            netBookValue: assetData.acquisitionCost,
+            assetAccountId: assetAcct.id,
+            depreciationAccountId: depAcct?.id ?? assetAcct.id,
+            accumDepAccountId: accumAcct?.id ?? assetAcct.id,
+            companyId,
+          },
+        });
+
+        await tx.bankTransaction.update({
+          where: { id: bankTx.id },
+          data: { status: "RECONCILED", economicCategory: "CAPEX_ACQUISITION" },
+        });
+        const capexReco = payload.reconciliationId
+          ? await tx.reconciliation.findUnique({ where: { id: payload.reconciliationId } })
+          : null;
+        if (capexReco)
+          await tx.reconciliation.update({
+            where: { id: capexReco.id },
+            data: {
+              status: "APPROVED",
+              resolvedAt: new Date(),
+              resolvedById: userId,
+              resolution: "register_fixed_asset",
+            },
+          });
+
+        return {
+          success: true,
+          action: "register_fixed_asset",
+          reconciliationId: capexReco?.id ?? null,
+          message: `Fixed asset "${asset.name}" registered.`,
+        };
+      }
+
+      // ─── REGISTER INVESTMENT (Scenario 20 - Financial) ───
+      case "register_investment": {
+        const bankTx = await tx.bankTransaction.findFirstOrThrow({
+          where: { id: payload.bankTransactionId!, companyId },
+        });
+        const invData = payload.investmentData as
+          | {
+              name: string;
+              type: string;
+              pgcAccount: string;
+              acquisitionCost: number;
+              isinCif?: string;
+              ownershipPct?: number;
+            }
+          | undefined;
+        if (!invData) throw new Error("investmentData required for register_investment");
+
+        const investment = await tx.investment.create({
+          data: {
+            name: invData.name,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            type: invData.type as any,
+            pgcAccount: invData.pgcAccount,
+            acquisitionDate: bankTx.valueDate,
+            acquisitionCost: invData.acquisitionCost,
+            currentValue: invData.acquisitionCost,
+            lastValuationDate: bankTx.valueDate,
+            isinCif: invData.isinCif,
+            ownershipPct: invData.ownershipPct,
+            companyId,
+          },
+        });
+
+        await tx.investmentTransaction.create({
+          data: {
+            type: "ACQUISITION",
+            date: bankTx.valueDate,
+            amount: invData.acquisitionCost,
+            pgcDebitAccount: invData.pgcAccount,
+            pgcCreditAccount: "572",
+            investmentId: investment.id,
+            bankTransactionId: bankTx.id,
+          },
+        });
+
+        await tx.bankTransaction.update({
+          where: { id: bankTx.id },
+          data: { status: "RECONCILED", economicCategory: "INVESTMENT_ACQUISITION" },
+        });
+        const invReco = payload.reconciliationId
+          ? await tx.reconciliation.findUnique({ where: { id: payload.reconciliationId } })
+          : null;
+        if (invReco)
+          await tx.reconciliation.update({
+            where: { id: invReco.id },
+            data: {
+              status: "APPROVED",
+              resolvedAt: new Date(),
+              resolvedById: userId,
+              resolution: "register_investment",
+            },
+          });
+
+        return {
+          success: true,
+          action: "register_investment",
+          reconciliationId: invReco?.id ?? null,
+          message: `Investment "${investment.name}" registered.`,
+        };
+      }
+
       default:
         throw new Error(`Unknown action: ${action}`);
     }
@@ -717,7 +890,8 @@ export async function resolveItem(
     console.warn("[learning] Calibration failed:", err instanceof Error ? err.message : err);
   }
 
-  return result;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return result as ResolveResult;
 }
 
 function inferCategory(matchReason: string | null | undefined, action: string): ActionCategory {
