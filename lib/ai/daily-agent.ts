@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars, prefer-const */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const */
 /**
  * Daily AI Agent Orchestrator.
  *
@@ -14,6 +14,7 @@ import { processRecurringAccruals } from "@/lib/accounting/accruals";
 import { checkDeferredMatches } from "@/lib/accounting/deferred-entries";
 import { detectIntercompany } from "@/lib/reconciliation/detectors/intercompany-detector";
 import { generateForecast } from "@/lib/reports/forecast-generator";
+import { checkCapitalAdequacy } from "@/lib/accounting/capital-adequacy";
 import { callAI } from "@/lib/ai/model-router";
 import { getCallBuffer, clearCallBuffer } from "@/lib/ai/model-router";
 import {
@@ -578,6 +579,66 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
     return { generated: !!closeProposalText };
   });
   if (!step10.success && step10.error) stepErrors.push(`group/close_proposal: ${step10.error}`);
+
+  // Step 10b: Capital adequacy check (per company)
+  const step10b = await runStep("capital_adequacy", async () => {
+    let alertsCreated = 0;
+    for (const company of org.companies) {
+      const companyDb = getScopedDb(company.id);
+      const adequacy = await checkCapitalAdequacy(companyDb);
+      for (const alert of adequacy.alerts) {
+        if (alert.level === "CRITICAL" || alert.level === "MEDIUM") {
+          if (notificationCount < MAX_NOTIFICATIONS_PER_RUN) {
+            const adminUsers = await getOrgAdminUsers(organizationId);
+            for (const userId of adminUsers.slice(0, 3)) {
+              await createNotification(
+                company.id,
+                userId,
+                "FINANCIAL_ALERT",
+                alert.level === "CRITICAL"
+                  ? "Causa de disolución: PN < 50% capital (art. 363 LSC)"
+                  : "Adecuación de capital: PN por debajo del capital social",
+                `${company.shortName ?? company.name}: ${alert.message}`
+              );
+              notificationCount++;
+              alertsCreated++;
+            }
+          }
+        }
+      }
+
+      // Regularization suggestion: if close_proposal is active (days 1-3)
+      // and result account 129 has balance, suggest regularization
+      if (dayOfMonth <= 3 && adequacy.patrimonioNeto > 0) {
+        // Check if 129 has balance (result pending distribution)
+        const pendingDividends = await (companyDb as any).supportingDocument?.findFirst?.({
+          where: {
+            type: "ACTA_JUNTA",
+            status: "PENDING_APPROVAL",
+            description: { contains: "dividendo" },
+          },
+        });
+
+        if (pendingDividends && notificationCount < MAX_NOTIFICATIONS_PER_RUN) {
+          const adminUsers = await getOrgAdminUsers(organizationId);
+          for (const userId of adminUsers.slice(0, 2)) {
+            await createNotification(
+              company.id,
+              userId,
+              "FINANCIAL_ALERT",
+              "Dividendos pendientes de aprobación",
+              `${company.shortName ?? company.name}: Existe una propuesta de reparto de dividendos pendiente de aprobación.`
+            );
+            notificationCount++;
+            alertsCreated++;
+          }
+        }
+      }
+    }
+    return { alertsCreated };
+  });
+  if (!step10b.success && step10b.error)
+    stepErrors.push(`group/capital_adequacy: ${step10b.error}`);
 
   // Step 11: Daily briefing
   let briefingText: string | null = null;

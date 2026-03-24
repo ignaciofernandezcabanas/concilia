@@ -35,6 +35,11 @@ vi.mock("@/lib/accounting/deferred-entries", () => ({
   checkDeferredMatches: mockCheckDeferredMatches,
 }));
 
+const mockCheckCapitalAdequacy = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/accounting/capital-adequacy", () => ({
+  checkCapitalAdequacy: mockCheckCapitalAdequacy,
+}));
+
 const mockDetectIntercompany = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/reconciliation/detectors/intercompany-detector", () => ({
   detectIntercompany: mockDetectIntercompany,
@@ -106,6 +111,13 @@ function setupDefaults() {
     siblingCompanyId: null,
     siblingCompanyName: null,
     organizationId: null,
+  });
+  mockCheckCapitalAdequacy.mockResolvedValue({
+    patrimonioNeto: 50000,
+    capital: 10000,
+    reservaLegal: 2000,
+    ratio: 5,
+    alerts: [],
   });
   mockGenerateForecast.mockResolvedValue({
     currentBalance: 50000,
@@ -312,5 +324,30 @@ describe("Daily Agent", () => {
 
     // This test validates the structure — the exact mirror detection
     // depends on findFirst being available which we've mocked
+  });
+
+  it("capital adequacy CRITICAL → FINANCIAL_ALERT notification", async () => {
+    mockCheckCapitalAdequacy.mockResolvedValue({
+      patrimonioNeto: 4000,
+      capital: 10000,
+      reservaLegal: 500,
+      ratio: 0.4,
+      alerts: [
+        {
+          level: "CRITICAL",
+          message: "PN/Capital = 40.0% — causa de disolución obligatoria (art. 363.1.e LSC)",
+        },
+      ],
+    });
+
+    await runDailyAgent(ORG_ID);
+
+    const notifCalls = mockPrisma.notification.create.mock.calls;
+    const financialAlerts = notifCalls.filter(
+      (c: unknown[]) => (c[0] as { data: { type: string } }).data.type === "FINANCIAL_ALERT"
+    );
+    expect(financialAlerts.length).toBeGreaterThanOrEqual(1);
+    const alertBody = (financialAlerts[0][0] as { data: { body: string } }).data.body;
+    expect(alertBody).toContain("40.0%");
   });
 });
