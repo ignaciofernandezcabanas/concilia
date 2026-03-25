@@ -191,9 +191,9 @@ export default function Movimientos() {
                 <span className="w-24">Fecha</span>
                 <span className="flex-1">Concepto</span>
                 <span className="w-[160px]">Contrapartida</span>
-                <span className="w-[110px] text-right">Importe</span>
+                <span className="w-[110px] text-right font-mono">Importe</span>
                 <span className="w-24 text-center">Estado</span>
-                <span className="w-12 text-center"></span>
+                <span className="w-12 text-center sr-only">Acciones</span>
               </div>
               {transactions.map((tx) => (
                 <div
@@ -209,7 +209,10 @@ export default function Movimientos() {
                     />
                   </span>
                   <span className="w-24 text-text-secondary">{formatDate(tx.valueDate)}</span>
-                  <span className="flex-1 text-text-primary truncate">
+                  <span
+                    className="flex-1 text-text-primary truncate"
+                    title={tx.conceptParsed || tx.concept || undefined}
+                  >
                     {tx.conceptParsed || tx.concept || "—"}
                   </span>
                   <span className="w-[160px] text-text-secondary truncate">

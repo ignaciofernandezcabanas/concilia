@@ -152,12 +152,12 @@ export default function CuentasCobrarPage() {
               <div className="flex items-center h-10 px-5 border-b border-subtle text-xs font-semibold text-text-secondary">
                 <span className="w-6" />
                 <span className="flex-1">Contacto</span>
-                <span className="w-24 text-right">Total</span>
-                <span className="w-20 text-right">Corriente</span>
-                <span className="w-20 text-right">0-30d</span>
-                <span className="w-20 text-right">31-60d</span>
-                <span className="w-20 text-right">61-90d</span>
-                <span className="w-20 text-right">&gt;90d</span>
+                <span className="w-24 text-right font-mono">Total</span>
+                <span className="w-24 text-right font-mono">Corriente</span>
+                <span className="w-24 text-right font-mono">0-30d</span>
+                <span className="w-24 text-right font-mono">31-60d</span>
+                <span className="w-24 text-right font-mono">61-90d</span>
+                <span className="w-24 text-right font-mono">&gt;90d</span>
                 <span className="w-16 text-center">Riesgo</span>
               </div>
               {contacts.map((c) => {
@@ -180,12 +180,14 @@ export default function CuentasCobrarPage() {
                       <span className="w-6 text-text-tertiary">
                         {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </span>
-                      <div className="flex-1">
-                        <span className="text-[13px] font-medium text-text-primary">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[13px] font-medium text-text-primary truncate block">
                           {c.contactName}
                         </span>
                         {c.cif && (
-                          <span className="text-[10px] text-text-tertiary ml-2">{c.cif}</span>
+                          <span className="text-[10px] text-text-tertiary ml-2 w-24 inline-block">
+                            {c.cif}
+                          </span>
                         )}
                       </div>
                       <span className="w-24 text-right font-mono font-semibold">
@@ -194,7 +196,7 @@ export default function CuentasCobrarPage() {
                       {c.buckets.map((b, i) => (
                         <span
                           key={i}
-                          className={`w-20 text-right font-mono ${b > 0 ? BUCKET_TEXT[i] : "text-text-tertiary"}`}
+                          className={`w-24 text-right font-mono ${b > 0 ? BUCKET_TEXT[i] : "text-text-tertiary"}`}
                         >
                           {b > 0 ? formatAmount(b) : "—"}
                         </span>
@@ -304,7 +306,7 @@ function ImpagadosView() {
           <span className="w-28">Factura</span>
           <span className="flex-1">Contacto</span>
           <span className="w-28 text-right">Vencimiento</span>
-          <span className="w-28 text-right">Importe</span>
+          <span className="w-28 text-right font-mono">Importe</span>
           <span className="w-32 text-center">Estado fiscal</span>
           <span className="w-36 text-right">Acciones</span>
         </div>
@@ -315,11 +317,13 @@ function ImpagadosView() {
           return (
             <div
               key={t.id}
-              className="flex items-center h-11 px-5 border-b border-border-light text-[12px]"
+              className="flex items-center h-11 px-5 border-b border-border-light text-[12px] hover:bg-hover transition-colors"
             >
               <span className="w-28 font-medium text-accent">{t.invoice.number}</span>
-              <div className="flex-1">
-                <span className="text-text-primary">{t.invoice.contact?.name ?? "—"}</span>
+              <div className="flex-1 min-w-0">
+                <span className="text-text-primary truncate block">
+                  {t.invoice.contact?.name ?? "—"}
+                </span>
                 {t.invoice.contact?.cif && (
                   <span className="text-[10px] text-text-tertiary ml-1.5">
                     {t.invoice.contact.cif}

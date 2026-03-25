@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Mail, Send, CheckCircle, AlertTriangle, XCircle, RotateCw, FileText } from "lucide-react";
+import { formatAmount } from "@/lib/format";
 
 interface Inquiry {
   id: string;
@@ -207,7 +208,7 @@ export default function SeguimientosPage() {
                 <span className="text-sm">{inquiry.contact?.name ?? inquiry.recipientName}</span>
                 {amount != null && (
                   <span className="font-mono text-xs text-text-secondary">
-                    {Math.abs(amount).toLocaleString("es-ES", { minimumFractionDigits: 2 })} €
+                    {formatAmount(Math.abs(amount))}
                   </span>
                 )}
               </div>

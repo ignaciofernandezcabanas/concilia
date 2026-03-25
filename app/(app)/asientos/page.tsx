@@ -95,8 +95,8 @@ export default function AsientosPage() {
               <span className="flex-1">Descripción</span>
               <span className="w-28">Tipo</span>
               <span className="w-24">Estado</span>
-              <span className="w-24 text-right">Debe</span>
-              <span className="w-24 text-right">Haber</span>
+              <span className="w-24 text-right font-mono">Debe</span>
+              <span className="w-24 text-right font-mono">Haber</span>
               <span className="w-20" />
             </div>
 
@@ -154,7 +154,10 @@ export default function AsientosPage() {
                   {expanded && (
                     <div className="bg-page border-b border-subtle">
                       {entry.lines.map((line) => (
-                        <div key={line.id} className="flex items-center h-9 px-5 pl-14 text-[12px]">
+                        <div
+                          key={line.id}
+                          className="flex items-center h-9 px-5 pl-14 text-[12px] border-b border-border-light last:border-0"
+                        >
                           <span className="w-20 font-mono text-accent">{line.account.code}</span>
                           <span className="flex-1 text-text-secondary">
                             {line.account.name}

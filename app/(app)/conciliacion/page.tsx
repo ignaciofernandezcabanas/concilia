@@ -201,10 +201,10 @@ export default function Conciliacion() {
                       />
                     </span>
                     <span className="w-12">Prior.</span>
-                    <span className="w-20">Tipo</span>
+                    <span className="w-28">Tipo</span>
                     <span className="w-20">Fecha</span>
                     <span className="flex-1">Concepto</span>
-                    <span className="w-10 text-center">Conf.</span>
+                    <span className="w-10 text-center font-mono">Conf.</span>
                     <span className="w-[120px] text-right">Importe</span>
                     <span className="w-20">Estado</span>
                     <span className="w-20 text-right">Acciones</span>
@@ -257,7 +257,7 @@ export default function Conciliacion() {
                                   : "—"}
                           </span>
                         </span>
-                        <span className="w-20">
+                        <span className="w-28">
                           {isCapex ? (
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">
                               CAPEX
@@ -275,11 +275,11 @@ export default function Conciliacion() {
                         </span>
                         <span
                           className="flex-1 text-text-primary truncate"
-                          title={tx.concept ?? undefined}
+                          title={tx.conceptParsed || tx.concept || undefined}
                         >
                           {tx.conceptParsed || tx.concept || "—"}
                         </span>
-                        <span className="w-10 text-center">
+                        <span className="w-10 text-center font-mono">
                           {confPct != null && (
                             <span
                               className={`text-[10px] font-mono font-medium ${confPct >= 90 ? "text-green-600" : confPct >= 70 ? "text-amber-600" : "text-red-500"}`}
@@ -517,7 +517,7 @@ export default function Conciliacion() {
                 <div className="flex items-center h-10 px-5 border-b border-subtle text-xs font-semibold text-text-secondary">
                   <span className="w-24">Nº Factura</span>
                   <span className="flex-1">Contacto</span>
-                  <span className="w-[120px] text-right">Pendiente</span>
+                  <span className="w-[120px] text-right font-mono">Pendiente</span>
                   <span className="w-20 text-right">Estado</span>
                 </div>
                 {(reconData.unreconciledInvoices ?? []).length === 0 ? (
@@ -528,7 +528,7 @@ export default function Conciliacion() {
                   (reconData.unreconciledInvoices ?? []).map((item) => (
                     <div
                       key={item.invoiceId}
-                      className="flex items-center h-11 px-5 text-[13px] border-b border-border-light"
+                      className="flex items-center h-11 px-5 text-[13px] border-b border-border-light hover:bg-hover transition-colors"
                     >
                       <span className="w-24 text-accent font-medium">{item.number}</span>
                       <span className="flex-1 text-text-primary">{item.contactName}</span>
@@ -551,7 +551,7 @@ export default function Conciliacion() {
                 <div className="flex items-center h-10 px-5 border-b border-subtle text-xs font-semibold text-text-secondary">
                   <span className="w-24">Fecha</span>
                   <span className="flex-1">Concepto</span>
-                  <span className="w-[120px] text-right">Importe</span>
+                  <span className="w-[120px] text-right font-mono">Importe</span>
                   <span className="w-24 text-right">Estado</span>
                 </div>
                 {(reconData.unreconciledTransactions ?? []).length === 0 ? (
@@ -562,7 +562,7 @@ export default function Conciliacion() {
                   (reconData.unreconciledTransactions ?? []).map((item) => (
                     <div
                       key={item.transactionId}
-                      className="flex items-center h-11 px-5 text-[13px] border-b border-border-light"
+                      className="flex items-center h-11 px-5 text-[13px] border-b border-border-light hover:bg-hover transition-colors"
                     >
                       <span className="w-24 text-text-secondary">
                         {new Date(item.valueDate).toLocaleDateString("es-ES", {

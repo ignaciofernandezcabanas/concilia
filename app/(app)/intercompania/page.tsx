@@ -91,7 +91,7 @@ export default function IntercompaniaPage() {
               <span className="w-36">Sociedad A</span>
               <span className="w-8 text-center">→</span>
               <span className="w-36">Sociedad B</span>
-              <span className="w-28 text-right">Importe</span>
+              <span className="w-28 text-right font-mono">Importe</span>
               <span className="flex-1">Concepto</span>
               <span className="w-24">Estado</span>
               <span className="w-20" />
@@ -104,17 +104,28 @@ export default function IntercompaniaPage() {
                 <span className="w-24 text-text-secondary">
                   {new Date(link.date).toLocaleDateString("es-ES")}
                 </span>
-                <span className="w-36 text-text-primary font-medium truncate">
+                <span
+                  className="w-36 text-text-primary font-medium truncate"
+                  title={link.companyA?.name ?? undefined}
+                >
                   {link.companyA?.shortName ?? link.companyA?.name ?? "—"}
                 </span>
                 <span className="w-8 text-center text-text-tertiary">→</span>
-                <span className="w-36 text-text-primary font-medium truncate">
+                <span
+                  className="w-36 text-text-primary font-medium truncate"
+                  title={link.companyB?.name ?? undefined}
+                >
                   {link.companyB?.shortName ?? link.companyB?.name ?? "—"}
                 </span>
                 <span className="w-28 text-right font-mono font-medium">
                   {formatAmount(link.amount)}
                 </span>
-                <span className="flex-1 text-text-secondary truncate">{link.concept ?? "—"}</span>
+                <span
+                  className="flex-1 text-text-secondary truncate"
+                  title={link.concept ?? undefined}
+                >
+                  {link.concept ?? "—"}
+                </span>
                 <span className="w-24">
                   <Badge value={link.status} />
                 </span>

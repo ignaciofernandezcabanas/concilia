@@ -160,9 +160,18 @@ function RulesTab() {
           {rules.map((rule) => (
             <div
               key={rule.id}
-              className={`flex items-center h-10 px-4 text-[12px] border-b border-border-light ${rule.status !== "ACTIVE" ? "opacity-50" : ""}`}
+              className={`flex items-center h-10 px-4 text-[12px] border-b border-border-light hover:bg-hover transition-colors ${rule.status !== "ACTIVE" ? "opacity-50" : ""}`}
             >
-              <span className="w-[200px] text-text-primary truncate font-medium">
+              <span
+                className="w-[200px] text-text-primary truncate font-medium"
+                title={
+                  rule.name ||
+                  rule.pattern ||
+                  rule.counterpartIban ||
+                  rule.conceptContains ||
+                  rule.type
+                }
+              >
                 {rule.name ||
                   rule.pattern ||
                   rule.counterpartIban ||
@@ -466,7 +475,7 @@ function PatternsTab() {
           {patterns.map((p) => (
             <div
               key={p.id}
-              className="flex items-center h-10 px-4 text-[12px] border-b border-border-light"
+              className="flex items-center h-10 px-4 text-[12px] border-b border-border-light hover:bg-hover transition-colors"
             >
               <span className="w-28 text-text-secondary">{p.type}</span>
               <span className="flex-1 text-text-primary truncate">

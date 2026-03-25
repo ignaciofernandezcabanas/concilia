@@ -98,14 +98,18 @@ export default function PeriodificacionesPage() {
           </p>
         </div>
       ) : (
-        <div className="bg-white border border-subtle rounded-xl overflow-hidden">
+        <div className="bg-white border border-subtle rounded-xl overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-subtle bg-page">
                 <th className="text-left px-4 py-3 font-medium text-text-secondary">Descripción</th>
                 <th className="text-left px-4 py-3 font-medium text-text-secondary">Proveedor</th>
-                <th className="text-right px-4 py-3 font-medium text-text-secondary">Mensual</th>
-                <th className="text-right px-4 py-3 font-medium text-text-secondary">Anual</th>
+                <th className="text-right px-4 py-3 font-medium text-text-secondary font-mono">
+                  Mensual
+                </th>
+                <th className="text-right px-4 py-3 font-medium text-text-secondary font-mono">
+                  Anual
+                </th>
                 <th className="text-center px-4 py-3 font-medium text-text-secondary">
                   Frecuencia
                 </th>
