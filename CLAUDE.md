@@ -468,6 +468,30 @@ CAPEX e inversiones financieras NUNCA entran en auto-aprobación. NUNCA en batch
 
 `lib/invoices/import-from-mailbox.ts` now checks `In-Reply-To` header against `clarificationEmailMessageId` before processing emails as invoices. Replies to clarifications skip the invoice pipeline.
 
+### Contacts Agent (Module 01)
+
+Three endpoints, one mailbox hook, four AI prompts.
+
+**Endpoints:**
+
+| Method | Path                      | Description                                        |
+| ------ | ------------------------- | -------------------------------------------------- |
+| POST   | /api/contacts/import      | Import CSV via AI parsing (Haiku). Dedup by NIF.   |
+| POST   | /api/contacts/deduplicate | Deterministic merge (NIF) + AI proposals (Sonnet). |
+| POST   | /api/contacts/enrich      | Infer payment conditions from tx history (Sonnet). |
+
+**Mailbox hook** (`lib/invoices/import-from-mailbox.ts`): Creates basic contact from sender email before invoice processing. No AI call — enrichment done via `/enrich`.
+
+**Prompts:** `DETECT_CONTACT_FROM_EMAIL` (Haiku), `IMPORT_CONTACTS_FILE` (Haiku), `ENRICH_CONTACT_FROM_HISTORY` (Sonnet), `DEDUPLICATE_CONTACTS` (Sonnet).
+
+**Business rules:**
+
+- NIF normalized (remove hyphens/dots/spaces, uppercase) before all dedup checks.
+- Import fills empty fields on existing contacts, never overwrites.
+- Dedup: same normalized NIF = auto-merge (canonical = most fields filled). No-NIF contacts → AI proposals for controller review.
+- Enrich: min 3 bank movements required. Transaction lookup: contactId → IBAN → fuzzy name. Max 20 contacts per call.
+- Utility functions in `lib/contacts/utils.ts`: `normalizeNif`, `updateContactIfNewData`.
+
 ### Design Decisions
 
 - **LearnedPattern reused**: No separate RecurringPattern model. Added `source` field to distinguish controller vs agent-generated patterns.

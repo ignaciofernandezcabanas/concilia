@@ -934,29 +934,134 @@ export const PARSE_CLARIFICATION_REPLY = {
 export const DETECT_CONTACT_FROM_EMAIL = {
   task: "detect_contact_from_email" as const,
   version: "1.0",
-  system: "TODO: Implement in contacts agent module",
-  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+  system:
+    `Eres un extractor de datos de contacto de emails y facturas españolas. ` +
+    `Extrae: nombre, NIF/CIF, email, tipo (supplier/client). ` +
+    `Infiere si es posible: IRPF aplicable, plazo de pago habitual, importe típico. ` +
+    `Confidence "high" SOLO si NIF + nombre están confirmados en el documento. ` +
+    `"medium" si nombre claro pero sin NIF. "low" si solo email. ` +
+    `Responde SOLO con JSON válido, sin markdown.`,
+  buildUser: (data: { from: string; subject: string; body: string; attachmentNames: string[] }) =>
+    `Analiza este email y extrae datos del contacto remitente.\n\n` +
+    `<email_data>\n` +
+    `From: ${data.from}\n` +
+    `Subject: ${data.subject}\n` +
+    `Body: ${data.body.slice(0, 2000)}\n` +
+    `Attachments: ${data.attachmentNames.join(", ") || "none"}\n` +
+    `</email_data>\n\n` +
+    `Return JSON: { name, nif (string|null), email, type ("SUPPLIER"|"CUSTOMER"), ` +
+    `irpfApplicable (boolean|null), paymentTermsDays (number|null), ` +
+    `typicalAmount (number|null), confidence ("high"|"medium"|"low") }`,
+  schema: z.object({
+    name: z.string(),
+    nif: z.string().nullable(),
+    email: z.string().nullable(),
+    type: z.enum(["SUPPLIER", "CUSTOMER"]).default("SUPPLIER"),
+    irpfApplicable: z.boolean().nullable().default(null),
+    paymentTermsDays: z.number().nullable().default(null),
+    typicalAmount: z.number().nullable().default(null),
+    confidence: z.enum(["high", "medium", "low"]).default("low"),
+  }),
 };
 
 export const IMPORT_CONTACTS_FILE = {
   task: "import_contacts_file" as const,
   version: "1.0",
-  system: "TODO: Implement in contacts agent module",
-  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+  system:
+    `Eres un parseador de archivos de contactos para empresas españolas. ` +
+    `Detecta el formato del archivo (Holded, Sage, A3, generic CSV). ` +
+    `Mapea columnas al esquema estándar. Valida NIF/CIF (formato español). ` +
+    `Valida emails. Ignora filas sin nombre. ` +
+    `Responde SOLO con JSON válido, sin markdown.`,
+  buildUser: (data: { content: string; filename: string }) =>
+    `Analiza este archivo de contactos y extrae los datos.\n\n` +
+    `<contacts_file>\n` +
+    `Filename: ${data.filename}\n` +
+    `Content (first 5000 chars):\n${data.content.slice(0, 5000)}\n` +
+    `</contacts_file>\n\n` +
+    `Return JSON: { formatDetected ("holded"|"sage"|"a3"|"generic"), ` +
+    `contacts: [{ name, nif (string|null), email (string|null), iban (string|null), ` +
+    `type ("SUPPLIER"|"CUSTOMER"|"BOTH"), paymentTermsDays (number|null) }], ` +
+    `warnings: string[] }`,
+  schema: z.object({
+    formatDetected: z.enum(["holded", "sage", "a3", "generic"]).default("generic"),
+    contacts: z.array(
+      z.object({
+        name: z.string(),
+        nif: z.string().nullable().default(null),
+        email: z.string().nullable().default(null),
+        iban: z.string().nullable().default(null),
+        type: z.enum(["SUPPLIER", "CUSTOMER", "BOTH"]).default("SUPPLIER"),
+        paymentTermsDays: z.number().nullable().default(null),
+      })
+    ),
+    warnings: z.array(z.string()).default([]),
+  }),
 };
 
 export const ENRICH_CONTACT_FROM_HISTORY = {
   task: "enrich_contact_from_history" as const,
   version: "1.0",
-  system: "TODO: Implement in contacts agent module",
-  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+  system:
+    `Eres un analista financiero español. A partir del historial de movimientos bancarios ` +
+    `de un contacto, infiere sus condiciones de pago y comportamiento. ` +
+    `Analiza: plazo medio de pago (días), importe típico, frecuencia, ` +
+    `patrón de IRPF (retención habitual), riesgo de morosidad. ` +
+    `Con >= 6 movimientos: confidence "high". 3-5: "medium". <3: devuelve nulls con confidence "low". ` +
+    `RAZONA PASO A PASO antes de responder.\n` +
+    `Responde SOLO con JSON válido, sin markdown.`,
+  buildUser: (data: { contactName: string; contactType: string; transactions: string }) =>
+    `Analiza el historial de movimientos de este contacto e infiere condiciones de pago.\n\n` +
+    `<company_data>\n` +
+    `Contact: ${data.contactName} (${data.contactType})\n` +
+    `</company_data>\n\n` +
+    `<bank_transaction>\n${data.transactions}\n</bank_transaction>\n\n` +
+    `Return JSON: { paymentTermsDays (number|null), typicalAmountAvg (number|null), ` +
+    `frequency ("monthly"|"quarterly"|"irregular"|null), ` +
+    `irpfApplicable (boolean|null), irpfRateImplied (number|null, decimal e.g. 0.15), ` +
+    `latePaymentRisk ("low"|"medium"|"high"|null), avgPaymentDays (number|null), ` +
+    `confidence ("high"|"medium"|"low"), reasoning (string) }`,
+  schema: z.object({
+    paymentTermsDays: z.number().nullable().default(null),
+    typicalAmountAvg: z.number().nullable().default(null),
+    frequency: z.enum(["monthly", "quarterly", "irregular"]).nullable().default(null),
+    irpfApplicable: z.boolean().nullable().default(null),
+    irpfRateImplied: z.number().nullable().default(null),
+    latePaymentRisk: z.enum(["low", "medium", "high"]).nullable().default(null),
+    avgPaymentDays: z.number().nullable().default(null),
+    confidence: z.enum(["high", "medium", "low"]).default("low"),
+    reasoning: z.string().default(""),
+  }),
 };
 
 export const DEDUPLICATE_CONTACTS = {
   task: "deduplicate_contacts" as const,
   version: "1.0",
-  system: "TODO: Implement in contacts agent module",
-  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+  system:
+    `Eres un experto en limpieza de datos de contactos empresariales españoles. ` +
+    `Detecta posibles duplicados entre contactos. ` +
+    `REGLAS:\n` +
+    `- Mismo NIF/CIF (normalizado, sin guiones) = duplicado CIERTO.\n` +
+    `- Nombre similar + mismo email = duplicado PROBABLE (confidence >= 0.8).\n` +
+    `- Nombre similar sin NIF ni email común = POSIBLE (confidence 0.5-0.7).\n` +
+    `- Filiales distintas con NIFs diferentes NO son duplicados.\n` +
+    `- Normaliza NIF: quita guiones, puntos, espacios, mayúsculas.\n` +
+    `Responde SOLO con JSON válido, sin markdown.`,
+  buildUser: (data: { contacts: string }) =>
+    `Analiza esta lista de contactos y detecta posibles duplicados.\n\n` +
+    `<company_data>\n${data.contacts}\n</company_data>\n\n` +
+    `Return JSON: { duplicateGroups: [{ contactIds: string[], confidence (0-1), ` +
+    `reason (string), canonicalId (string, the most complete contact) }] }`,
+  schema: z.object({
+    duplicateGroups: z.array(
+      z.object({
+        contactIds: z.array(z.string()),
+        confidence: z.number().min(0).max(1),
+        reason: z.string(),
+        canonicalId: z.string(),
+      })
+    ),
+  }),
 };
 
 // ── Module 02: Onboarding Agent ──

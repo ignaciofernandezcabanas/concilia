@@ -88,6 +88,24 @@ export async function importInvoicesFromMailbox(
       }
     }
 
+    // Contact detection — wrapped in try/catch, never blocks pipeline
+    try {
+      if (email.from) {
+        const senderEmail = email.from.match(/[\w.-]+@[\w.-]+/)?.[0];
+        if (senderEmail) {
+          const existing = await db.contact.findFirst({ where: { email: senderEmail } });
+          if (!existing) {
+            const senderName = email.from.replace(/<.*>/, "").trim() || senderEmail;
+            await (db as any).contact.create({
+              data: { name: senderName, email: senderEmail, type: "SUPPLIER", companyId },
+            });
+          }
+        }
+      }
+    } catch {
+      /* Contact detection failure never blocks invoice pipeline */
+    }
+
     // Filter PDF attachments only
     const pdfAttachments = email.attachments.filter(
       (a) => a.mimeType === "application/pdf" || a.fileName.toLowerCase().endsWith(".pdf")
