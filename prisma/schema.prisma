@@ -119,6 +119,8 @@ model Company {
   syncLogs                 SyncLog[]
   users                    User[]
   openingBalanceImport     OpeningBalanceImport?
+  agentThreads             AgentThread[]
+  followUpConfig           FollowUpConfig?
 }
 
 model AccountingPeriod {
@@ -1711,4 +1713,119 @@ enum CovenantOperator {
   LTE
   GT
   GTE
+}
+
+// ── Follow-Up System (AgentThread) ──
+
+enum FollowUpScenario {
+  OVERDUE_RECEIVABLE
+  DUPLICATE_OR_OVERPAYMENT
+  SUPPLIER_DISCREPANCY
+  MISSING_FISCAL_DOCS
+  GESTORIA_RECONCILIATION
+  BANK_RETURN
+  UNIDENTIFIED_ADVANCE
+  INTERCOMPANY
+}
+
+enum ThreadStatus {
+  AGENT_WORKING
+  WAITING_EXTERNAL
+  WAITING_CONTROLLER
+  RESOLVED
+  STALE
+}
+
+enum ThreadPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum MessageRole {
+  AGENT
+  CONTROLLER
+  EXTERNAL
+  SYSTEM
+}
+
+enum MessageChannel {
+  APP
+  EMAIL
+}
+
+model AgentThread {
+  id                   String            @id @default(cuid())
+  companyId            String
+  organizationId       String
+  scenario             FollowUpScenario
+  status               ThreadStatus      @default(AGENT_WORKING)
+  priority             ThreadPriority    @default(MEDIUM)
+  subject              String
+  summary              String?
+  blockedReason        String?
+  reconciliationIds    String[]          @default([])
+  invoiceIds           String[]          @default([])
+  transactionIds       String[]          @default([])
+  contactId            String?
+  autoResolveCondition Json?
+  followUpPolicy       Json?
+  followUpCount        Int               @default(0)
+  lastFollowUpAt       DateTime?
+  nextFollowUpAt       DateTime?
+  supportingDocUrls    String[]          @default([])
+  externalEmail        String?
+  externalName         String?
+  assignedToId         String?
+  dueDate              DateTime?
+  resolvedAt           DateTime?
+  lastActivityAt       DateTime          @default(now())
+  staleSince           DateTime?
+  agentRunId           String?
+  sourceStep           String?
+  autoResolved         Boolean           @default(false)
+  messages             ThreadMessage[]
+  company              Company           @relation(fields: [companyId], references: [id])
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  @@index([companyId, status])
+  @@index([companyId, scenario, status])
+  @@index([status, nextFollowUpAt])
+  @@index([contactId, status])
+}
+
+model ThreadMessage {
+  id               String         @id @default(cuid())
+  threadId         String
+  thread           AgentThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role             MessageRole
+  channel          MessageChannel
+  content          String
+  contentHtml      String?
+  channelMeta      Json?          @default("{}")
+  attachmentUrls   String[]       @default([])
+  attachmentNames  String[]       @default([])
+  suggestedActions Json?
+  actionTaken      String?
+  actionTakenAt    DateTime?
+  actionResult     String?
+  createdAt        DateTime       @default(now())
+
+  @@index([threadId, createdAt])
+}
+
+model FollowUpConfig {
+  id                     String   @id @default(cuid())
+  companyId              String   @unique
+  scenarioDefaults       Json     @default("{}")
+  defaultIntervalDays    Int      @default(4)
+  defaultMaxAttempts     Int      @default(3)
+  defaultToneProgression String[] @default(["friendly", "firm", "formal"])
+  autoResolveEnabled     Boolean  @default(true)
+  staleDays              Int      @default(7)
+  company                Company  @relation(fields: [companyId], references: [id])
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 }

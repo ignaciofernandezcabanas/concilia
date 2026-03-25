@@ -1382,3 +1382,218 @@ export const ANALYZE_DEBT_POSITION = {
   system: "TODO: Implement in debt analysis module",
   buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
 };
+
+// ════════════════════════════════════════════════════════════
+// FOLLOW-UP SYSTEM — AgentThread prompts
+// ════════════════════════════════════════════════════════════
+
+// ── COMPOSE_FOLLOWUP (Sonnet) — compose follow-up email ──
+
+export const COMPOSE_FOLLOWUP = {
+  task: "compose_followup" as const,
+  version: "2.0",
+  system:
+    `Eres el asistente de cobros y seguimiento de un controller financiero español.\n` +
+    `Redactas emails de seguimiento profesionales para situaciones de conciliación bancaria.\n\n` +
+    `REGLAS OBLIGATORIAS:\n` +
+    `1. SIEMPRE referencia el movimiento concreto: fecha, concepto bancario literal, importe con céntimos.\n` +
+    `2. Si hay factura vinculada, incluye nº factura y fecha de vencimiento.\n` +
+    `3. Pide EXPLÍCITAMENTE la acción: "Les rogamos...", "¿Podrían confirmar...por favor?"\n` +
+    `4. SIEMPRE despídete amablemente: "Quedamos a su disposición. Un cordial saludo,"\n` +
+    `5. Firma como: Departamento de Administración, [nombre empresa]\n` +
+    `6. Progresión de tono:\n` +
+    `   - "friendly": Cordial, pregunta abierta, sin urgencia.\n` +
+    `   - "firm": Profesional pero directo. Menciona intentos previos.\n` +
+    `   - "formal": Firme. Menciona número de intentos y posibles consecuencias (provisión contable, etc.).\n` +
+    `7. En follow-ups 2+, haz referencia a emails anteriores: "En relación con nuestro email de [fecha]..."\n` +
+    `8. NUNCA amenaces legalmente. Máximo: "nos veremos obligados a provisionar contablemente la deuda."\n\n` +
+    `Responde SOLO con JSON: { subject, htmlBody, plainBody }`,
+  buildUser: (data: {
+    scenario: string;
+    companyName: string;
+    contactName: string;
+    externalEmail: string;
+    tone: string;
+    followUpCount: number;
+    threadSummary: string;
+    invoiceDetails?: string;
+    transactionDetails?: string;
+    previousMessages?: string;
+  }) => {
+    let context = `<followup_context>\n`;
+    context += `Empresa: ${data.companyName}\n`;
+    context += `Destinatario: ${data.contactName} (${data.externalEmail})\n`;
+    context += `Escenario: ${data.scenario}\n`;
+    context += `Tono: ${data.tone}\n`;
+    context += `Follow-up nº: ${data.followUpCount}\n`;
+    context += `Resumen del hilo: ${data.threadSummary}\n`;
+    if (data.invoiceDetails) context += `Facturas:\n${data.invoiceDetails}\n`;
+    if (data.transactionDetails) context += `Movimientos:\n${data.transactionDetails}\n`;
+    if (data.previousMessages) context += `Mensajes previos:\n${data.previousMessages}\n`;
+    context += `</followup_context>\n\n`;
+    context += `Redacta el email de seguimiento. JSON: { subject (string), htmlBody (HTML string), plainBody (text string) }`;
+    return context;
+  },
+  schema: z.object({
+    subject: z.string(),
+    htmlBody: z.string(),
+    plainBody: z.string(),
+  }),
+};
+
+// ── FOLLOW_UP_PARSE_RESPONSE (Haiku) — parse external email reply ──
+
+export const FOLLOW_UP_PARSE_RESPONSE = {
+  task: "followup_parse_response" as const,
+  version: "1.0",
+  system:
+    `Analiza la respuesta de un contacto externo a un email de seguimiento financiero.\n` +
+    `Clasifica la respuesta en una categoría y extrae datos relevantes.\n` +
+    `Responde SOLO con JSON válido.`,
+  buildUser: (data: {
+    threadSubject: string;
+    threadScenario: string;
+    responseText: string;
+    hasAttachments: boolean;
+    attachmentNames: string[];
+    expectedAmount?: number;
+  }) =>
+    `<thread_context>\n` +
+    `Asunto original: ${data.threadSubject}\n` +
+    `Escenario: ${data.threadScenario}\n` +
+    `Importe esperado: ${data.expectedAmount != null ? `${Math.abs(data.expectedAmount).toFixed(2)} EUR` : "N/A"}\n` +
+    `</thread_context>\n\n` +
+    `<response_email>\n${data.responseText.substring(0, 3000)}\n</response_email>\n\n` +
+    `Adjuntos: ${data.hasAttachments ? data.attachmentNames.join(", ") : "Ninguno"}\n\n` +
+    `JSON: { category ("confirms_will_pay"|"confirms_already_paid"|"provides_document"|"disputes"|` +
+    `"requests_time"|"requests_info"|"redirects"|"out_of_office"|"acknowledgment_only"|"unrelated"), ` +
+    `extractedData: { paymentDate (string|null), referenceNumber (string|null), amount (number|null), ` +
+    `redirectContact (string|null) }, confidence (0-1), summary (1-2 frases en español) }`,
+  schema: z.object({
+    category: z.string(),
+    extractedData: z.object({
+      paymentDate: z.string().nullable().default(null),
+      referenceNumber: z.string().nullable().default(null),
+      amount: z.number().nullable().default(null),
+      redirectContact: z.string().nullable().default(null),
+    }),
+    confidence: z.number().min(0).max(1),
+    summary: z.string(),
+  }),
+};
+
+// ── FOLLOW_UP_DECIDE_ACTION (Sonnet) — decide next action given parsed response ──
+
+export const FOLLOW_UP_DECIDE_ACTION = {
+  task: "followup_decide_action" as const,
+  version: "1.0",
+  system:
+    `Eres un controller financiero español. Dado el contexto de un hilo de seguimiento y la respuesta ` +
+    `parseada del contacto externo, decide la siguiente acción del agente.\n\n` +
+    `Acciones posibles:\n` +
+    `- wait_and_verify: El contacto confirma pago — esperar y verificar en banco.\n` +
+    `- send_thank_you: Documentación recibida y correcta — agradecer y cerrar.\n` +
+    `- request_more_info: Respuesta incompleta — pedir más detalles.\n` +
+    `- schedule_next_followup: Sin respuesta útil — programar siguiente follow-up.\n` +
+    `- search_payment_in_bank: Confirman pago realizado — buscar en movimientos.\n` +
+    `- escalate_to_controller: Disputa, situación compleja o decisión requerida.\n\n` +
+    `Responde SOLO con JSON válido.`,
+  buildUser: (data: {
+    threadSubject: string;
+    threadScenario: string;
+    threadSummary: string;
+    followUpCount: number;
+    parsedResponse: string;
+    pendingAmount?: number;
+  }) =>
+    `<thread_context>\n` +
+    `Asunto: ${data.threadSubject}\n` +
+    `Escenario: ${data.threadScenario}\n` +
+    `Resumen: ${data.threadSummary}\n` +
+    `Follow-ups enviados: ${data.followUpCount}\n` +
+    `Importe pendiente: ${data.pendingAmount != null ? `${data.pendingAmount.toFixed(2)} EUR` : "N/A"}\n` +
+    `</thread_context>\n\n` +
+    `<parsed_response>\n${data.parsedResponse}\n</parsed_response>\n\n` +
+    `JSON: { action ("wait_and_verify"|"send_thank_you"|"request_more_info"|` +
+    `"schedule_next_followup"|"search_payment_in_bank"|"escalate_to_controller"), ` +
+    `reasoning (1-2 frases), waitDays (number|null — para wait_and_verify), ` +
+    `controllerOptions (string[]|null — si escalate, qué opciones dar al controller) }`,
+  schema: z.object({
+    action: z.string(),
+    reasoning: z.string(),
+    waitDays: z.number().nullable().default(null),
+    controllerOptions: z.array(z.string()).nullable().default(null),
+  }),
+};
+
+// ── CONTROLLER_CONVERSATION (Sonnet) — handle natural language from controller ──
+
+export const CONTROLLER_CONVERSATION = {
+  task: "controller_conversation" as const,
+  version: "1.0",
+  system:
+    `Eres el agente de seguimiento de un controller financiero español. El controller te da instrucciones ` +
+    `en lenguaje natural sobre un hilo de seguimiento. Debes:\n` +
+    `1. Entender su intención (enviar email, cerrar, cambiar prioridad, investigar, etc.).\n` +
+    `2. Si la instrucción es clara → confirmar y preparar la acción.\n` +
+    `3. Si es ambigua → pedir aclaración.\n` +
+    `4. Responder SIEMPRE en español, tono profesional pero cercano.\n\n` +
+    `Responde SOLO con JSON válido.`,
+  buildUser: (data: {
+    threadSubject: string;
+    threadScenario: string;
+    threadStatus: string;
+    threadSummary: string;
+    recentMessages: string;
+    controllerMessage: string;
+  }) =>
+    `<thread_context>\n` +
+    `Asunto: ${data.threadSubject}\n` +
+    `Escenario: ${data.threadScenario}\n` +
+    `Estado: ${data.threadStatus}\n` +
+    `Resumen: ${data.threadSummary}\n` +
+    `Mensajes recientes:\n${data.recentMessages}\n` +
+    `</thread_context>\n\n` +
+    `<controller_message>\n${data.controllerMessage}\n</controller_message>\n\n` +
+    `JSON: { reply (string — respuesta al controller en español), ` +
+    `status ("needs_clarification"|"ready_to_execute"|"executed"|"cannot_do"), ` +
+    `plannedActions: [{ type (string), params (object) }] }`,
+  schema: z.object({
+    reply: z.string(),
+    status: z.enum(["needs_clarification", "ready_to_execute", "executed", "cannot_do"]),
+    plannedActions: z
+      .array(
+        z.object({
+          type: z.string(),
+          params: z.record(z.string(), z.unknown()).default({}),
+        })
+      )
+      .default([]),
+  }),
+};
+
+// ── THREAD_SUBJECT (Haiku) — generate short thread subject ──
+
+export const THREAD_SUBJECT = {
+  task: "thread_subject" as const,
+  version: "1.0",
+  system:
+    `Genera un asunto corto (max 80 chars) para un hilo de seguimiento financiero.\n` +
+    `Formato: "[Tipo] [Referencia] — [Contacto] ([Importe])"\n` +
+    `Ejemplo: "Cobro pendiente F-2024-0342 — Transportes García (€4.200,00)"\n` +
+    `Responde SOLO con el texto del asunto, sin comillas ni JSON.`,
+  buildUser: (data: {
+    scenario: string;
+    contactName?: string;
+    invoiceNumber?: string;
+    amount?: number;
+    concept?: string;
+  }) =>
+    `<thread_data>\n` +
+    `Escenario: ${data.scenario}\n` +
+    `Contacto: ${data.contactName ?? "Desconocido"}\n` +
+    `Factura: ${data.invoiceNumber ?? "N/A"}\n` +
+    `Importe: ${data.amount != null ? `${data.amount.toFixed(2)} EUR` : "N/A"}\n` +
+    `Concepto: ${data.concept ?? "N/A"}\n` +
+    `</thread_data>`,
+};
