@@ -771,6 +771,96 @@ export const EXPLAIN_INVESTMENT_BANDEJA = {
 };
 
 // ════════════════════════════════════════════════════════════
+// CLASSIFY FINANCING MOVEMENT (Haiku)
+// ════════════════════════════════════════════════════════════
+
+export const CLASSIFY_FINANCING_MOVEMENT = {
+  task: "classify_financing_movement" as const,
+  version: "1.0",
+  system:
+    `Eres un tesorero español experto en financiación bancaria (PGC 2007).\n` +
+    `Clasifica un movimiento bancario como operación de financiación.\n` +
+    `Tipos posibles: CUOTA_PRESTAMO, DISPOSICION_CREDITO, DEVOLUCION_CREDITO, LIQUIDACION_INTERESES, ` +
+    `COMISION_BANCARIA, ANTICIPO_DESCUENTO, VENCIMIENTO_DESCUENTO, LEASING, OTRO.\n` +
+    `Responde SOLO con JSON.`,
+  buildUser: (data: {
+    amount: number;
+    concept: string;
+    counterpartName: string | null;
+    counterpartIban: string | null;
+    debtInstruments: string;
+  }) =>
+    `<bank_transaction>\n` +
+    `Importe: ${data.amount} EUR\n` +
+    `Concepto: ${data.concept}\n` +
+    `Contrapartida: ${data.counterpartName ?? "Desconocido"}\n` +
+    `IBAN: ${data.counterpartIban ?? "N/A"}\n` +
+    `</bank_transaction>\n\n` +
+    `<debt_instruments>\n${data.debtInstruments}\n</debt_instruments>\n\n` +
+    `JSON: { type, debtInstrumentId (string|null), principalAmount (number|null), interestAmount (number|null), confidence (0-1), reasoning (1 frase) }`,
+  schema: z.object({
+    type: z.string(),
+    debtInstrumentId: z.string().nullable(),
+    principalAmount: z.number().nullable(),
+    interestAmount: z.number().nullable(),
+    confidence: z.number().min(0).max(1),
+    reasoning: z.string(),
+  }),
+};
+
+// ════════════════════════════════════════════════════════════
+// DECOMPOSE INTEREST SETTLEMENT (Sonnet)
+// ════════════════════════════════════════════════════════════
+
+export const DECOMPOSE_INTEREST_SETTLEMENT = {
+  task: "decompose_interest_settlement" as const,
+  version: "1.0",
+  system:
+    `Eres un tesorero español. Descompón una liquidación de intereses bancaria en sus componentes.\n` +
+    `Identifica: intereses deudores (662), intereses acreedores (769), comisiones (626), ` +
+    `retenciones IRPF sobre intereses (473/769), y cualquier otro concepto.\n` +
+    `Razona paso a paso. Responde SOLO con JSON.`,
+  buildUser: (data: { amount: number; concept: string; debtInstruments: string }) =>
+    `<bank_transaction>\n` +
+    `Importe: ${data.amount} EUR\n` +
+    `Concepto: ${data.concept}\n` +
+    `</bank_transaction>\n\n` +
+    `<debt_instruments>\n${data.debtInstruments}\n</debt_instruments>\n\n` +
+    `RAZONA:\n` +
+    `1. ¿Es una liquidación trimestral o mensual?\n` +
+    `2. ¿Incluye intereses deudores (cargo)?\n` +
+    `3. ¿Incluye intereses acreedores (abono)?\n` +
+    `4. ¿Incluye comisiones?\n` +
+    `5. ¿Tiene retención IRPF sobre intereses?\n\n` +
+    `JSON: { steps: { period, debtInterest, creditInterest, commissions, withholding }, ` +
+    `components: [{ type ("INTEREST_DEBIT"|"INTEREST_CREDIT"|"COMMISSION"|"WITHHOLDING"|"OTHER"), ` +
+    `amount, pgcDebitAccount, pgcCreditAccount, description }], ` +
+    `confidence (0-1), reasoning (1 frase) }`,
+  schema: z.object({
+    steps: z
+      .object({
+        period: z.string().optional(),
+        debtInterest: z.string().optional(),
+        creditInterest: z.string().optional(),
+        commissions: z.string().optional(),
+        withholding: z.string().optional(),
+      })
+      .optional(),
+    components: z.array(
+      z.object({
+        type: z.string(),
+        amount: z.number(),
+        pgcDebitAccount: z.string(),
+        pgcCreditAccount: z.string(),
+        description: z.string(),
+      })
+    ),
+    confidence: z.number().min(0).max(1),
+    reasoning: z.string(),
+  }),
+};
+
+// ════════════════════════════════════════════════════════════
 // CLASSIFY MATCH DIFFERENCE (Haiku)
 // ════════════════════════════════════════════════════════════
 

@@ -38,7 +38,14 @@ export type ResolveAction =
   | "ignore"
   | "split_financial"
   | "register_fixed_asset"
-  | "register_investment";
+  | "register_investment"
+  | "reconcile_loan_installment"
+  | "reconcile_credit_line_movement"
+  | "reconcile_interest_settlement"
+  | "reconcile_discount_advance"
+  | "reconcile_discount_settlement"
+  | "reconcile_discount_default"
+  | "record_reclassification_lp_cp";
 
 export interface ResolvePayload {
   action: ResolveAction;
@@ -93,6 +100,15 @@ export interface ResolvePayload {
     isinCif?: string;
     ownershipPct?: number;
   };
+
+  // For debt actions
+  debtInstrumentId?: string;
+  debtScheduleEntryId?: string;
+  commissionAmount?: number;
+  invoiceIdToReopen?: string;
+  fromAccountCode?: string;
+  toAccountCode?: string;
+  reclassificationAmount?: number;
 
   // Rule creation
   createRule?: boolean;
@@ -980,6 +996,746 @@ export async function resolveItem(
           action: "register_investment",
           reconciliationId: invReco?.id ?? null,
           message: `Investment "${investment.name}" registered.`,
+        };
+      }
+
+      // ─── RECONCILE LOAN INSTALLMENT ───
+      case "reconcile_loan_installment": {
+        const bankTx = await tx.bankTransaction.findFirstOrThrow({
+          where: { id: payload.bankTransactionId!, companyId },
+        });
+        if (!payload.debtInstrumentId) throw new Error("debtInstrumentId required");
+        if (payload.principalAmount == null || payload.interestAmount == null)
+          throw new Error("principalAmount and interestAmount required");
+
+        const absTx = Math.abs(bankTx.amount);
+        const principalAcct = await tx.account.findFirst({ where: { code: "520", companyId } });
+        const bankAcct = await tx.account.findFirst({ where: { code: "572", companyId } });
+        const interestAcct = await tx.account.findFirst({ where: { code: "662", companyId } });
+
+        // Create journal entry with 2 lines: principal 520/572, interest 662/572
+        const je = await tx.journalEntry.create({
+          data: {
+            companyId,
+            number: 0,
+            date: bankTx.valueDate,
+            description: `Cuota préstamo — principal + intereses`,
+            type: "AUTO_RECONCILIATION",
+            status: "POSTED",
+            postedAt: new Date(),
+            lines: {
+              create: [
+                {
+                  debit: payload.principalAmount,
+                  credit: 0,
+                  accountId: principalAcct?.id ?? "520",
+                  description: "Amortización principal",
+                },
+                {
+                  debit: payload.interestAmount,
+                  credit: 0,
+                  accountId: interestAcct?.id ?? "662",
+                  description: "Intereses deuda",
+                },
+                { debit: 0, credit: absTx, accountId: bankAcct?.id ?? "572", description: "Banco" },
+              ],
+            },
+          },
+        });
+
+        // Create 2 DebtTransactions
+        await (tx as any).debtTransaction.create({
+          data: {
+            debtInstrumentId: payload.debtInstrumentId,
+            type: "INSTALLMENT_PRINCIPAL",
+            date: bankTx.valueDate,
+            amount: payload.principalAmount,
+            pgcDebitAccount: "520",
+            pgcCreditAccount: "572",
+            bankTransactionId: bankTx.id,
+            journalEntryId: je.id,
+          },
+        });
+        await (tx as any).debtTransaction.create({
+          data: {
+            debtInstrumentId: payload.debtInstrumentId,
+            type: "INSTALLMENT_INTEREST",
+            date: bankTx.valueDate,
+            amount: payload.interestAmount,
+            pgcDebitAccount: "662",
+            pgcCreditAccount: "572",
+          },
+        });
+
+        // Update outstanding balance
+        const instrument = await (tx as any).debtInstrument.findUnique({
+          where: { id: payload.debtInstrumentId },
+        });
+        if (instrument) {
+          await (tx as any).debtInstrument.update({
+            where: { id: payload.debtInstrumentId },
+            data: {
+              outstandingBalance: Math.max(
+                0,
+                instrument.outstandingBalance - payload.principalAmount
+              ),
+            },
+          });
+        }
+
+        // Mark schedule entry if provided
+        if (payload.debtScheduleEntryId) {
+          await (tx as any).debtScheduleEntry.update({
+            where: { id: payload.debtScheduleEntryId },
+            data: { matched: true, bankTransactionId: bankTx.id, matchedAt: new Date() },
+          });
+        }
+
+        await tx.bankTransaction.update({
+          where: { id: bankTx.id },
+          data: { status: "RECONCILED", economicCategory: "FINANCING_REPAYMENT" },
+        });
+
+        const installReco = payload.reconciliationId
+          ? await tx.reconciliation.findUnique({ where: { id: payload.reconciliationId } })
+          : null;
+        if (installReco)
+          await tx.reconciliation.update({
+            where: { id: installReco.id },
+            data: {
+              status: "APPROVED",
+              resolvedAt: new Date(),
+              resolvedById: userId,
+              resolution: "reconcile_loan_installment",
+            },
+          });
+
+        await createAuditLog(
+          tx,
+          userId,
+          "reconciliation.reconcile_loan_installment",
+          "BankTransaction",
+          bankTx.id,
+          {
+            debtInstrumentId: payload.debtInstrumentId,
+            principalAmount: payload.principalAmount,
+            interestAmount: payload.interestAmount,
+          }
+        );
+
+        return {
+          success: true,
+          action,
+          reconciliationId: installReco?.id,
+          bankTransactionId: bankTx.id,
+          message: "Loan installment reconciled.",
+        };
+      }
+
+      // ─── RECONCILE CREDIT LINE MOVEMENT ───
+      case "reconcile_credit_line_movement": {
+        const bankTx = await tx.bankTransaction.findFirstOrThrow({
+          where: { id: payload.bankTransactionId!, companyId },
+        });
+        if (!payload.debtInstrumentId) throw new Error("debtInstrumentId required");
+
+        const isDrawdown = bankTx.amount > 0;
+        const abs = Math.abs(bankTx.amount);
+
+        const debitAcct = isDrawdown ? "572" : "5201";
+        const creditAcct = isDrawdown ? "5201" : "572";
+        const debitAccount = await tx.account.findFirst({ where: { code: debitAcct, companyId } });
+        const creditAccount = await tx.account.findFirst({
+          where: { code: creditAcct, companyId },
+        });
+
+        await tx.journalEntry.create({
+          data: {
+            companyId,
+            number: 0,
+            date: bankTx.valueDate,
+            description: isDrawdown ? "Disposición línea de crédito" : "Reembolso línea de crédito",
+            type: "AUTO_RECONCILIATION",
+            status: "POSTED",
+            postedAt: new Date(),
+            lines: {
+              create: [
+                {
+                  debit: abs,
+                  credit: 0,
+                  accountId: debitAccount?.id ?? debitAcct,
+                  description: isDrawdown ? "Banco" : "Devolución crédito",
+                },
+                {
+                  debit: 0,
+                  credit: abs,
+                  accountId: creditAccount?.id ?? creditAcct,
+                  description: isDrawdown ? "Disposición crédito" : "Banco",
+                },
+              ],
+            },
+          },
+        });
+
+        await (tx as any).debtTransaction.create({
+          data: {
+            debtInstrumentId: payload.debtInstrumentId,
+            type: isDrawdown ? "DRAWDOWN" : "REPAYMENT",
+            date: bankTx.valueDate,
+            amount: abs,
+            pgcDebitAccount: debitAcct,
+            pgcCreditAccount: creditAcct,
+            bankTransactionId: bankTx.id,
+          },
+        });
+
+        // Update currentDrawdown
+        const clInstrument = await (tx as any).debtInstrument.findUnique({
+          where: { id: payload.debtInstrumentId },
+        });
+        if (clInstrument) {
+          const newDrawdown = isDrawdown
+            ? (clInstrument.currentDrawdown ?? 0) + abs
+            : Math.max(0, (clInstrument.currentDrawdown ?? 0) - abs);
+          await (tx as any).debtInstrument.update({
+            where: { id: payload.debtInstrumentId },
+            data: { currentDrawdown: newDrawdown },
+          });
+        }
+
+        await tx.bankTransaction.update({
+          where: { id: bankTx.id },
+          data: {
+            status: "RECONCILED",
+            economicCategory: isDrawdown ? "FINANCING_DRAWDOWN" : "FINANCING_REPAYMENT",
+          },
+        });
+
+        const clReco = payload.reconciliationId
+          ? await tx.reconciliation.findUnique({ where: { id: payload.reconciliationId } })
+          : null;
+        if (clReco)
+          await tx.reconciliation.update({
+            where: { id: clReco.id },
+            data: {
+              status: "APPROVED",
+              resolvedAt: new Date(),
+              resolvedById: userId,
+              resolution: "reconcile_credit_line_movement",
+            },
+          });
+
+        await createAuditLog(
+          tx,
+          userId,
+          "reconciliation.reconcile_credit_line_movement",
+          "BankTransaction",
+          bankTx.id,
+          {
+            debtInstrumentId: payload.debtInstrumentId,
+            isDrawdown,
+            amount: abs,
+          }
+        );
+
+        return {
+          success: true,
+          action,
+          reconciliationId: clReco?.id,
+          bankTransactionId: bankTx.id,
+          message: isDrawdown
+            ? "Credit line drawdown recorded."
+            : "Credit line repayment recorded.",
+        };
+      }
+
+      // ─── RECONCILE INTEREST SETTLEMENT ───
+      case "reconcile_interest_settlement": {
+        const bankTx = await tx.bankTransaction.findFirstOrThrow({
+          where: { id: payload.bankTransactionId!, companyId },
+        });
+        if (!payload.interestAmount) throw new Error("interestAmount required");
+
+        const abs = Math.abs(bankTx.amount);
+        const interestAcct = await tx.account.findFirst({ where: { code: "662", companyId } });
+        const bankAcct = await tx.account.findFirst({ where: { code: "572", companyId } });
+        const commAcct = payload.commissionAmount
+          ? await tx.account.findFirst({ where: { code: "626", companyId } })
+          : null;
+
+        const lines: Array<{
+          debit: number;
+          credit: number;
+          accountId: string;
+          description: string;
+        }> = [
+          {
+            debit: payload.interestAmount,
+            credit: 0,
+            accountId: interestAcct?.id ?? "662",
+            description: "Intereses deuda",
+          },
+        ];
+        if (payload.commissionAmount && payload.commissionAmount > 0) {
+          lines.push({
+            debit: payload.commissionAmount,
+            credit: 0,
+            accountId: commAcct?.id ?? "626",
+            description: "Comisión bancaria",
+          });
+        }
+        lines.push({
+          debit: 0,
+          credit: abs,
+          accountId: bankAcct?.id ?? "572",
+          description: "Banco",
+        });
+
+        await tx.journalEntry.create({
+          data: {
+            companyId,
+            number: 0,
+            date: bankTx.valueDate,
+            description: "Liquidación de intereses",
+            type: "AUTO_RECONCILIATION",
+            status: "POSTED",
+            postedAt: new Date(),
+            lines: { create: lines },
+          },
+        });
+
+        if (payload.debtInstrumentId) {
+          await (tx as any).debtTransaction.create({
+            data: {
+              debtInstrumentId: payload.debtInstrumentId,
+              type: "INTEREST_PAYMENT",
+              date: bankTx.valueDate,
+              amount: payload.interestAmount,
+              pgcDebitAccount: "662",
+              pgcCreditAccount: "572",
+              bankTransactionId: bankTx.id,
+            },
+          });
+          if (payload.commissionAmount && payload.commissionAmount > 0) {
+            await (tx as any).debtTransaction.create({
+              data: {
+                debtInstrumentId: payload.debtInstrumentId,
+                type: "COMMISSION",
+                date: bankTx.valueDate,
+                amount: payload.commissionAmount,
+                pgcDebitAccount: "626",
+                pgcCreditAccount: "572",
+              },
+            });
+          }
+        }
+
+        await tx.bankTransaction.update({
+          where: { id: bankTx.id },
+          data: { status: "RECONCILED", economicCategory: "FINANCING_INTEREST" },
+        });
+
+        const intReco = payload.reconciliationId
+          ? await tx.reconciliation.findUnique({ where: { id: payload.reconciliationId } })
+          : null;
+        if (intReco)
+          await tx.reconciliation.update({
+            where: { id: intReco.id },
+            data: {
+              status: "APPROVED",
+              resolvedAt: new Date(),
+              resolvedById: userId,
+              resolution: "reconcile_interest_settlement",
+            },
+          });
+
+        await createAuditLog(
+          tx,
+          userId,
+          "reconciliation.reconcile_interest_settlement",
+          "BankTransaction",
+          bankTx.id,
+          {
+            interestAmount: payload.interestAmount,
+            commissionAmount: payload.commissionAmount,
+          }
+        );
+
+        return {
+          success: true,
+          action,
+          reconciliationId: intReco?.id,
+          bankTransactionId: bankTx.id,
+          message: "Interest settlement reconciled.",
+        };
+      }
+
+      // ─── RECONCILE DISCOUNT ADVANCE ───
+      case "reconcile_discount_advance": {
+        // 572+665 / 5208 — NEVER auto-approve
+        const bankTx = await tx.bankTransaction.findFirstOrThrow({
+          where: { id: payload.bankTransactionId!, companyId },
+        });
+        if (!payload.principalAmount || !payload.interestAmount)
+          throw new Error("principalAmount (nominal) and interestAmount (discount cost) required");
+
+        const nominalAmount = payload.principalAmount;
+        const discountCost = payload.interestAmount;
+        const netReceived = Math.abs(bankTx.amount);
+
+        const bankAcct = await tx.account.findFirst({ where: { code: "572", companyId } });
+        const discountAcct = await tx.account.findFirst({ where: { code: "665", companyId } });
+        const discountLiability = await tx.account.findFirst({
+          where: { code: "5208", companyId },
+        });
+
+        await tx.journalEntry.create({
+          data: {
+            companyId,
+            number: 0,
+            date: bankTx.valueDate,
+            description: "Anticipo por descuento de efectos",
+            type: "AUTO_RECONCILIATION",
+            status: "POSTED",
+            postedAt: new Date(),
+            lines: {
+              create: [
+                {
+                  debit: netReceived,
+                  credit: 0,
+                  accountId: bankAcct?.id ?? "572",
+                  description: "Banco (neto recibido)",
+                },
+                {
+                  debit: discountCost,
+                  credit: 0,
+                  accountId: discountAcct?.id ?? "665",
+                  description: "Intereses descuento",
+                },
+                {
+                  debit: 0,
+                  credit: nominalAmount,
+                  accountId: discountLiability?.id ?? "5208",
+                  description: "Deudas por efectos descontados",
+                },
+              ],
+            },
+          },
+        });
+
+        if (payload.debtInstrumentId) {
+          await (tx as any).debtTransaction.create({
+            data: {
+              debtInstrumentId: payload.debtInstrumentId,
+              type: "DISCOUNT_ADVANCE",
+              date: bankTx.valueDate,
+              amount: nominalAmount,
+              pgcDebitAccount: "572",
+              pgcCreditAccount: "5208",
+              bankTransactionId: bankTx.id,
+            },
+          });
+        }
+
+        await tx.bankTransaction.update({
+          where: { id: bankTx.id },
+          data: { status: "RECONCILED", economicCategory: "FINANCING_DISCOUNT_ADV" },
+        });
+
+        const daReco = payload.reconciliationId
+          ? await tx.reconciliation.findUnique({ where: { id: payload.reconciliationId } })
+          : null;
+        if (daReco)
+          await tx.reconciliation.update({
+            where: { id: daReco.id },
+            data: {
+              status: "APPROVED",
+              resolvedAt: new Date(),
+              resolvedById: userId,
+              resolution: "reconcile_discount_advance",
+            },
+          });
+
+        await createAuditLog(
+          tx,
+          userId,
+          "reconciliation.reconcile_discount_advance",
+          "BankTransaction",
+          bankTx.id,
+          {
+            nominalAmount,
+            discountCost,
+            netReceived,
+          }
+        );
+
+        return {
+          success: true,
+          action,
+          reconciliationId: daReco?.id,
+          bankTransactionId: bankTx.id,
+          message: "Discount advance reconciled.",
+        };
+      }
+
+      // ─── RECONCILE DISCOUNT SETTLEMENT ───
+      case "reconcile_discount_settlement": {
+        // 5208 / 4310
+        const bankTx = await tx.bankTransaction.findFirstOrThrow({
+          where: { id: payload.bankTransactionId!, companyId },
+        });
+        const abs = Math.abs(bankTx.amount);
+        const discountLiability = await tx.account.findFirst({
+          where: { code: "5208", companyId },
+        });
+        const receivable = await tx.account.findFirst({ where: { code: "4310", companyId } });
+
+        await tx.journalEntry.create({
+          data: {
+            companyId,
+            number: 0,
+            date: bankTx.valueDate,
+            description: "Vencimiento efecto descontado — cobro normal",
+            type: "AUTO_RECONCILIATION",
+            status: "POSTED",
+            postedAt: new Date(),
+            lines: {
+              create: [
+                {
+                  debit: abs,
+                  credit: 0,
+                  accountId: discountLiability?.id ?? "5208",
+                  description: "Cancelación deuda efectos",
+                },
+                {
+                  debit: 0,
+                  credit: abs,
+                  accountId: receivable?.id ?? "4310",
+                  description: "Efectos cobrados",
+                },
+              ],
+            },
+          },
+        });
+
+        if (payload.debtInstrumentId) {
+          await (tx as any).debtTransaction.create({
+            data: {
+              debtInstrumentId: payload.debtInstrumentId,
+              type: "DISCOUNT_SETTLEMENT",
+              date: bankTx.valueDate,
+              amount: abs,
+              pgcDebitAccount: "5208",
+              pgcCreditAccount: "4310",
+              bankTransactionId: bankTx.id,
+            },
+          });
+        }
+
+        await tx.bankTransaction.update({
+          where: { id: bankTx.id },
+          data: { status: "RECONCILED", economicCategory: "FINANCING_DISCOUNT_SET" },
+        });
+
+        const dsReco = payload.reconciliationId
+          ? await tx.reconciliation.findUnique({ where: { id: payload.reconciliationId } })
+          : null;
+        if (dsReco)
+          await tx.reconciliation.update({
+            where: { id: dsReco.id },
+            data: {
+              status: "APPROVED",
+              resolvedAt: new Date(),
+              resolvedById: userId,
+              resolution: "reconcile_discount_settlement",
+            },
+          });
+
+        await createAuditLog(
+          tx,
+          userId,
+          "reconciliation.reconcile_discount_settlement",
+          "BankTransaction",
+          bankTx.id,
+          { amount: abs }
+        );
+
+        return {
+          success: true,
+          action,
+          reconciliationId: dsReco?.id,
+          bankTransactionId: bankTx.id,
+          message: "Discount settlement reconciled.",
+        };
+      }
+
+      // ─── RECONCILE DISCOUNT DEFAULT ───
+      case "reconcile_discount_default": {
+        // 4310 / 572 — reopen the invoice
+        const bankTx = await tx.bankTransaction.findFirstOrThrow({
+          where: { id: payload.bankTransactionId!, companyId },
+        });
+        const abs = Math.abs(bankTx.amount);
+        const receivable = await tx.account.findFirst({ where: { code: "4310", companyId } });
+        const bankAcct = await tx.account.findFirst({ where: { code: "572", companyId } });
+
+        await tx.journalEntry.create({
+          data: {
+            companyId,
+            number: 0,
+            date: bankTx.valueDate,
+            description: "Impago efecto descontado — devolución",
+            type: "AUTO_RECONCILIATION",
+            status: "POSTED",
+            postedAt: new Date(),
+            lines: {
+              create: [
+                {
+                  debit: abs,
+                  credit: 0,
+                  accountId: receivable?.id ?? "4310",
+                  description: "Efectos impagados",
+                },
+                {
+                  debit: 0,
+                  credit: abs,
+                  accountId: bankAcct?.id ?? "572",
+                  description: "Cargo en cuenta",
+                },
+              ],
+            },
+          },
+        });
+
+        if (payload.debtInstrumentId) {
+          await (tx as any).debtTransaction.create({
+            data: {
+              debtInstrumentId: payload.debtInstrumentId,
+              type: "DISCOUNT_DEFAULT",
+              date: bankTx.valueDate,
+              amount: abs,
+              pgcDebitAccount: "4310",
+              pgcCreditAccount: "572",
+              bankTransactionId: bankTx.id,
+            },
+          });
+        }
+
+        // Reopen invoice if provided
+        if (payload.invoiceIdToReopen) {
+          await tx.invoice.update({
+            where: { id: payload.invoiceIdToReopen },
+            data: { status: "OVERDUE" },
+          });
+        }
+
+        await tx.bankTransaction.update({
+          where: { id: bankTx.id },
+          data: { status: "RECONCILED", economicCategory: "FINANCING_DISCOUNT_SET" },
+        });
+
+        const ddReco = payload.reconciliationId
+          ? await tx.reconciliation.findUnique({ where: { id: payload.reconciliationId } })
+          : null;
+        if (ddReco)
+          await tx.reconciliation.update({
+            where: { id: ddReco.id },
+            data: {
+              status: "APPROVED",
+              resolvedAt: new Date(),
+              resolvedById: userId,
+              resolution: "reconcile_discount_default",
+            },
+          });
+
+        await createAuditLog(
+          tx,
+          userId,
+          "reconciliation.reconcile_discount_default",
+          "BankTransaction",
+          bankTx.id,
+          {
+            amount: abs,
+            invoiceReopened: payload.invoiceIdToReopen,
+          }
+        );
+
+        return {
+          success: true,
+          action,
+          reconciliationId: ddReco?.id,
+          bankTransactionId: bankTx.id,
+          message: "Discount default processed — invoice reopened.",
+        };
+      }
+
+      // ─── RECORD RECLASSIFICATION LP → CP ───
+      case "record_reclassification_lp_cp": {
+        // 170 / 520 — no bankTransactionId (accounting-only)
+        if (!payload.debtInstrumentId) throw new Error("debtInstrumentId required");
+        if (!payload.reclassificationAmount) throw new Error("reclassificationAmount required");
+
+        const fromCode = payload.fromAccountCode ?? "170";
+        const toCode = payload.toAccountCode ?? "520";
+        const fromAcct = await tx.account.findFirst({ where: { code: fromCode, companyId } });
+        const toAcct = await tx.account.findFirst({ where: { code: toCode, companyId } });
+
+        await tx.journalEntry.create({
+          data: {
+            companyId,
+            number: 0,
+            date: new Date(),
+            description: "Reclasificación deuda largo plazo → corto plazo",
+            type: "ADJUSTMENT",
+            status: "POSTED",
+            postedAt: new Date(),
+            lines: {
+              create: [
+                {
+                  debit: payload.reclassificationAmount,
+                  credit: 0,
+                  accountId: fromAcct?.id ?? fromCode,
+                  description: `Baja ${fromCode}`,
+                },
+                {
+                  debit: 0,
+                  credit: payload.reclassificationAmount,
+                  accountId: toAcct?.id ?? toCode,
+                  description: `Alta ${toCode}`,
+                },
+              ],
+            },
+          },
+        });
+
+        await (tx as any).debtTransaction.create({
+          data: {
+            debtInstrumentId: payload.debtInstrumentId,
+            type: "RECLASSIFICATION_LP_CP",
+            date: new Date(),
+            amount: payload.reclassificationAmount,
+            pgcDebitAccount: fromCode,
+            pgcCreditAccount: toCode,
+          },
+        });
+
+        await createAuditLog(
+          tx,
+          userId,
+          "reconciliation.record_reclassification_lp_cp",
+          "DebtInstrument",
+          payload.debtInstrumentId,
+          {
+            amount: payload.reclassificationAmount,
+            from: fromCode,
+            to: toCode,
+          }
+        );
+
+        return {
+          success: true,
+          action,
+          message: `Reclassification ${fromCode} → ${toCode} recorded.`,
         };
       }
 

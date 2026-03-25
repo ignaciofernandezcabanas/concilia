@@ -17,6 +17,7 @@ import { detectReturn } from "./detectors/return-detector";
 import { detectFinancialOp } from "./detectors/financial-detector";
 import { detectInvestmentOrCapex } from "./detectors/investment-detector";
 import { detectEquityMovement } from "./detectors/equity-detector";
+import { detectFinancing } from "./detectors/financing-detector";
 
 import { findExactMatch, findSupportingDocMatch } from "./matchers/exact-match";
 import { findGroupedMatch } from "./matchers/grouped-match";
@@ -230,6 +231,68 @@ async function processTransaction(
       result.needsReview++;
       return;
     }
+  }
+
+  // =====================================================================
+  // PHASE 0a2: FINANCING PRE-CLASSIFICATION
+  // =====================================================================
+  // Detects debt-related movements (loan installments, credit line operations,
+  // discount lines, leasing, commissions). If detected → creates a DECISION
+  // or CONFIRMATION item and short-circuits phases 1-4.
+
+  const financingResult = await detectFinancing(tx, db).catch(() => null);
+  if (financingResult?.isFinancing && financingResult.detectedType) {
+    await db.bankTransaction.update({
+      where: { id: tx.id },
+      data: {
+        economicCategory: financingResult.economicCategory,
+        classificationNotes: JSON.parse(
+          JSON.stringify({
+            debtInstrumentId: financingResult.debtInstrumentId,
+            scheduleEntryId: financingResult.scheduleEntryId,
+            principalSplit: financingResult.principalSplit,
+            interestSplit: financingResult.interestSplit,
+            detectedAt: new Date().toISOString(),
+          })
+        ),
+      },
+    });
+
+    const autoApprove =
+      financingResult.confidence >= autoApproveThreshold &&
+      Math.abs(tx.amount) <= materialityThreshold &&
+      financingResult.detectedType !== "DISCOUNT_ADVANCE"; // Discount advances NEVER auto
+
+    await createReconciliation(db, tx, companyId, {
+      type: "MANUAL",
+      confidence: financingResult.confidence,
+      matchReason: financingResult.matchReason!,
+      detectedType: financingResult.detectedType,
+      autoApprove,
+    });
+
+    const priority =
+      financingResult.confidence === 0
+        ? "DECISION"
+        : financingResult.confidence >= autoApproveThreshold
+          ? "ROUTINE"
+          : "CONFIRMATION";
+
+    await updateTxStatus(
+      db,
+      tx.id,
+      autoApprove ? "RECONCILED" : "PENDING",
+      financingResult.detectedType,
+      priority as "DECISION" | "CONFIRMATION" | "ROUTINE" | "URGENT"
+    );
+
+    if (autoApprove) {
+      result.matched++;
+      result.autoApproved++;
+    } else {
+      result.needsReview++;
+    }
+    return;
   }
 
   // =====================================================================
