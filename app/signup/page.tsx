@@ -44,32 +44,20 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 6,
 };
 
-export default function LoginPage() {
-  const { signIn, session, loading, isConfigured } = useAuth();
+export default function SignupPage() {
+  const { session, loading, isConfigured } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [company, setCompany] = useState("");
+  const [step, setStep] = useState(1);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!loading && (session || !isConfigured)) {
-      router.push("/");
-    }
-  }, [loading, session, isConfigured, router]);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setSubmitting(true);
-    const result = await signIn(email, password);
-    setSubmitting(false);
-    if (result.error) {
-      setError(result.error);
-    } else {
-      router.push("/");
-    }
-  }
+    if (!loading && session) router.push("/");
+  }, [loading, session, router]);
 
   async function handleOAuth(provider: "google" | "azure") {
     const sb = getSupabase();
@@ -82,8 +70,25 @@ export default function LoginPage() {
     if (error) setError(error.message);
   }
 
-  if (loading) return null;
-  if (!isConfigured) return null;
+  async function handleSignup() {
+    const sb = getSupabase();
+    if (!sb) return;
+    setError("");
+    setSubmitting(true);
+    const { error } = await sb.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: name, company_name: company } },
+    });
+    setSubmitting(false);
+    if (error) {
+      setError(error.message);
+    } else {
+      router.push("/");
+    }
+  }
+
+  if (loading || !isConfigured) return null;
 
   return (
     <>
@@ -183,15 +188,16 @@ export default function LoginPage() {
                 marginBottom: 24,
               }}
             >
-              Bienvenido de vuelta.
+              Tu agente de controlling
               <br />
-              <span style={{ color: colors.teal }}>Tu agente te espera.</span>
+              <span style={{ color: colors.teal }}>empieza a trabajar hoy.</span>
             </h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 40 }}>
               {[
-                { icon: "📊", text: "Tu dashboard te espera con las últimas conciliaciones." },
-                { icon: "🔔", text: "Revisa las excepciones pendientes de tu aprobación." },
-                { icon: "📈", text: "Aging, tesorería y reporting actualizados al minuto." },
+                { icon: "⚡", text: "Setup en 10 minutos. Sin instalación." },
+                { icon: "🏦", text: "Conecta tu banco con Open Banking (PSD2)." },
+                { icon: "🤖", text: "El agente empieza a conciliar automáticamente." },
+                { icon: "✓", text: "14 días gratis. Sin tarjeta. Sin permanencia." },
               ].map((item, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <span style={{ fontSize: 20 }}>{item.icon}</span>
@@ -231,7 +237,7 @@ export default function LoginPage() {
                 marginBottom: 8,
               }}
             >
-              Inicia sesión
+              Crea tu cuenta
             </h3>
             <p
               style={{
@@ -241,7 +247,7 @@ export default function LoginPage() {
                 marginBottom: 32,
               }}
             >
-              Accede a tu panel de controlling.
+              Empieza tu prueba gratuita de 14 días.
             </p>
 
             {/* Google button */}
@@ -348,75 +354,143 @@ export default function LoginPage() {
               <div style={{ flex: 1, height: 1, background: colors.steel }} />
             </div>
 
-            <form
-              onSubmit={handleSubmit}
-              style={{ display: "flex", flexDirection: "column", gap: 16 }}
-            >
-              <div>
-                <label style={labelStyle}>Email</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  style={inputStyle}
-                  placeholder="tu@empresa.com"
-                  required
-                  onFocus={(e: any) => (e.target.style.borderColor = colors.teal)}
-                  onBlur={(e: any) => (e.target.style.borderColor = colors.steel)}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>Contraseña</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  style={inputStyle}
-                  placeholder="••••••••"
-                  required
-                  onFocus={(e: any) => (e.target.style.borderColor = colors.teal)}
-                  onBlur={(e: any) => (e.target.style.borderColor = colors.steel)}
-                />
-              </div>
+            {step === 1 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div>
+                  <label style={labelStyle}>Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    style={inputStyle}
+                    placeholder="tu@empresa.com"
+                    onFocus={(e: any) => (e.target.style.borderColor = colors.teal)}
+                    onBlur={(e: any) => (e.target.style.borderColor = colors.steel)}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Contraseña</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    style={inputStyle}
+                    placeholder="Mínimo 8 caracteres"
+                    onFocus={(e: any) => (e.target.style.borderColor = colors.teal)}
+                    onBlur={(e: any) => (e.target.style.borderColor = colors.steel)}
+                  />
+                </div>
 
-              {error && (
-                <div
+                <button
+                  onClick={() => {
+                    if (email && password.length >= 8) setStep(2);
+                    else setError("Email y contraseña (mín. 8 caracteres) requeridos");
+                  }}
                   style={{
-                    padding: "12px 16px",
+                    width: "100%",
+                    padding: "14px 24px",
                     borderRadius: 10,
-                    background: "rgba(239,68,68,0.1)",
-                    border: `1px solid rgba(239,68,68,0.2)`,
-                    fontSize: 14,
-                    color: colors.red,
+                    border: "none",
+                    background: colors.teal,
+                    color: colors.white,
+                    fontSize: 15,
                     fontFamily: "'Plus Jakarta Sans', sans-serif",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    marginTop: 8,
                   }}
                 >
-                  {error}
-                </div>
-              )}
+                  Continuar →
+                </button>
+              </div>
+            )}
 
-              <button
-                type="submit"
-                disabled={submitting}
+            {step === 2 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div>
+                  <label style={labelStyle}>Tu nombre</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    style={inputStyle}
+                    placeholder="María García"
+                    onFocus={(e: any) => (e.target.style.borderColor = colors.teal)}
+                    onBlur={(e: any) => (e.target.style.borderColor = colors.steel)}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Nombre de la empresa</label>
+                  <input
+                    type="text"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    style={inputStyle}
+                    placeholder="Mi Empresa SL"
+                    onFocus={(e: any) => (e.target.style.borderColor = colors.teal)}
+                    onBlur={(e: any) => (e.target.style.borderColor = colors.steel)}
+                  />
+                </div>
+
+                <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+                  <button
+                    onClick={() => setStep(1)}
+                    style={{
+                      flex: 1,
+                      padding: "14px 24px",
+                      borderRadius: 10,
+                      border: `1px solid ${colors.steel}`,
+                      background: "transparent",
+                      color: colors.cloud,
+                      fontSize: 15,
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ← Atrás
+                  </button>
+                  <button
+                    onClick={handleSignup}
+                    disabled={submitting || !name}
+                    style={{
+                      flex: 2,
+                      padding: "14px 24px",
+                      borderRadius: 10,
+                      border: "none",
+                      background: colors.teal,
+                      color: colors.white,
+                      fontSize: 15,
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      transition: "all 0.2s",
+                      opacity: submitting || !name ? 0.5 : 1,
+                    }}
+                  >
+                    {submitting ? "Creando cuenta..." : "Crear cuenta"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div
                 style={{
-                  width: "100%",
-                  padding: "14px 24px",
+                  marginTop: 16,
+                  padding: "12px 16px",
                   borderRadius: 10,
-                  border: "none",
-                  background: colors.teal,
-                  color: colors.white,
-                  fontSize: 15,
+                  background: "rgba(239,68,68,0.1)",
+                  border: `1px solid rgba(239,68,68,0.2)`,
+                  fontSize: 14,
+                  color: colors.red,
                   fontFamily: "'Plus Jakarta Sans', sans-serif",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  marginTop: 8,
-                  opacity: submitting ? 0.5 : 1,
                 }}
               >
-                {submitting ? "Entrando..." : "Iniciar sesión"}
-              </button>
-            </form>
+                {error}
+              </div>
+            )}
 
             <p
               style={{
@@ -427,12 +501,12 @@ export default function LoginPage() {
                 textAlign: "center",
               }}
             >
-              ¿No tienes cuenta?{" "}
+              ¿Ya tienes cuenta?{" "}
               <Link
-                href="/signup"
+                href="/login"
                 style={{ color: colors.teal, textDecoration: "none", fontWeight: 600 }}
               >
-                Regístrate gratis
+                Inicia sesión
               </Link>
             </p>
           </div>
