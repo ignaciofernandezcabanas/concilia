@@ -104,6 +104,7 @@ model Company {
   recurringAccruals        RecurringAccrual[]
   badDebtTrackers          BadDebtTracker[]
   exchangeRateDifferences  ExchangeRateDifference[]
+  debtInstruments          DebtInstrument[]
   deferredEntries          DeferredEntry[]
   invoices                 Invoice[]
   journalEntries           JournalEntry[]
@@ -239,6 +240,7 @@ model JournalEntry {
   company      Company            @relation(fields: [companyId], references: [id])
   lines                  JournalEntryLine[]
   investmentTransactions InvestmentTransaction[]
+  debtTransactions       DebtTransaction[]
   recurringAccrual       RecurringAccrual?      @relation("AccrualEntries", fields: [recurringAccrualId], references: [id])
   recurringAccrualId     String?
   supportingDocument     SupportingDocument?    @relation("SupportingDocEntry")
@@ -498,13 +500,14 @@ model InvestmentTransaction {
 }
 
 model OwnBankAccount {
-  id        String  @id @default(cuid())
-  iban      String
-  bankName  String?
-  alias     String?
-  isActive  Boolean @default(true)
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
+  id              String           @id @default(cuid())
+  iban            String
+  bankName        String?
+  alias           String?
+  isActive        Boolean          @default(true)
+  companyId       String
+  company         Company          @relation(fields: [companyId], references: [id])
+  debtInstruments DebtInstrument[]
 
   @@unique([iban, companyId])
 }
@@ -640,6 +643,8 @@ model BankTransaction {
   inquiries              Inquiry[]
   reconciliations        Reconciliation[]
   investmentTransactions InvestmentTransaction[]
+  debtTransactions       DebtTransaction[]
+  debtScheduleEntry      DebtScheduleEntry?
 
   // Investment/CAPEX classification
   economicCategory    EconomicCategory?
@@ -1157,6 +1162,13 @@ enum EconomicCategory {
   LOAN_REPAYMENT_RECEIVED
   FINANCING_IN
   FINANCING_OUT
+  FINANCING_DRAWDOWN
+  FINANCING_REPAYMENT
+  FINANCING_INTEREST
+  FINANCING_COMMISSION
+  FINANCING_DISCOUNT_ADV
+  FINANCING_DISCOUNT_SET
+  FINANCING_LEASE_PAYMENT
   TAX_PAYMENT
   INTERCOMPANY
   UNCLASSIFIED
@@ -1224,6 +1236,14 @@ enum DetectedType {
   INTERCOMPANY
   OPENING_BALANCE
   PAYROLL
+  LOAN_INSTALLMENT
+  CREDIT_LINE_DRAWDOWN
+  CREDIT_LINE_REPAYMENT
+  INTEREST_SETTLEMENT
+  DISCOUNT_ADVANCE
+  DISCOUNT_SETTLEMENT
+  LEASE_INSTALLMENT
+  DEBT_COMMISSION
 }
 
 enum DuplicateStatus {
@@ -1332,6 +1352,12 @@ enum NotificationType {
   JOURNAL_ENTRY_PENDING_APPROVAL
   CLARIFICATION_RECEIVED
   CLARIFICATION_OVERDUE
+  DEBT_INSTALLMENT_OVERDUE
+  DEBT_MATURITY_APPROACHING
+  DEBT_COVENANT_BREACH_RISK
+  DEBT_COVENANT_BREACHED
+  CREDIT_LINE_LOW_AVAILABLE
+  CREDIT_LINE_RENEWAL_DUE
 }
 
 enum AgentRunStatus {
@@ -1460,4 +1486,159 @@ enum ExpectedDirection {
   INFLOW
   OUTFLOW
   NONE
+}
+
+// ── Debt Module ──
+
+model DebtInstrument {
+  id                String            @id @default(cuid())
+  name              String
+  type              DebtType
+  bankEntityName    String
+  principalAmount   Float
+  outstandingBalance Float
+  interestRateType  InterestRateType
+  interestRateValue Float
+  referenceRate     String?
+  spread            Float?
+  startDate         DateTime
+  maturityDate      DateTime
+  gracePeriodEndDate DateTime?
+  paymentDay        Int?
+  paymentFrequency  PaymentFrequency
+  creditLimit       Float?
+  currentDrawdown   Float?
+  contractDocUrl    String?
+  status            DebtStatus        @default(ACTIVE)
+  notes             String?
+  bankAccountId     String?
+  bankAccount       OwnBankAccount?   @relation(fields: [bankAccountId], references: [id])
+  companyId         String
+  company           Company           @relation(fields: [companyId], references: [id])
+  covenants         DebtCovenant[]
+  schedule          DebtScheduleEntry[]
+  transactions      DebtTransaction[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([companyId, status])
+}
+
+model DebtScheduleEntry {
+  id                String           @id @default(cuid())
+  debtInstrumentId  String
+  debtInstrument    DebtInstrument   @relation(fields: [debtInstrumentId], references: [id], onDelete: Cascade)
+  entryNumber       Int
+  dueDate           DateTime
+  principalAmount   Float
+  interestAmount    Float
+  totalAmount       Float
+  outstandingAfter  Float
+  matched           Boolean          @default(false)
+  bankTransactionId String?          @unique
+  bankTransaction   BankTransaction? @relation(fields: [bankTransactionId], references: [id])
+  matchedAt         DateTime?
+
+  @@index([debtInstrumentId, dueDate])
+}
+
+model DebtTransaction {
+  id                String           @id @default(cuid())
+  debtInstrumentId  String
+  debtInstrument    DebtInstrument   @relation(fields: [debtInstrumentId], references: [id], onDelete: Cascade)
+  type              DebtTransactionType
+  date              DateTime
+  amount            Float
+  pgcDebitAccount   String
+  pgcCreditAccount  String
+  bankTransactionId String?          @unique
+  bankTransaction   BankTransaction? @relation(fields: [bankTransactionId], references: [id])
+  journalEntryId    String?
+  journalEntry      JournalEntry?    @relation(fields: [journalEntryId], references: [id])
+  notes             String?
+  createdAt         DateTime         @default(now())
+
+  @@index([debtInstrumentId])
+  @@index([bankTransactionId])
+}
+
+model DebtCovenant {
+  id                String           @id @default(cuid())
+  debtInstrumentId  String
+  debtInstrument    DebtInstrument   @relation(fields: [debtInstrumentId], references: [id], onDelete: Cascade)
+  name              String
+  metric            CovenantMetric
+  threshold         Float
+  operator          CovenantOperator
+  testFrequency     PaymentFrequency
+  lastTestedAt      DateTime?
+  lastTestedValue   Float?
+  isCompliant       Boolean?
+
+  @@index([debtInstrumentId])
+}
+
+// ── Debt enums ──
+
+enum DebtType {
+  TERM_LOAN
+  REVOLVING_CREDIT
+  DISCOUNT_LINE
+  CONFIRMING
+  FINANCE_LEASE
+  OVERDRAFT
+  GUARANTEE
+}
+
+enum DebtStatus {
+  ACTIVE
+  MATURED
+  REFINANCED
+  DEFAULT
+}
+
+enum DebtTransactionType {
+  DRAWDOWN
+  REPAYMENT
+  INSTALLMENT_PRINCIPAL
+  INSTALLMENT_INTEREST
+  INTEREST_PAYMENT
+  COMMISSION
+  INTEREST_ACCRUAL
+  RECLASSIFICATION_LP_CP
+  DISCOUNT_ADVANCE
+  DISCOUNT_SETTLEMENT
+  DISCOUNT_DEFAULT
+  EARLY_REPAYMENT
+  LEASE_PAYMENT
+}
+
+enum InterestRateType {
+  FIXED
+  VARIABLE
+}
+
+enum PaymentFrequency {
+  MONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
+  ON_DEMAND
+  BULLET
+}
+
+enum CovenantMetric {
+  DEBT_TO_EBITDA
+  DSCR
+  CURRENT_RATIO
+  NET_WORTH
+  EQUITY_RATIO
+  LEVERAGE_RATIO
+}
+
+enum CovenantOperator {
+  LT
+  LTE
+  GT
+  GTE
 }
