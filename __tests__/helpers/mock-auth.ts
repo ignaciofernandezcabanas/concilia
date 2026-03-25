@@ -112,6 +112,15 @@ export function createMockDb() {
       findMany: vi.fn().mockResolvedValue([]),
     },
     classification: { findMany: vi.fn().mockResolvedValue([]) },
+    contactPerson: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: "cp_1" }),
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      delete: vi.fn().mockResolvedValue({}),
+      count: vi.fn().mockResolvedValue(0),
+    },
   };
 }
 

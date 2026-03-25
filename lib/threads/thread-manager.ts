@@ -83,6 +83,21 @@ export async function createThread(db: ScopedPrisma, params: CreateThreadParams)
     if (existing) return existing.id;
   }
 
+  // Look up default person for the contact
+  let externalEmail = contactEmail;
+  let externalName = contactName;
+  if (contactId) {
+    const defaultPerson = await (db as any).contactPerson
+      ?.findFirst?.({
+        where: { contactId, isDefault: true },
+      })
+      .catch(() => null);
+    if (defaultPerson) {
+      externalEmail = defaultPerson.email;
+      externalName = defaultPerson.name;
+    }
+  }
+
   // Get follow-up policy
   const config = await (db as any).followUpConfig?.findFirst?.().catch(() => null);
   const policy = getPolicy(scenario, config ?? undefined);
@@ -126,10 +141,10 @@ export async function createThread(db: ScopedPrisma, params: CreateThreadParams)
     data: {
       organizationId,
       scenario,
-      status: contactEmail ? "WAITING_EXTERNAL" : "WAITING_CONTROLLER",
+      status: externalEmail ? "WAITING_EXTERNAL" : "WAITING_CONTROLLER",
       priority,
       subject,
-      summary: `Seguimiento de ${scenario.toLowerCase().replace(/_/g, " ")} para ${contactName ?? "contacto desconocido"}.`,
+      summary: `Seguimiento de ${scenario.toLowerCase().replace(/_/g, " ")} para ${externalName ?? "contacto desconocido"}.`,
       contactId: contactId ?? null,
       invoiceIds,
       transactionIds,
@@ -137,8 +152,8 @@ export async function createThread(db: ScopedPrisma, params: CreateThreadParams)
       autoResolveCondition: autoResolveCondition as any,
       followUpPolicy: policy as any,
       nextFollowUpAt,
-      externalEmail: contactEmail ?? null,
-      externalName: contactName ?? null,
+      externalEmail: externalEmail ?? null,
+      externalName: externalName ?? null,
       dueDate: dueDate ?? null,
       agentRunId: agentRunId ?? null,
       sourceStep: sourceStep ?? null,
@@ -172,12 +187,12 @@ export async function createThread(db: ScopedPrisma, params: CreateThreadParams)
       threadId: thread.id,
       role: "SYSTEM",
       channel: "APP",
-      content: `Hilo creado: ${scenario}. Contacto: ${contactName ?? "N/A"}. Importe: ${amount?.toFixed(2) ?? "N/A"} EUR.`,
+      content: `Hilo creado: ${scenario}. Contacto: ${externalName ?? "N/A"}. Importe: ${amount?.toFixed(2) ?? "N/A"} EUR.`,
     },
   });
 
   // If email available, compose and send first follow-up
-  if (contactEmail && companyName) {
+  if (externalEmail && companyName) {
     try {
       const tone = getCurrentTone(policy, 0);
       const emailResult = await callAIJson(
@@ -186,8 +201,8 @@ export async function createThread(db: ScopedPrisma, params: CreateThreadParams)
         COMPOSE_FOLLOWUP.buildUser({
           scenario,
           companyName,
-          contactName: contactName ?? "Estimado/a",
-          externalEmail: contactEmail,
+          contactName: externalName ?? "Estimado/a",
+          externalEmail: externalEmail,
           tone,
           followUpCount: 0,
           threadSummary: `Primera comunicación sobre ${scenario.toLowerCase().replace(/_/g, " ")}.`,
@@ -206,7 +221,7 @@ export async function createThread(db: ScopedPrisma, params: CreateThreadParams)
             channel: "EMAIL",
             content: emailResult.plainBody,
             contentHtml: emailResult.htmlBody,
-            channelMeta: { to: contactEmail, subject: emailResult.subject },
+            channelMeta: { to: externalEmail, subject: emailResult.subject },
           },
         });
 

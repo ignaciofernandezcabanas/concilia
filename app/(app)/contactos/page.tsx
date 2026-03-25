@@ -39,6 +39,15 @@ interface ContactInvoice {
   status: string;
 }
 
+interface ContactPerson {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: string | null;
+  isDefault: boolean;
+}
+
 interface ContactDetail {
   id: string;
   name: string;
@@ -58,6 +67,7 @@ interface ContactDetail {
   enrichedAt: string | null;
   enrichmentConfidence: string | null;
   invoices: ContactInvoice[];
+  people?: ContactPerson[];
   _count: { invoices: number; inquiries: number; recurringAccruals: number };
 }
 
@@ -141,11 +151,45 @@ function ContactDetailPanel({
   contact,
   onEdit,
   onEnrich,
+  onPeopleChange,
 }: {
   contact: ContactDetail;
   onEdit: () => void;
   onEnrich: () => void;
+  onPeopleChange: () => void;
 }) {
+  const [showAddPerson, setShowAddPerson] = useState(false);
+  const [newPersonName, setNewPersonName] = useState("");
+  const [newPersonEmail, setNewPersonEmail] = useState("");
+  const [newPersonRole, setNewPersonRole] = useState("");
+
+  async function addPerson() {
+    if (!newPersonName.trim() || !newPersonEmail.trim()) return;
+    try {
+      await api.post(`/api/contacts/${contact.id}/people`, {
+        name: newPersonName.trim(),
+        email: newPersonEmail.trim(),
+        role: newPersonRole.trim() || null,
+      });
+      setNewPersonName("");
+      setNewPersonEmail("");
+      setNewPersonRole("");
+      setShowAddPerson(false);
+      onPeopleChange();
+    } catch {
+      // handled by api client
+    }
+  }
+
+  async function setDefaultPerson(personId: string) {
+    try {
+      await api.post(`/api/contacts/${contact.id}/people/${personId}/set-default`);
+      onPeopleChange();
+    } catch {
+      // handled by api client
+    }
+  }
+
   const typeCfg = TYPE_BADGE[contact.type] ?? TYPE_BADGE.CUSTOMER;
   const risk = contact.latePaymentRisk ? RISK_BADGE[contact.latePaymentRisk] : null;
   const conf = contact.enrichmentConfidence ? CONFIDENCE_BADGE[contact.enrichmentConfidence] : null;
@@ -249,6 +293,92 @@ function ContactDetailPanel({
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Personas de contacto */}
+      <div className="p-5 border-b border-gray-100 flex-shrink-0">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            Personas de contacto
+          </h3>
+          <button
+            onClick={() => setShowAddPerson(true)}
+            className="text-xs text-accent hover:underline"
+          >
+            + Anadir
+          </button>
+        </div>
+
+        {contact.people?.map((person) => (
+          <div
+            key={person.id}
+            className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0"
+          >
+            <div>
+              <div className="flex items-center gap-1.5">
+                {person.isDefault && (
+                  <span className="text-amber-500" title="Contacto para seguimiento">
+                    *
+                  </span>
+                )}
+                <span className="text-sm font-medium">{person.name}</span>
+                {person.role && <span className="text-[10px] text-gray-400">{person.role}</span>}
+              </div>
+              <p className="text-xs text-gray-500">
+                {person.email}
+                {person.phone ? ` · ${person.phone}` : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-1">
+              {!person.isDefault && (
+                <button
+                  onClick={() => setDefaultPerson(person.id)}
+                  className="text-[10px] text-accent hover:underline"
+                >
+                  Seguimiento
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {(!contact.people || contact.people.length === 0) && !showAddPerson && (
+          <p className="text-sm text-gray-400">Sin personas</p>
+        )}
+
+        {showAddPerson && (
+          <div className="mt-2 space-y-1.5">
+            <input
+              placeholder="Nombre"
+              value={newPersonName}
+              onChange={(e) => setNewPersonName(e.target.value)}
+              className="w-full text-sm border rounded px-2 py-1"
+            />
+            <input
+              placeholder="Email"
+              value={newPersonEmail}
+              onChange={(e) => setNewPersonEmail(e.target.value)}
+              className="w-full text-sm border rounded px-2 py-1"
+            />
+            <input
+              placeholder="Rol (opcional)"
+              value={newPersonRole}
+              onChange={(e) => setNewPersonRole(e.target.value)}
+              className="w-full text-sm border rounded px-2 py-1"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={addPerson}
+                className="text-xs bg-accent text-white px-3 py-1 rounded"
+              >
+                Anadir
+              </button>
+              <button className="text-xs text-gray-500" onClick={() => setShowAddPerson(false)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Recent invoices */}
@@ -801,6 +931,7 @@ export default function ContactosPage() {
             contact={detailData}
             onEdit={handleOpenEdit}
             onEnrich={handleEnrich}
+            onPeopleChange={refetchDetail}
           />
         ) : (
           <EmptyDetailState />

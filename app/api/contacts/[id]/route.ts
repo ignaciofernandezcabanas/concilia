@@ -20,6 +20,7 @@ export const GET = withAuth(
       const contact = await db.contact.findUnique({
         where: { id },
         include: {
+          people: { orderBy: { isDefault: "desc" } },
           invoices: {
             orderBy: { issueDate: "desc" },
             take: 10,

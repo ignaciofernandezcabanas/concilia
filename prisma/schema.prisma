@@ -564,10 +564,27 @@ model Contact {
   deferredEntries   DeferredEntry[]  @relation("DeferredContact")
   inquiries         Inquiry[]
   invoices          Invoice[]
+  people            ContactPerson[]
   recurringAccruals    RecurringAccrual[]
   supportingDocuments  SupportingDocument[] @relation("SupportingDocContact")
 
   @@unique([holdedId, companyId])
+}
+
+model ContactPerson {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  name      String
+  email     String
+  phone     String?
+  role      String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contactId])
+  @@unique([contactId, email])
 }
 
 model Invoice {

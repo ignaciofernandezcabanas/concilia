@@ -293,6 +293,73 @@ async function main() {
   ]);
   const c = Object.fromEntries(contacts.map((ct) => [ct.cif!, ct]));
 
+  // Step 6b: Contact People
+  const p = prisma as any;
+  for (const contact of contacts) {
+    if (contact.email || contact.name) {
+      const emailDomain = contact.name
+        .toLowerCase()
+        .replace(/[^a-z]+/g, "")
+        .slice(0, 20);
+      await p.contactPerson
+        .create({
+          data: {
+            contactId: contact.id,
+            name: contact.name,
+            email: contact.email ?? `info@${emailDomain}.es`,
+            role: "General",
+            isDefault: true,
+          },
+        })
+        .catch(() => {});
+    }
+  }
+  // Extra people for a few contacts
+  await p.contactPerson
+    .create({
+      data: {
+        contactId: contacts[0].id,
+        name: "Laura Martinez",
+        email: "contabilidad@distribuidoralevante.es",
+        role: "Administracion",
+        isDefault: false,
+      },
+    })
+    .catch(() => {});
+  await p.contactPerson
+    .create({
+      data: {
+        contactId: contacts[1].id,
+        name: "Carlos Ruiz",
+        email: "pagos@supermercadoscosta.es",
+        role: "Administracion",
+        isDefault: false,
+      },
+    })
+    .catch(() => {});
+  await p.contactPerson
+    .create({
+      data: {
+        contactId: contacts[6].id,
+        name: "Ana Garcia",
+        email: "facturacion@materiasprimas.es",
+        role: "Administracion",
+        isDefault: false,
+      },
+    })
+    .catch(() => {});
+  await p.contactPerson
+    .create({
+      data: {
+        contactId: contacts[13].id,
+        name: "Pedro Fernandez",
+        email: "direccion@grupoalimentario.es",
+        role: "Direccion",
+        isDefault: false,
+      },
+    })
+    .catch(() => {});
+
   // Step 7: Invoices
   const invoices: Awaited<ReturnType<typeof mkInvoice>>[] = [];
   const inv = async (...args: Parameters<typeof mkInvoice>) => {
