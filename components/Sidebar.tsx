@@ -29,6 +29,7 @@ import {
   Mail,
   Receipt,
   Briefcase,
+  CreditCard,
   FileCheck,
   type LucideIcon,
 } from "lucide-react";
@@ -74,6 +75,7 @@ const sections: NavSection[] = [
       { label: "Balance", icon: Scale, href: "/balance" },
       { label: "Cashflow", icon: TrendingUp, href: "/cashflow" },
       { label: "Tesorería", icon: Wallet, href: "/tesoreria" },
+      { label: "Deuda", icon: CreditCard, href: "/deuda" },
       { label: "Cuentas a cobrar", icon: Clock, href: "/cuentas-cobrar" },
       { label: "Fiscal", icon: Receipt, href: "/fiscal" },
     ],
