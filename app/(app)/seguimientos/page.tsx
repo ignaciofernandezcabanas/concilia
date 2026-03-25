@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useFetch } from "@/hooks/useApi";
-import { Bot, ChevronDown, ChevronUp, Send, Search } from "lucide-react";
-import { formatAmount } from "@/lib/format";
+import { Bot, Send, Search } from "lucide-react";
 import { api } from "@/lib/api-client";
 
 // ── Types ──
@@ -35,18 +34,6 @@ interface AgentThread {
   resolvedAt?: string;
   dueDate?: string;
   messages: ThreadMessage[];
-}
-
-interface Inquiry {
-  id: string;
-  triggerType: string;
-  status: string;
-  subject: string;
-  recipientName: string;
-  sentAt: string | null;
-  contact: { id: string; name: string } | null;
-  bankTransaction: { id: string; amount: number; concept: string; valueDate: string } | null;
-  invoice: { id: string; number: string; totalAmount: number } | null;
 }
 
 // ── Constants ──
@@ -91,13 +78,6 @@ const ROLE_STYLES: Record<string, { label: string; bg: string }> = {
   CONTROLLER: { label: "Tú", bg: "bg-green-50" },
 };
 
-const TRIGGER_LABELS: Record<string, string> = {
-  MISSING_INVOICE: "Factura faltante",
-  MISSING_DOCUMENTATION: "Documentación pendiente",
-  EXPENSE_CLARIFICATION: "Aclaración de gasto",
-  IC_CONFIRMATION: "Confirmación IC",
-};
-
 type FilterKey = "all" | "decision" | "active" | "resolved";
 
 // ── Helpers ──
@@ -107,12 +87,6 @@ function daysAgoLabel(date: string): string {
   if (d === 0) return "Hoy";
   if (d === 1) return "Ayer";
   return `${d}d`;
-}
-
-function daysAgo(date: string | null | undefined) {
-  if (!date) return null;
-  const d = Math.floor((Date.now() - new Date(date).getTime()) / 86400000);
-  return d === 0 ? "hoy" : d === 1 ? "ayer" : `hace ${d} días`;
 }
 
 // ── ThreadCard ──
@@ -361,96 +335,6 @@ function FilterButton({
   );
 }
 
-// ── LegacyInquiriesSection ──
-
-function LegacyInquiriesSection() {
-  const [show, setShow] = useState(false);
-  const [legacyFilter, setLegacyFilter] = useState("all");
-
-  const legacyApiPath = `/api/inquiries${legacyFilter !== "all" ? `?status=${legacyFilter}` : ""}`;
-  const { data: inquiryData, loading: inquiryLoading } = useFetch<{
-    data: Inquiry[];
-    pagination: { total: number };
-  }>(show ? legacyApiPath : null, [legacyFilter, show]);
-  const inquiries = inquiryData?.data ?? [];
-
-  return (
-    <div className="border-t border-gray-200 mt-2">
-      <button
-        onClick={() => setShow(!show)}
-        className="flex items-center gap-2 px-4 py-3 text-xs text-gray-500 hover:text-gray-700 w-full"
-      >
-        {show ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        Consultas por email (sistema anterior)
-        {(inquiryData?.pagination?.total ?? 0) > 0 && (
-          <span className="text-gray-400">({inquiryData?.pagination?.total})</span>
-        )}
-      </button>
-      {show && (
-        <div className="px-4 pb-4">
-          <div className="flex gap-2 mb-3 flex-wrap">
-            {[
-              { key: "all", label: "Todos" },
-              { key: "DRAFT", label: "Pendientes" },
-              { key: "SENT", label: "Enviados" },
-              { key: "RESOLVED", label: "Resueltos" },
-            ].map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setLegacyFilter(f.key)}
-                className={`text-[10px] px-2 py-1 rounded border ${
-                  legacyFilter === f.key
-                    ? "bg-gray-800 text-white border-gray-800"
-                    : "bg-white border-gray-200 text-gray-500 hover:border-gray-400"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-          {inquiryLoading ? (
-            <p className="text-gray-400 text-xs py-3">Cargando...</p>
-          ) : inquiries.length === 0 ? (
-            <p className="text-gray-400 text-xs py-3">No hay consultas en este filtro.</p>
-          ) : (
-            <div className="space-y-1">
-              {inquiries.map((inq) => {
-                const amount = inq.bankTransaction?.amount ?? inq.invoice?.totalAmount;
-                return (
-                  <div
-                    key={inq.id}
-                    className="flex items-center justify-between py-2 px-2 rounded hover:bg-gray-50 text-xs"
-                  >
-                    <div className="min-w-0">
-                      <span className="text-gray-500">
-                        {TRIGGER_LABELS[inq.triggerType] ?? inq.triggerType}
-                      </span>
-                      <span className="mx-1.5 text-gray-300">—</span>
-                      <span className="text-gray-700">
-                        {inq.contact?.name ?? inq.recipientName}
-                      </span>
-                      {amount != null && (
-                        <span className="ml-2 font-mono text-gray-500">
-                          {formatAmount(Math.abs(amount))}
-                        </span>
-                      )}
-                    </div>
-                    {inq.sentAt && (
-                      <span className="text-[10px] text-gray-400 shrink-0">
-                        {daysAgo(inq.sentAt)}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Main Page ──
 
 export default function SeguimientosPage() {
@@ -463,6 +347,7 @@ export default function SeguimientosPage() {
   const {
     data: threadData,
     loading,
+    error: threadError,
     refetch,
   } = useFetch<{
     data: AgentThread[];
@@ -607,6 +492,14 @@ export default function SeguimientosPage() {
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="p-4 text-sm text-gray-400">Cargando...</div>
+          ) : threadError ? (
+            <div className="p-4 text-sm text-red-500">
+              <p className="font-medium">Error al cargar seguimientos</p>
+              <p className="text-xs mt-1">{threadError}</p>
+              <button onClick={refetch} className="text-xs text-accent mt-2 hover:underline">
+                Reintentar
+              </button>
+            </div>
           ) : sortedThreads.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <Bot size={28} className="mx-auto mb-2 opacity-30" />
@@ -630,8 +523,7 @@ export default function SeguimientosPage() {
             </div>
           )}
 
-          {/* Legacy inquiries collapsed */}
-          <LegacyInquiriesSection />
+          {/* Legacy inquiries removed — all data lives in AgentThread now */}
         </div>
       </div>
 
