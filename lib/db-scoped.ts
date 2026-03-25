@@ -47,6 +47,8 @@ const SCOPED_MODELS = new Set([
   "exchangeRateDifference",
   "supportingDocument",
   "debtInstrument",
+  "businessProfile",
+  "gestoriaConfig",
   // NOT scoped (no companyId): InvoiceLine, BudgetLine, JournalEntryLine,
   //   BankTransactionClassification, DuplicateGroup, Payment, CompanyScope
   // NOT scoped (organizationId instead): IntercompanyLink, AgentRun

@@ -924,3 +924,92 @@ export const PARSE_CLARIFICATION_REPLY = {
     summary: z.string(),
   }),
 };
+
+// ════════════════════════════════════════════════════════════
+// AGENT MODULE STUBS — Pre-implementation infrastructure
+// ════════════════════════════════════════════════════════════
+
+// ── Module 01: Contacts Agent ──
+
+export const DETECT_CONTACT_FROM_EMAIL = {
+  task: "detect_contact_from_email" as const,
+  version: "1.0",
+  system: "TODO: Implement in contacts agent module",
+  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+};
+
+export const IMPORT_CONTACTS_FILE = {
+  task: "import_contacts_file" as const,
+  version: "1.0",
+  system: "TODO: Implement in contacts agent module",
+  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+};
+
+export const ENRICH_CONTACT_FROM_HISTORY = {
+  task: "enrich_contact_from_history" as const,
+  version: "1.0",
+  system: "TODO: Implement in contacts agent module",
+  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+};
+
+export const DEDUPLICATE_CONTACTS = {
+  task: "deduplicate_contacts" as const,
+  version: "1.0",
+  system: "TODO: Implement in contacts agent module",
+  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+};
+
+// ── Module 02: Onboarding Agent ──
+
+export const ONBOARDING_INFERENCE = {
+  task: "onboarding_inference" as const,
+  version: "1.0",
+  system: "TODO: Implement in onboarding agent module",
+  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+};
+
+export const PARSE_HISTORICAL_FILE = {
+  task: "parse_historical_file" as const,
+  version: "1.0",
+  system: "TODO: Implement in onboarding agent module",
+  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+};
+
+export const CALIBRATE_ACCOUNT_PLAN = {
+  task: "calibrate_account_plan" as const,
+  version: "1.0",
+  system: "TODO: Implement in onboarding agent module",
+  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+};
+
+// ── Module 05: Gestoría Agent ──
+
+export const GESTORIA_DAILY_ALERTS = {
+  task: "gestoria_daily_alerts" as const,
+  version: "1.0",
+  system: "TODO: Implement in gestoría agent module",
+  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+};
+
+export const GESTORIA_REVIEW_DRAFT = {
+  task: "gestoria_review_draft" as const,
+  version: "1.0",
+  system: "TODO: Implement in gestoría agent module",
+  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+};
+
+export const GESTORIA_PROCESS_UPLOAD = {
+  task: "gestoria_process_upload" as const,
+  version: "1.0",
+  system: "TODO: Implement in gestoría agent module",
+  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+};
+
+// ── Module 06: Debt Analysis ──
+
+export const ANALYZE_DEBT_POSITION = {
+  task: "analyze_debt_position" as const,
+  version: "1.0",
+  system: "TODO: Implement in debt analysis module",
+  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+};

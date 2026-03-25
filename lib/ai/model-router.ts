@@ -38,6 +38,20 @@ export type AITask =
   | "classify_match_difference"
   | "draft_clarification_email"
   | "parse_clarification_reply"
+  // Agent module stubs
+  | "detect_contact_from_email"
+  | "import_contacts_file"
+  | "enrich_contact_from_history"
+  | "deduplicate_contacts"
+  | "onboarding_inference"
+  | "parse_historical_file"
+  | "calibrate_account_plan"
+  | "gestoria_daily_alerts"
+  | "gestoria_review_draft"
+  | "gestoria_process_upload"
+  | "analyze_debt_position"
+  | "classify_financing_movement"
+  | "decompose_interest_settlement"
   // Opus — síntesis compleja
   | "daily_briefing"
   | "weekly_briefing"
@@ -104,6 +118,36 @@ const TASK_CONFIG: Record<AITask, TaskConfig> = {
     model: "claude-haiku-4-5-20251001",
     maxTokens: 200,
     temperature: 0.2,
+  },
+  // Agent module stubs
+  detect_contact_from_email: {
+    model: "claude-haiku-4-5-20251001",
+    maxTokens: 200,
+    temperature: 0.0,
+  },
+  import_contacts_file: { model: "claude-haiku-4-5-20251001", maxTokens: 300, temperature: 0.0 },
+  enrich_contact_from_history: {
+    model: "claude-sonnet-4-20250514",
+    maxTokens: 500,
+    temperature: 0.1,
+  },
+  deduplicate_contacts: { model: "claude-sonnet-4-20250514", maxTokens: 400, temperature: 0.1 },
+  onboarding_inference: { model: "claude-sonnet-4-20250514", maxTokens: 1200, temperature: 0.1 },
+  parse_historical_file: { model: "claude-haiku-4-5-20251001", maxTokens: 2000, temperature: 0.0 },
+  calibrate_account_plan: { model: "claude-sonnet-4-20250514", maxTokens: 1500, temperature: 0.1 },
+  gestoria_daily_alerts: { model: "claude-sonnet-4-20250514", maxTokens: 600, temperature: 0.2 },
+  gestoria_review_draft: { model: "claude-sonnet-4-20250514", maxTokens: 500, temperature: 0.2 },
+  gestoria_process_upload: { model: "claude-haiku-4-5-20251001", maxTokens: 300, temperature: 0.0 },
+  analyze_debt_position: { model: "claude-sonnet-4-20250514", maxTokens: 1000, temperature: 0.1 },
+  classify_financing_movement: {
+    model: "claude-haiku-4-5-20251001",
+    maxTokens: 300,
+    temperature: 0.0,
+  },
+  decompose_interest_settlement: {
+    model: "claude-sonnet-4-20250514",
+    maxTokens: 800,
+    temperature: 0.1,
   },
   // Opus
   daily_briefing: { model: "claude-opus-4-6", maxTokens: 1500, temperature: 0.3 },

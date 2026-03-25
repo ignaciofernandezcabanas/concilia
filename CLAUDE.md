@@ -434,3 +434,43 @@ CAPEX e inversiones financieras NUNCA entran en auto-aprobación. NUNCA en batch
 - Available credit lines, weighted avg rate
 - DSCR (Debt Service Coverage Ratio)
 - Overdue installments, covenant compliance
+
+## Pre-implementation Infrastructure (6 Agent Modules)
+
+### New Models
+
+- **BusinessProfile** (1:1 with Company): sector, actividad, canales, regimenIva, modeloIngreso, subplanPGC, modulosFiscales. Scoped.
+- **GestoriaConfig** (1:1 with Company): gestoriaName, contactName, phone, email, accessLevel, manages. Scoped.
+
+### Schema Changes (Existing Models)
+
+- **Contact**: +typicalAmountAvg, irpfApplicable, irpfRateImplied, latePaymentRisk, enrichedAt, enrichmentConfidence
+- **Company**: +needsBusinessProfile (default true), businessProfile relation, gestoriaConfig relation
+- **LearnedPattern**: +source (default "controller") -- reused instead of creating RecurringPattern model
+
+### AI Task Stubs (prompt-registry.ts + model-router.ts)
+
+| Task                        | Model  | MaxTokens | Module        |
+| --------------------------- | ------ | --------- | ------------- |
+| detect_contact_from_email   | Haiku  | 200       | 01-Contacts   |
+| import_contacts_file        | Haiku  | 300       | 01-Contacts   |
+| enrich_contact_from_history | Sonnet | 500       | 01-Contacts   |
+| deduplicate_contacts        | Sonnet | 400       | 01-Contacts   |
+| onboarding_inference        | Sonnet | 1200      | 02-Onboarding |
+| parse_historical_file       | Haiku  | 2000      | 02-Onboarding |
+| calibrate_account_plan      | Sonnet | 1500      | 02-Onboarding |
+| gestoria_daily_alerts       | Sonnet | 600       | 05-Gestoria   |
+| gestoria_review_draft       | Sonnet | 500       | 05-Gestoria   |
+| gestoria_process_upload     | Haiku  | 300       | 05-Gestoria   |
+| analyze_debt_position       | Sonnet | 1000      | 06-Debt       |
+
+### Mailbox: In-Reply-To Check
+
+`lib/invoices/import-from-mailbox.ts` now checks `In-Reply-To` header against `clarificationEmailMessageId` before processing emails as invoices. Replies to clarifications skip the invoice pipeline.
+
+### Design Decisions
+
+- **LearnedPattern reused**: No separate RecurringPattern model. Added `source` field to distinguish controller vs agent-generated patterns.
+- **Onboarding (Option B)**: `needsBusinessProfile` flag on Company triggers onboarding inference. BusinessProfile stores the inferred business context.
+- **Debt analysis**: On-demand endpoint pattern (preserves LLM budget for 6 agent modules). analyze_debt_position is Sonnet-level.
+- **SCOPED_MODELS**: businessProfile and gestoriaConfig added for consistency (both have companyId with @unique).

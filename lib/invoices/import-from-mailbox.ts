@@ -70,6 +70,24 @@ export async function importInvoicesFromMailbox(
   result.emailsRead = emails.length;
 
   for (const email of emails) {
+    // Check if this is a reply to a clarification we sent
+    const inReplyTo =
+      (email as any).headers?.["In-Reply-To"] || (email as any).headers?.["in-reply-to"];
+    if (inReplyTo) {
+      const clarificationMatch = await (db as any).reconciliation?.findFirst?.({
+        where: { clarificationEmailMessageId: inReplyTo },
+        select: { id: true },
+      });
+      if (clarificationMatch) {
+        // This is a reply to our clarification — don't process as invoice
+        console.log(
+          `[mailbox] Reply to clarification ${clarificationMatch.id} — skipping invoice pipeline`
+        );
+        // TODO: handleClarificationReply() to be implemented in agent module 04
+        continue;
+      }
+    }
+
     // Filter PDF attachments only
     const pdfAttachments = email.attachments.filter(
       (a) => a.mimeType === "application/pdf" || a.fileName.toLowerCase().endsWith(".pdf")
