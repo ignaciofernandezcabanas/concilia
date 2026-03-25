@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import TopBar from "@/components/TopBar";
+import SetupBanner from "@/components/SetupBanner";
 import { useFetch } from "@/hooks/useApi";
 import { qs } from "@/lib/api-client";
 import { formatAmount, formatMonth, getMonthRange } from "@/lib/format";
@@ -48,6 +49,10 @@ export default function Dashboard() {
           ? "text-amber"
           : "text-red-text";
 
+  const { data: companyData } = useFetch<{ needsBusinessProfile?: boolean }>(
+    `/api/settings/company`
+  );
+
   const { data: briefingData } = useFetch<{ data: BriefingNotification[] }>(
     `/api/notifications${qs({ type: "DAILY_BRIEFING", limit: 1 })}`
   );
@@ -81,6 +86,9 @@ export default function Dashboard() {
     <div className="flex flex-col min-h-full">
       <TopBar title="Resumen" />
       <div className="flex flex-col gap-5 p-6 px-8 flex-1 overflow-auto">
+        {/* Setup banner */}
+        {companyData?.needsBusinessProfile && <SetupBanner />}
+
         {/* Briefing */}
         {todayBriefing && (
           <div className="bg-accent/5 border border-accent/30 rounded-lg p-5">

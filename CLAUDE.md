@@ -498,3 +498,41 @@ Three endpoints, one mailbox hook, four AI prompts.
 - **Onboarding (Option B)**: `needsBusinessProfile` flag on Company triggers onboarding inference. BusinessProfile stores the inferred business context.
 - **Debt analysis**: On-demand endpoint pattern (preserves LLM budget for 6 agent modules). analyze_debt_position is Sonnet-level.
 - **SCOPED_MODELS**: businessProfile and gestoriaConfig added for consistency (both have companyId with @unique).
+
+## Onboarding Agent + Historical Calibration
+
+### Overview
+
+Multi-step setup wizard (`/setup`) that infers PGC 2007 accounts, fiscal modules, and default counterparts from the company's business profile, then optionally calibrates with historical accounting data.
+
+### Endpoints
+
+| Method | Path                              | Description                                            |
+| ------ | --------------------------------- | ------------------------------------------------------ |
+| POST   | /api/setup/business-profile/infer | Infer PGC subplan from business profile (Sonnet)       |
+| POST   | /api/setup/historical/process     | Parse historical files + calibrate plan (Haiku+Sonnet) |
+
+### Prompts (3)
+
+- **ONBOARDING_INFERENCE** (Sonnet, 1200 tok): Infers PGC accounts + fiscal modules + default counterparts from company form data. Only real PGC codes, fiscal modules with legal basis.
+- **PARSE_HISTORICAL_FILE** (Haiku, 2000 tok): Parses CSV/Excel accounting files. Detects format (balance sumas saldos, libro diario, Holded/Sage/A3/generic).
+- **CALIBRATE_ACCOUNT_PLAN** (Sonnet, 1500 tok): Compares inferred plan vs historical data. Confirms, adds, deactivates accounts. Flags anomalies (551, 170/520). Extracts recurring patterns (>=3 occurrences).
+
+### Wizard Flow (8 steps)
+
+1. Company data (name, NIF, forma jurídica)
+2. Activity (sector, descripción, canales)
+3. Fiscality (régimen IVA, retenciones IRPF, forma cobro)
+4. Inference result (auto-calls /infer on entering step)
+5. Historical file upload (optional, can skip)
+6. Calibration result (auto-calls /process on entering step)
+7. Integration links (redirect to /ajustes)
+8. Summary + "Empezar" → redirects to dashboard
+
+### SetupBanner
+
+`components/SetupBanner.tsx` — Shown on dashboard when `Company.needsBusinessProfile = true`. Links to `/setup`.
+
+### Calibration → LearnedPattern
+
+Recurring patterns from historical calibration are stored as `LearnedPattern` entries with `type: "historical_calibration"`. These feed into the reconciliation engine's pattern matching phase.

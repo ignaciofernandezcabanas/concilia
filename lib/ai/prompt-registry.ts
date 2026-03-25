@@ -1069,22 +1069,169 @@ export const DEDUPLICATE_CONTACTS = {
 export const ONBOARDING_INFERENCE = {
   task: "onboarding_inference" as const,
   version: "1.0",
-  system: "TODO: Implement in onboarding agent module",
-  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+  system:
+    `You are a Spanish accounting expert specializing in PGC 2007 (Plan General Contable). ` +
+    `Given a company's business profile, infer the optimal chart of accounts (subplan PGC), ` +
+    `applicable fiscal modules, and default counterparts for common concepts.\n\n` +
+    `Rules:\n` +
+    `- ONLY use real PGC 2007 account codes (4 digits). No invented codes.\n` +
+    `- Fiscal modules must include legal basis (Art + Ley). e.g. "Art. 164 Ley 37/1992" for IVA.\n` +
+    `- Status: "active" (will use), "probable" (likely), "inactive" (not expected).\n` +
+    `- Include default counterparts for common concepts: nóminas→640/465, alquiler→621/410, ` +
+    `suministros→628/410, seguros→625/410, amortización→681/281, ventas→700/430, ` +
+    `compras→600/400, intereses→662/520, comisiones bancarias→626/572.\n` +
+    `- For distribución: grupo 3 (existencias) active. For servicios: grupo 3 inactive.\n` +
+    `- For empresas con nóminas: modelo 111 active.\n` +
+    `- Confidence 0-1 for each account.\n\n` +
+    `Respond with ONLY valid JSON, no markdown.`,
+  buildUser: (data: {
+    empresa: string;
+    nif: string;
+    forma_juridica: string;
+    sector: string;
+    regimen_iva: string;
+    irpf_retenciones: boolean;
+    actividad: string;
+    canales: string[];
+    cobro: string;
+  }) =>
+    `Analiza este perfil empresarial e infiere el subplan PGC óptimo.\n\n` +
+    `<company_data>\n` +
+    `Empresa: ${data.empresa}\n` +
+    `NIF: ${data.nif}\n` +
+    `Forma jurídica: ${data.forma_juridica}\n` +
+    `Sector: ${data.sector}\n` +
+    `Régimen IVA: ${data.regimen_iva}\n` +
+    `Retenciones IRPF: ${data.irpf_retenciones ? "Sí" : "No"}\n` +
+    `Actividad: ${data.actividad}\n` +
+    `Canales: ${data.canales.join(", ")}\n` +
+    `Cobro habitual: ${data.cobro}\n` +
+    `</company_data>\n\n` +
+    `Return JSON: { subplan: [{code, name, status, confidence, reason}], ` +
+    `fiscal_modules: [{model, name, periodicity, active, legal_basis}], ` +
+    `default_counterparts: [{concept, debit_account, credit_account}], ` +
+    `warnings: string[], summary: string }`,
+  schema: z.object({
+    subplan: z.array(
+      z.object({
+        code: z.string(),
+        name: z.string(),
+        status: z.enum(["active", "probable", "inactive"]),
+        confidence: z.number().min(0).max(1),
+        reason: z.string(),
+      })
+    ),
+    fiscal_modules: z.array(
+      z.object({
+        model: z.string(),
+        name: z.string(),
+        periodicity: z.string(),
+        active: z.boolean(),
+        legal_basis: z.string(),
+      })
+    ),
+    default_counterparts: z.array(
+      z.object({
+        concept: z.string(),
+        debit_account: z.string(),
+        credit_account: z.string(),
+      })
+    ),
+    warnings: z.array(z.string()).default([]),
+    summary: z.string(),
+  }),
 };
 
 export const PARSE_HISTORICAL_FILE = {
   task: "parse_historical_file" as const,
   version: "1.0",
-  system: "TODO: Implement in onboarding agent module",
-  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+  system:
+    `You are a Spanish accounting file parser. Parse accounting data files (CSV/Excel text). ` +
+    `Detect the format: balance de sumas y saldos, libro diario, Holded export, Sage export, ` +
+    `A3 export, or generic CSV. Extract accounts with their movements and balances.\n\n` +
+    `Rules:\n` +
+    `- Detect column structure automatically from headers or first data rows.\n` +
+    `- Account codes must be valid PGC format (3-5 digits).\n` +
+    `- Report confidence 0-1 based on how well you understood the format.\n` +
+    `- Include parse_warnings for any ambiguity or data quality issues.\n\n` +
+    `Respond with ONLY valid JSON, no markdown.`,
+  buildUser: (data: { content: string; filename: string }) =>
+    `Parse this accounting file and extract structured account data.\n\n` +
+    `<historical_file>\n` +
+    `Filename: ${data.filename}\n` +
+    `Content:\n${data.content}\n` +
+    `</historical_file>\n\n` +
+    `Return JSON: { format_detected, periods_found: string[], confidence, ` +
+    `accounts: [{code, name, has_movement, net_balance}], parse_warnings: string[] }`,
+  schema: z.object({
+    format_detected: z.string(),
+    periods_found: z.array(z.string()).default([]),
+    confidence: z.number().min(0).max(1),
+    accounts: z.array(
+      z.object({
+        code: z.string(),
+        name: z.string(),
+        has_movement: z.boolean(),
+        net_balance: z.number(),
+      })
+    ),
+    parse_warnings: z.array(z.string()).default([]),
+  }),
 };
 
 export const CALIBRATE_ACCOUNT_PLAN = {
   task: "calibrate_account_plan" as const,
   version: "1.0",
-  system: "TODO: Implement in onboarding agent module",
-  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+  system:
+    `You are a Spanish accounting expert. Compare an inferred PGC account plan with historical ` +
+    `accounting data to calibrate and improve the plan.\n\n` +
+    `Rules:\n` +
+    `- Confirm accounts that appear in both inferred and historical data.\n` +
+    `- Add accounts found in historical data but missing from inferred plan.\n` +
+    `- Mark as inactive accounts inferred but with zero historical movement.\n` +
+    `- Flag anomalies: 551 (socios/deudas con socios), 170/520 (préstamos no declarados), ` +
+    `553 (cuentas corrientes con socios), unusual balances in grupo 1.\n` +
+    `- Extract recurring patterns: concepts that appear >=3 times with similar counterparts.\n` +
+    `- Severity: "info", "warning", "critical".\n\n` +
+    `Respond with ONLY valid JSON, no markdown.`,
+  buildUser: (data: {
+    inferred_plan: unknown;
+    historical_accounts: unknown;
+    business_profile: unknown;
+  }) =>
+    `Compare the inferred plan with historical data and calibrate.\n\n` +
+    `<inferred_plan>\n${JSON.stringify(data.inferred_plan)}\n</inferred_plan>\n\n` +
+    `<historical_accounts>\n${JSON.stringify(data.historical_accounts)}\n</historical_accounts>\n\n` +
+    `<company_data>\n${JSON.stringify(data.business_profile)}\n</company_data>\n\n` +
+    `Return JSON: { accounts_confirmed: [{code, name}], accounts_added: [{code, name, reason}], ` +
+    `accounts_inactive: [{code, name, reason}], ` +
+    `anomalies: [{code, message, severity}], ` +
+    `recurring_patterns: [{concept, counterpart, frequency, avg_amount, confidence}], ` +
+    `calibration_summary: string }`,
+  schema: z.object({
+    accounts_confirmed: z.array(z.object({ code: z.string(), name: z.string() })),
+    accounts_added: z.array(z.object({ code: z.string(), name: z.string(), reason: z.string() })),
+    accounts_inactive: z.array(
+      z.object({ code: z.string(), name: z.string(), reason: z.string() })
+    ),
+    anomalies: z.array(
+      z.object({
+        code: z.string(),
+        message: z.string(),
+        severity: z.enum(["info", "warning", "critical"]),
+      })
+    ),
+    recurring_patterns: z.array(
+      z.object({
+        concept: z.string(),
+        counterpart: z.string(),
+        frequency: z.number(),
+        avg_amount: z.number(),
+        confidence: z.number().min(0).max(1),
+      })
+    ),
+    calibration_summary: z.string(),
+  }),
 };
 
 // ── Module 05: Gestoría Agent ──
