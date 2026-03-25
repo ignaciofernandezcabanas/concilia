@@ -11,6 +11,9 @@ const mockPrisma = vi.hoisted(() => ({
   journalEntry: { count: vi.fn() },
   membership: { findMany: vi.fn() },
   notification: { create: vi.fn() },
+  debtScheduleEntry: { findMany: vi.fn() },
+  debtInstrument: { findMany: vi.fn() },
+  debtCovenant: { findMany: vi.fn() },
 }));
 vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
 vi.mock("@/lib/db-scoped", () => ({ getScopedDb: () => mockPrisma }));
@@ -83,6 +86,9 @@ function setupDefaults() {
   mockPrisma.journalEntry.count.mockResolvedValue(0);
   mockPrisma.membership.findMany.mockResolvedValue([{ userId: "user_1" }]);
   mockPrisma.notification.create.mockResolvedValue({});
+  mockPrisma.debtScheduleEntry.findMany.mockResolvedValue([]);
+  mockPrisma.debtInstrument.findMany.mockResolvedValue([]);
+  mockPrisma.debtCovenant.findMany.mockResolvedValue([]);
 
   mockRunReconciliation.mockResolvedValue({
     processed: 5,
@@ -324,6 +330,105 @@ describe("Daily Agent", () => {
 
     // This test validates the structure — the exact mirror detection
     // depends on findFirst being available which we've mocked
+  });
+
+  it("debt_monitoring — overdue installments → notification", async () => {
+    const pastDue = new Date();
+    pastDue.setDate(pastDue.getDate() - 5);
+
+    mockPrisma.debtScheduleEntry.findMany.mockResolvedValue([
+      {
+        id: "se_1",
+        entryNumber: 3,
+        dueDate: pastDue,
+        totalAmount: 2500,
+        matched: false,
+        debtInstrument: { name: "ICO Loan", id: "d1" },
+      },
+    ]);
+
+    await runDailyAgent(ORG_ID);
+
+    const notifCalls = mockPrisma.notification.create.mock.calls;
+    const debtNotifs = notifCalls.filter(
+      (c: unknown[]) =>
+        (c[0] as { data: { type: string } }).data.type === "DEBT_INSTALLMENT_OVERDUE"
+    );
+    expect(debtNotifs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("debt_monitoring — maturity approaching → notification", async () => {
+    const maturitySoon = new Date();
+    maturitySoon.setDate(maturitySoon.getDate() + 25);
+
+    mockPrisma.debtInstrument.findMany.mockResolvedValue([
+      {
+        id: "d1",
+        name: "Póliza Santander",
+        type: "REVOLVING_CREDIT",
+        maturityDate: maturitySoon,
+        outstandingBalance: 50000,
+        status: "ACTIVE",
+        creditLimit: 100000,
+        currentDrawdown: 50000,
+      },
+    ]);
+
+    await runDailyAgent(ORG_ID);
+
+    const notifCalls = mockPrisma.notification.create.mock.calls;
+    const maturityNotifs = notifCalls.filter(
+      (c: unknown[]) =>
+        (c[0] as { data: { type: string } }).data.type === "DEBT_MATURITY_APPROACHING"
+    );
+    expect(maturityNotifs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("debt_monitoring — covenant breach → notification", async () => {
+    mockPrisma.debtCovenant.findMany.mockResolvedValue([
+      {
+        id: "cov_1",
+        name: "Debt/EBITDA",
+        metric: "DEBT_TO_EBITDA",
+        threshold: 3.0,
+        operator: "LTE",
+        lastTestedValue: 4.5,
+        isCompliant: false,
+        debtInstrument: { name: "ICO Loan" },
+      },
+    ]);
+
+    await runDailyAgent(ORG_ID);
+
+    const notifCalls = mockPrisma.notification.create.mock.calls;
+    const covenantNotifs = notifCalls.filter(
+      (c: unknown[]) => (c[0] as { data: { type: string } }).data.type === "DEBT_COVENANT_BREACHED"
+    );
+    expect(covenantNotifs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("debt_monitoring — low credit line → notification", async () => {
+    mockPrisma.debtInstrument.findMany.mockResolvedValue([
+      {
+        id: "d1",
+        name: "Línea BBVA",
+        type: "REVOLVING_CREDIT",
+        maturityDate: new Date("2028-01-01"),
+        outstandingBalance: 85000,
+        status: "ACTIVE",
+        creditLimit: 100000,
+        currentDrawdown: 85000,
+      },
+    ]);
+
+    await runDailyAgent(ORG_ID);
+
+    const notifCalls = mockPrisma.notification.create.mock.calls;
+    const creditNotifs = notifCalls.filter(
+      (c: unknown[]) =>
+        (c[0] as { data: { type: string } }).data.type === "CREDIT_LINE_LOW_AVAILABLE"
+    );
+    expect(creditNotifs.length).toBeGreaterThanOrEqual(1);
   });
 
   it("capital adequacy CRITICAL → FINANCIAL_ALERT notification", async () => {

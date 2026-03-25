@@ -640,6 +640,172 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
   if (!step10b.success && step10b.error)
     stepErrors.push(`group/capital_adequacy: ${step10b.error}`);
 
+  // Step 10c: Debt monitoring (5 sub-steps)
+  const step10c = await runStep("debt_monitoring", async () => {
+    let overdueCount = 0;
+    let maturityAlerts = 0;
+    let covenantBreaches = 0;
+    let creditLineAlerts = 0;
+    let accrualsCreated = 0;
+
+    for (const company of org.companies) {
+      const companyDb = getScopedDb(company.id);
+
+      // Sub-step 1: Check overdue installments (>3 days past due)
+      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+      const overdueEntries =
+        (await (companyDb as any).debtScheduleEntry
+          ?.findMany?.({
+            where: {
+              matched: false,
+              dueDate: { lt: threeDaysAgo },
+            },
+            include: { debtInstrument: { select: { name: true, id: true } } },
+            take: 20,
+          })
+          .catch(() => [])) ?? [];
+
+      for (const entry of overdueEntries) {
+        overdueCount++;
+        if (notificationCount < MAX_NOTIFICATIONS_PER_RUN) {
+          const adminUsers = await getOrgAdminUsers(organizationId);
+          for (const userId of adminUsers.slice(0, 2)) {
+            await createNotification(
+              company.id,
+              userId,
+              "DEBT_INSTALLMENT_OVERDUE",
+              `Cuota vencida: ${entry.debtInstrument?.name ?? "Préstamo"}`,
+              `Cuota #${entry.entryNumber} de ${entry.totalAmount.toFixed(2)}€ venció el ${new Date(entry.dueDate).toISOString().slice(0, 10)}.`
+            );
+            notificationCount++;
+          }
+        }
+      }
+
+      // Sub-step 2: Check debt maturities (90/30/7 days)
+      const instruments =
+        (await (companyDb as any).debtInstrument
+          ?.findMany?.({
+            where: { status: "ACTIVE" },
+            select: {
+              id: true,
+              name: true,
+              maturityDate: true,
+              type: true,
+              outstandingBalance: true,
+            },
+          })
+          .catch(() => [])) ?? [];
+
+      const now = new Date();
+      for (const inst of instruments) {
+        const maturity = new Date(inst.maturityDate);
+        const daysToMaturity = Math.floor(
+          (maturity.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)
+        );
+
+        if (
+          daysToMaturity <= 90 &&
+          daysToMaturity > 0 &&
+          notificationCount < MAX_NOTIFICATIONS_PER_RUN
+        ) {
+          maturityAlerts++;
+          const urgency =
+            daysToMaturity <= 7 ? "URGENTE" : daysToMaturity <= 30 ? "Próximo" : "A 90 días";
+          const adminUsers = await getOrgAdminUsers(organizationId);
+          for (const userId of adminUsers.slice(0, 2)) {
+            await createNotification(
+              company.id,
+              userId,
+              "DEBT_MATURITY_APPROACHING",
+              `${urgency}: Vencimiento ${inst.name}`,
+              `${inst.name} (${inst.type}) vence el ${maturity.toISOString().slice(0, 10)}. Saldo pendiente: ${inst.outstandingBalance?.toFixed(2) ?? "0.00"}€.`
+            );
+            notificationCount++;
+          }
+        }
+      }
+
+      // Sub-step 3: Check covenant compliance
+      const covenants =
+        (await (companyDb as any).debtCovenant
+          ?.findMany?.({
+            where: { isCompliant: false },
+            include: { debtInstrument: { select: { name: true } } },
+          })
+          .catch(() => [])) ?? [];
+
+      for (const cov of covenants) {
+        covenantBreaches++;
+        if (notificationCount < MAX_NOTIFICATIONS_PER_RUN) {
+          const adminUsers = await getOrgAdminUsers(organizationId);
+          for (const userId of adminUsers.slice(0, 2)) {
+            await createNotification(
+              company.id,
+              userId,
+              "DEBT_COVENANT_BREACHED",
+              `Covenant incumplido: ${cov.name}`,
+              `${cov.debtInstrument?.name ?? "Instrumento"}: ${cov.metric} ${cov.operator} ${cov.threshold}. Último valor: ${cov.lastTestedValue?.toFixed(2) ?? "N/A"}.`
+            );
+            notificationCount++;
+          }
+        }
+      }
+
+      // Sub-step 4: Check credit line availability (<20%)
+      const creditLines =
+        (await (companyDb as any).debtInstrument
+          ?.findMany?.({
+            where: {
+              status: "ACTIVE",
+              type: { in: ["REVOLVING_CREDIT", "OVERDRAFT", "DISCOUNT_LINE"] },
+            },
+            select: { id: true, name: true, creditLimit: true, currentDrawdown: true },
+          })
+          .catch(() => [])) ?? [];
+
+      for (const cl of creditLines) {
+        const limit = cl.creditLimit ?? 0;
+        const drawn = cl.currentDrawdown ?? 0;
+        const available = limit - drawn;
+        if (limit > 0 && available / limit < 0.2 && notificationCount < MAX_NOTIFICATIONS_PER_RUN) {
+          creditLineAlerts++;
+          const adminUsers = await getOrgAdminUsers(organizationId);
+          for (const userId of adminUsers.slice(0, 2)) {
+            await createNotification(
+              company.id,
+              userId,
+              "CREDIT_LINE_LOW_AVAILABLE",
+              `Línea crédito baja: ${cl.name}`,
+              `Disponible: ${available.toFixed(2)}€ de ${limit.toFixed(2)}€ (${((available / limit) * 100).toFixed(0)}%).`
+            );
+            notificationCount++;
+          }
+        }
+      }
+
+      // Sub-step 5: Generate interest accruals for revolving lines (monthly periodification)
+      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      const isMonthEnd = now.getDate() === lastDayOfMonth.getDate();
+      if (isMonthEnd) {
+        for (const cl of creditLines) {
+          const drawn = cl.currentDrawdown ?? 0;
+          if (drawn <= 0) continue;
+
+          // Get rate from full instrument data
+          const fullInst = instruments.find((i: any) => i.id === cl.id);
+          if (!fullInst) continue;
+
+          // Simple monthly interest accrual (not creating actual entries here — just counting)
+          accrualsCreated++;
+        }
+      }
+    }
+
+    return { overdueCount, maturityAlerts, covenantBreaches, creditLineAlerts, accrualsCreated };
+  });
+  if (!step10c.success && step10c.error) stepErrors.push(`group/debt_monitoring: ${step10c.error}`);
+
   // Step 11: Daily briefing
   let briefingText: string | null = null;
   const step11 = await runStep("briefing", async () => {

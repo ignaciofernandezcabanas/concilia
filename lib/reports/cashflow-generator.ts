@@ -489,9 +489,46 @@ async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promis
   const B7 = sum(investDisposal) + sum(investFinancial.filter((t) => t.amount > 0));
   const B8 = roundTwo(B6 + B7);
 
-  // ── C: Financing flows ──
-  const C10a = sum(financingIn);
-  const C10c = sum(financingOut);
+  // ── C: Financing flows (enhanced with DebtTransaction data) ──
+  // Query DebtTransaction for structured financing data
+  const debtTxs =
+    (await (db as any).debtTransaction
+      ?.findMany?.({
+        where: {
+          date: { gte: from, lte: to },
+        },
+        select: { type: true, amount: true },
+      })
+      .catch(() => [])) ?? [];
+
+  // Group DebtTransactions by type
+  const debtByType = new Map<string, number>();
+  for (const dtx of debtTxs) {
+    const current = debtByType.get(dtx.type) ?? 0;
+    debtByType.set(dtx.type, current + Math.abs(dtx.amount));
+  }
+
+  const debtDrawdowns = debtByType.get("DRAWDOWN") ?? 0;
+  const debtRepayments = -(
+    (debtByType.get("REPAYMENT") ?? 0) +
+    (debtByType.get("INSTALLMENT_PRINCIPAL") ?? 0) +
+    (debtByType.get("EARLY_REPAYMENT") ?? 0)
+  );
+  const debtInterest = -(
+    (debtByType.get("INSTALLMENT_INTEREST") ?? 0) + (debtByType.get("INTEREST_PAYMENT") ?? 0)
+  );
+  const debtCommissions = -(debtByType.get("COMMISSION") ?? 0);
+  const debtDiscountAdv = debtByType.get("DISCOUNT_ADVANCE") ?? 0;
+  const debtDiscountSet = -(debtByType.get("DISCOUNT_SETTLEMENT") ?? 0);
+  const debtLease = -(debtByType.get("LEASE_PAYMENT") ?? 0);
+
+  // Use DebtTransaction data if available, otherwise fall back to heuristic-classified bank txs
+  const hasDebtData = debtTxs.length > 0;
+
+  const C10a = hasDebtData ? roundTwo(debtDrawdowns + debtDiscountAdv) : sum(financingIn);
+  const C10c = hasDebtData
+    ? roundTwo(debtRepayments + debtInterest + debtCommissions + debtDiscountSet + debtLease)
+    : sum(financingOut);
   const C12 = roundTwo(C10a + C10c);
 
   // ── D: FX effect ──
@@ -612,20 +649,44 @@ async function generateEFEReport(db: ScopedPrisma, from: Date, to: Date): Promis
       code: "C",
       label: "C) FLUJOS DE EFECTIVO DE LAS ACTIVIDADES DE FINANCIACIÓN",
       amount: C12,
-      children: [
-        line("9. Cobros y pagos por instrumentos de patrimonio", 0),
-        line("  a) Emisión de instrumentos de patrimonio (10*)", 0),
-        line("  b) Amortización de instrumentos de patrimonio", 0),
-        line("  c) Subvenciones, donaciones y legados recibidos (13*)", 0),
-        line("10. Cobros y pagos por instrumentos de pasivo financiero", roundTwo(C10a + C10c)),
-        line("  a) Emisión deudas con entidades de crédito (+) (170, 520)", C10a, financingIn),
-        line("  b) Emisión de otras deudas (+) (171, 173, 521, 523)", 0),
-        line("  c) Devolución deudas con entidades de crédito (–)", C10c, financingOut),
-        line("  d) Devolución de otras deudas (–)", 0),
-        line("11. Pagos por dividendos y remuneraciones de otros instrumentos de patrimonio", 0),
-        line("  a) Dividendos (526, 557)", 0),
-        line("12. Flujos de efectivo de las actividades de financiación (9+10+11)", C12),
-      ],
+      children: hasDebtData
+        ? [
+            line("9. Cobros y pagos por instrumentos de patrimonio", 0),
+            line("  a) Emisión de instrumentos de patrimonio (10*)", 0),
+            line("  b) Amortización de instrumentos de patrimonio", 0),
+            line("  c) Subvenciones, donaciones y legados recibidos (13*)", 0),
+            line("10. Cobros y pagos por instrumentos de pasivo financiero", roundTwo(C10a + C10c)),
+            line("  a) Disposiciones crédito / préstamo (+)", roundTwo(debtDrawdowns)),
+            line("  b) Devolución principal préstamos (–)", roundTwo(debtRepayments)),
+            line("  c) Intereses pagados (–) (662)", roundTwo(debtInterest)),
+            line("  d) Comisiones bancarias (–) (626)", roundTwo(debtCommissions)),
+            line("  e) Anticipos descuento comercial (+)", roundTwo(debtDiscountAdv)),
+            line("  f) Liquidaciones descuento (–)", roundTwo(debtDiscountSet)),
+            line("  g) Cuotas leasing (–)", roundTwo(debtLease)),
+            line(
+              "11. Pagos por dividendos y remuneraciones de otros instrumentos de patrimonio",
+              0
+            ),
+            line("  a) Dividendos (526, 557)", 0),
+            line("12. Flujos de efectivo de las actividades de financiación (9+10+11)", C12),
+          ]
+        : [
+            line("9. Cobros y pagos por instrumentos de patrimonio", 0),
+            line("  a) Emisión de instrumentos de patrimonio (10*)", 0),
+            line("  b) Amortización de instrumentos de patrimonio", 0),
+            line("  c) Subvenciones, donaciones y legados recibidos (13*)", 0),
+            line("10. Cobros y pagos por instrumentos de pasivo financiero", roundTwo(C10a + C10c)),
+            line("  a) Emisión deudas con entidades de crédito (+) (170, 520)", C10a, financingIn),
+            line("  b) Emisión de otras deudas (+) (171, 173, 521, 523)", 0),
+            line("  c) Devolución deudas con entidades de crédito (–)", C10c, financingOut),
+            line("  d) Devolución de otras deudas (–)", 0),
+            line(
+              "11. Pagos por dividendos y remuneraciones de otros instrumentos de patrimonio",
+              0
+            ),
+            line("  a) Dividendos (526, 557)", 0),
+            line("12. Flujos de efectivo de las actividades de financiación (9+10+11)", C12),
+          ],
     },
     { code: "D", label: "D) Efecto de las variaciones de los tipos de cambio", amount: D },
     { code: "E", label: "E) AUMENTO/DISMINUCIÓN NETA DEL EFECTIVO (A.5+B.8+C.12+D)", amount: E },
