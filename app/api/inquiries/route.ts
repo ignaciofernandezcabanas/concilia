@@ -51,6 +51,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       pagination: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
     });
   } catch (err) {
+    console.error("[inquiries] GET error:", err);
     return errorResponse("Failed to list inquiries", err);
   }
 });

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Building2, Plus, ChevronDown, ChevronRight, X, AlertTriangle } from "lucide-react";
+import { api } from "@/lib/api-client";
 
 interface CompanyData {
   id: string;
@@ -105,8 +106,8 @@ export default function SociedadesPage() {
 
   const fetchCompanies = useCallback(async () => {
     try {
-      const res = await fetch("/api/settings/companies");
-      const json = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const json = await api.get<{ data: any[] }>("/api/settings/companies");
       setCompanies(json.data ?? []);
     } catch {
       /* ignore */

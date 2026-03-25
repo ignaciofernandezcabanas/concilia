@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Plus, ChevronDown, ChevronRight, Landmark, AlertTriangle, Check } from "lucide-react";
 import { formatNumber } from "@/lib/format";
+import { api } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -176,11 +177,13 @@ export default function DeudaPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [instRes, summaryRes, covRes] = await Promise.all([
-        fetch("/api/debt-instruments").then((r) => r.json()),
-        fetch("/api/debt-instruments/summary").then((r) => r.json()),
-        fetch("/api/debt-instruments/covenants").then((r) => r.json()),
-      ]);
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const [instRes, summaryRes, covRes] = (await Promise.all([
+        api.get<Record<string, unknown>>("/api/debt-instruments"),
+        api.get<Record<string, unknown>>("/api/debt-instruments/summary"),
+        api.get<Record<string, unknown>>("/api/debt-instruments/covenants"),
+      ])) as any[];
+      /* eslint-enable @typescript-eslint/no-explicit-any */
       setInstruments(instRes.data ?? []);
       setSummary(summaryRes);
       setCovenants(covRes.data ?? []);

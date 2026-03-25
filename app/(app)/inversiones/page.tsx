@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Briefcase, Plus, ChevronDown, ChevronRight } from "lucide-react";
 import { formatNumber } from "@/lib/format";
+import { api } from "@/lib/api-client";
 
 interface InvTx {
   id: string;
@@ -76,8 +77,8 @@ export default function InversionesPage() {
   });
 
   useEffect(() => {
-    fetch("/api/investments")
-      .then((r) => r.json())
+    api
+      .get<{ data: Investment[] }>("/api/investments")
       .then((d) => setInvestments(d.data ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));

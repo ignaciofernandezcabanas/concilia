@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Mail, Send, CheckCircle, AlertTriangle, XCircle, RotateCw, FileText } from "lucide-react";
 import { formatAmount } from "@/lib/format";
+import { api } from "@/lib/api-client";
 
 interface Inquiry {
   id: string;
@@ -89,8 +90,7 @@ export default function SeguimientosPage() {
   const fetchInquiries = useCallback(async () => {
     try {
       const params = filter !== "all" ? `?status=${filter}` : "";
-      const res = await fetch(`/api/inquiries${params}`);
-      const json = await res.json();
+      const json = await api.get<{ data: Inquiry[] }>(`/api/inquiries${params}`);
       setInquiries(json.data ?? []);
     } catch {
       /* ignore */
@@ -105,7 +105,7 @@ export default function SeguimientosPage() {
   const approveInquiry = async (id: string) => {
     setActing(true);
     try {
-      await fetch(`/api/inquiries/${id}/approve`, { method: "POST" });
+      await api.post(`/api/inquiries/${id}/approve`);
       fetchInquiries();
     } catch {
       /* ignore */
@@ -116,11 +116,7 @@ export default function SeguimientosPage() {
   const rejectInquiry = async (id: string) => {
     setActing(true);
     try {
-      await fetch(`/api/inquiries/${id}/reject`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: "Rechazado por el controller" }),
-      });
+      await api.post(`/api/inquiries/${id}/reject`, { reason: "Rechazado por el controller" });
       fetchInquiries();
     } catch {
       /* ignore */
@@ -156,11 +152,7 @@ export default function SeguimientosPage() {
   const resolveInquiry = async (id: string, status: string) => {
     setActing(true);
     try {
-      await fetch(`/api/inquiries/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
+      await api.put(`/api/inquiries/${id}`, { status });
       fetchInquiries();
     } catch {
       /* ignore */
@@ -567,15 +559,11 @@ export default function SeguimientosPage() {
                             onClick={async () => {
                               setActing(true);
                               try {
-                                await fetch("/api/inquiries/generate", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    bankTransactionId: selected.bankTransaction?.id,
-                                    invoiceId: selected.invoice?.id,
-                                    triggerType: selected.triggerType,
-                                    tone: "FORMAL",
-                                  }),
+                                await api.post("/api/inquiries/generate", {
+                                  bankTransactionId: selected.bankTransaction?.id,
+                                  invoiceId: selected.invoice?.id,
+                                  triggerType: selected.triggerType,
+                                  tone: "FORMAL",
                                 });
                                 fetchInquiries();
                               } catch {
