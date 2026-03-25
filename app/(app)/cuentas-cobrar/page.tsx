@@ -4,8 +4,8 @@ import { useState } from "react";
 import TopBar from "@/components/TopBar";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { useFetch } from "@/hooks/useApi";
-import { qs } from "@/lib/api-client";
-import { formatAmount } from "@/lib/format";
+import { api, qs } from "@/lib/api-client";
+import { formatAmount, formatDate } from "@/lib/format";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface AgingBucket {
@@ -40,7 +40,7 @@ interface AgingResponse {
   contacts: AgingContact[];
 }
 
-type Tab = "receivable" | "payable";
+type Tab = "receivable" | "payable" | "impagados";
 
 const BUCKET_COLORS = ["bg-green", "bg-green/60", "bg-amber", "bg-red/70", "bg-red"];
 const BUCKET_TEXT = [
@@ -88,9 +88,21 @@ export default function CuentasCobrarPage() {
           >
             Cuentas a pagar
           </button>
+          <button
+            onClick={() => setTab("impagados")}
+            className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-colors ${
+              tab === "impagados"
+                ? "border-accent text-accent"
+                : "border-transparent text-text-secondary"
+            }`}
+          >
+            Impagados
+          </button>
         </div>
 
-        {loading ? (
+        {tab === "impagados" ? (
+          <ImpagadosView />
+        ) : loading ? (
           <LoadingSpinner />
         ) : !summary ? (
           <p className="text-[13px] text-text-tertiary text-center py-12">Sin datos.</p>
@@ -212,6 +224,198 @@ export default function CuentasCobrarPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// ── Impagados (Bad Debts) view ──
+
+interface BadDebtTracker {
+  id: string;
+  status: string;
+  overdueMonths: number;
+  provisionAmount: number | null;
+  claimType: string | null;
+  claimDate: string | null;
+  claimReference: string | null;
+  invoice: {
+    number: string;
+    totalAmount: number;
+    amountPaid: number;
+    dueDate: string | null;
+    contact: { name: string; cif: string | null } | null;
+  };
+}
+
+const BD_STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
+  MONITORING: { bg: "bg-gray-100", text: "text-gray-600", label: "Monitorizando" },
+  PROVISION_ACCOUNTING: { bg: "bg-amber-100", text: "text-amber-700", label: "Prov. contable" },
+  PROVISION_TAX: { bg: "bg-green/10", text: "text-green-text", label: "Prov. fiscal" },
+  RECOVERED: { bg: "bg-blue-100", text: "text-blue-700", label: "Recuperado" },
+  WRITTEN_OFF: { bg: "bg-red/10", text: "text-red-text", label: "Fallido" },
+};
+
+function ImpagadosView() {
+  const { data, loading, refetch } = useFetch<{ data: BadDebtTracker[] }>("/api/bad-debts", []);
+  const [claimModal, setClaimModal] = useState<BadDebtTracker | null>(null);
+  const [claimType, setClaimType] = useState("BUROFAX");
+  const [claimDate, setClaimDate] = useState("");
+  const [claimRef, setClaimRef] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const trackers = data?.data ?? [];
+
+  async function handleClaim() {
+    if (!claimModal) return;
+    setSaving(true);
+    try {
+      await api.put("/api/bad-debts", {
+        id: claimModal.id,
+        claimType,
+        claimDate: claimDate ? new Date(claimDate).toISOString() : undefined,
+        claimReference: claimRef || undefined,
+        status: "PROVISION_TAX",
+      });
+      setClaimModal(null);
+      setClaimType("BUROFAX");
+      setClaimDate("");
+      setClaimRef("");
+      refetch();
+    } catch (err) {
+      console.error("Claim error:", err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return <LoadingSpinner />;
+
+  if (trackers.length === 0) {
+    return (
+      <p className="text-[13px] text-text-tertiary text-center py-12">
+        No hay impagados registrados.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <div className="bg-white rounded-lg border border-subtle overflow-hidden">
+        <div className="flex items-center h-10 px-5 border-b border-subtle text-xs font-semibold text-text-secondary">
+          <span className="w-28">Factura</span>
+          <span className="flex-1">Contacto</span>
+          <span className="w-28 text-right">Vencimiento</span>
+          <span className="w-28 text-right">Importe</span>
+          <span className="w-32 text-center">Estado fiscal</span>
+          <span className="w-36 text-right">Acciones</span>
+        </div>
+        {trackers.map((t) => {
+          const style = BD_STATUS_STYLE[t.status] ?? BD_STATUS_STYLE.MONITORING;
+          const canClaim = t.status === "MONITORING" || t.status === "PROVISION_ACCOUNTING";
+
+          return (
+            <div
+              key={t.id}
+              className="flex items-center h-11 px-5 border-b border-border-light text-[12px]"
+            >
+              <span className="w-28 font-medium text-accent">{t.invoice.number}</span>
+              <div className="flex-1">
+                <span className="text-text-primary">{t.invoice.contact?.name ?? "—"}</span>
+                {t.invoice.contact?.cif && (
+                  <span className="text-[10px] text-text-tertiary ml-1.5">
+                    {t.invoice.contact.cif}
+                  </span>
+                )}
+              </div>
+              <span className="w-28 text-right text-text-secondary">
+                {t.invoice.dueDate ? formatDate(t.invoice.dueDate) : "—"}
+              </span>
+              <span className="w-28 text-right font-mono font-medium">
+                {formatAmount(t.invoice.totalAmount)}
+              </span>
+              <span className="w-32 flex justify-center">
+                <span
+                  className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${style.bg} ${style.text}`}
+                >
+                  {style.label}
+                </span>
+              </span>
+              <span className="w-36 flex justify-end">
+                {canClaim && (
+                  <button
+                    onClick={() => setClaimModal(t)}
+                    className="text-[11px] font-medium px-2.5 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20"
+                  >
+                    Registrar reclamacion
+                  </button>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Claim registration modal */}
+      {claimModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg border border-subtle p-5 w-[420px] space-y-4">
+            <h3 className="text-[15px] font-semibold text-text-primary">Registrar reclamacion</h3>
+            <p className="text-[12px] text-text-secondary">
+              Factura {claimModal.invoice.number} — {formatAmount(claimModal.invoice.totalAmount)}
+            </p>
+            <div>
+              <label className="text-xs font-medium text-text-secondary block mb-1">
+                Tipo de reclamacion
+              </label>
+              <select
+                value={claimType}
+                onChange={(e) => setClaimType(e.target.value)}
+                className="w-full h-9 px-3 text-[13px] border border-subtle rounded-md"
+              >
+                <option value="BUROFAX">Burofax</option>
+                <option value="JUDICIAL">Judicial</option>
+                <option value="NOTARIAL">Notarial</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-text-secondary block mb-1">Fecha</label>
+              <input
+                type="date"
+                value={claimDate}
+                onChange={(e) => setClaimDate(e.target.value)}
+                className="w-full h-9 px-3 text-[13px] border border-subtle rounded-md"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-text-secondary block mb-1">
+                Referencia
+              </label>
+              <input
+                type="text"
+                value={claimRef}
+                onChange={(e) => setClaimRef(e.target.value)}
+                placeholder="Numero de referencia..."
+                className="w-full h-9 px-3 text-[13px] border border-subtle rounded-md"
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleClaim}
+                disabled={saving || !claimDate}
+                className="flex-1 h-9 bg-accent text-white text-[13px] font-medium rounded-md disabled:opacity-50"
+              >
+                {saving ? "Registrando..." : "Confirmar reclamacion"}
+              </button>
+              <button
+                onClick={() => setClaimModal(null)}
+                className="h-9 px-4 text-[13px] text-text-secondary border border-subtle rounded-md"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

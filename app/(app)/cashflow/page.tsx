@@ -58,7 +58,20 @@ interface TreasuryReport {
 }
 type CashflowReport = TreasuryReport | EFEReport;
 
-type Mode = "direct" | "indirect";
+// WC Bridge types
+interface WCBridgeStep {
+  code: string;
+  label: string;
+  amount: number;
+  isSubtotal: boolean;
+}
+interface WCBridgeReport {
+  steps: WCBridgeStep[];
+  reconciliationGap: number;
+  bankChangeActual: number;
+}
+
+type Mode = "direct" | "indirect" | "bridge";
 
 export default function CashflowPage() {
   const [mode, setMode] = useState<Mode>("indirect");
@@ -66,8 +79,22 @@ export default function CashflowPage() {
   const [offset, setOffset] = useState(0);
   const period = usePeriodData(periodType, offset);
 
-  const path = `/api/reports/cashflow${qs({ from: period.from, to: period.to, mode })}`;
-  const { data, loading } = useFetch<CashflowReport>(path, [period.from, period.to, mode]);
+  const cashflowMode = mode === "bridge" ? "indirect" : mode;
+  const path = `/api/reports/cashflow${qs({ from: period.from, to: period.to, mode: cashflowMode })}`;
+  const { data, loading: cashflowLoading } = useFetch<CashflowReport>(path, [
+    period.from,
+    period.to,
+    cashflowMode,
+  ]);
+
+  const bridgePath =
+    mode === "bridge" ? `/api/reports/wc-bridge${qs({ from: period.from, to: period.to })}` : null;
+  const { data: bridgeData, loading: bridgeLoading } = useFetch<WCBridgeReport>(bridgePath, [
+    period.from,
+    period.to,
+    mode,
+  ]);
+  const loading = mode === "bridge" ? bridgeLoading : cashflowLoading;
 
   // EFE data is now rendered directly by EFEView (no PgcTable mapping needed)
 
@@ -92,6 +119,12 @@ export default function CashflowPage() {
               >
                 EFE directo
               </button>
+              <button
+                onClick={() => setMode("bridge")}
+                className={`px-3.5 h-full text-xs font-medium border-l border-subtle ${mode === "bridge" ? "bg-accent text-white" : "bg-white text-text-secondary hover:bg-hover"}`}
+              >
+                Bridge
+              </button>
             </div>
             <PeriodSelector
               periodType={periodType}
@@ -114,6 +147,8 @@ export default function CashflowPage() {
           <LoadingSpinner />
         ) : mode === "indirect" ? (
           <EFEView data={data?.mode === "indirect" ? (data as EFEReport) : null} />
+        ) : mode === "bridge" ? (
+          <BridgeView data={bridgeData ?? null} />
         ) : (
           <TreasuryView data={data?.mode === "direct" ? (data as TreasuryReport) : null} />
         )}
@@ -315,6 +350,86 @@ function TDataRow({
         const f = fmtVal(total);
         return <span className={`w-[110px] text-right font-mono ${f.cls}`}>{f.text}</span>;
       })()}
+    </div>
+  );
+}
+
+// ── Bridge (Working Capital) view ──
+
+function BridgeView({ data }: { data: WCBridgeReport | null }) {
+  if (!data) return null;
+
+  const gap = data.reconciliationGap;
+  const showGapWarning = Math.abs(gap) > 1;
+
+  return (
+    <div className="space-y-3">
+      {showGapWarning && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2">
+          <span className="text-xs font-semibold text-red-700">
+            Gap de reconciliacion: {fmtN(gap)} — Revisar movimientos sin conciliar.
+          </span>
+        </div>
+      )}
+      <div className="bg-white rounded-lg border border-subtle overflow-hidden text-[13px]">
+        {data.steps.map((step, i) => {
+          const isSeparator =
+            step.code === "sep1" ||
+            step.code === "sep2" ||
+            step.code === "sep3" ||
+            step.code === "sep4";
+
+          if (isSeparator) {
+            return <div key={step.code + i} className="h-px bg-subtle mx-5 my-0" />;
+          }
+
+          const v = fmtVal(step.amount);
+
+          return (
+            <div
+              key={step.code}
+              className={`flex items-center h-9 px-6 ${
+                step.isSubtotal
+                  ? "bg-subtotal font-semibold border-b border-subtle"
+                  : "border-b border-border-light"
+              } ${!step.isSubtotal ? "pl-10" : ""}`}
+            >
+              <span className="flex-1 text-text-primary">{step.label}</span>
+              <span
+                className={`w-32 text-right font-mono ${step.isSubtotal ? "font-semibold" : ""} ${v.cls}`}
+              >
+                {fmtN(step.amount)}
+              </span>
+            </div>
+          );
+        })}
+
+        {/* Actual bank change */}
+        <div className="flex items-center h-9 px-6 bg-subtotal border-t border-subtle">
+          <span className="flex-1 font-semibold text-text-primary">Variacion real banco</span>
+          <span
+            className={`w-32 text-right font-mono font-semibold ${fmtVal(data.bankChangeActual).cls}`}
+          >
+            {fmtN(data.bankChangeActual)}
+          </span>
+        </div>
+
+        {/* Gap */}
+        <div
+          className={`flex items-center h-9 px-6 ${showGapWarning ? "bg-red-50" : "bg-subtotal"}`}
+        >
+          <span
+            className={`flex-1 font-semibold ${showGapWarning ? "text-red-700" : "text-text-primary"}`}
+          >
+            Gap de reconciliacion
+          </span>
+          <span
+            className={`w-32 text-right font-mono font-semibold ${showGapWarning ? "text-red-700" : "text-text-tertiary"}`}
+          >
+            {fmtN(gap)}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

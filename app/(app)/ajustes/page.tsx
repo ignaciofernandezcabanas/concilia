@@ -11,8 +11,16 @@ import { useAuth } from "@/components/AuthProvider";
 import LearningTab from "@/components/LearningTab";
 import { Plus, Save, RefreshCw, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 
-type Tab = "users" | "company" | "societies" | "fiscal" | "integrations" | "learning";
-const VALID_TABS: Tab[] = ["users", "company", "societies", "fiscal", "integrations", "learning"];
+type Tab = "users" | "company" | "societies" | "periods" | "fiscal" | "integrations" | "learning";
+const VALID_TABS: Tab[] = [
+  "users",
+  "company",
+  "societies",
+  "periods",
+  "fiscal",
+  "integrations",
+  "learning",
+];
 
 export default function Ajustes() {
   useAuth(); // ensure auth context is loaded
@@ -24,6 +32,7 @@ export default function Ajustes() {
     { value: "users", label: "Usuarios" },
     { value: "company", label: "Empresa" },
     { value: "societies", label: "Sociedades" },
+    { value: "periods", label: "Periodos" },
     { value: "fiscal", label: "Fiscal" },
     { value: "integrations", label: "Integraciones" },
     { value: "learning", label: "Aprendizaje" },
@@ -54,6 +63,7 @@ export default function Ajustes() {
         {tab === "users" && <UsersTab />}
         {tab === "company" && <CompanyTab />}
         {tab === "societies" && <SocietiesTab />}
+        {tab === "periods" && <PeriodsTab />}
         {tab === "fiscal" && <FiscalTab />}
         {tab === "integrations" && <IntegrationsTab />}
         {tab === "learning" && <LearningTab />}
@@ -831,6 +841,189 @@ function DriveFolderConfig({
             Actual: ...{currentFolderId.slice(-12)}
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// Periods Tab
+// ══════════════════════════════════════════════════════════════
+
+interface PeriodRow {
+  id: string;
+  year: number;
+  month: number;
+  status: string;
+  closedAt: string | null;
+  notes: string | null;
+}
+
+const MONTH_NAMES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
+const PERIOD_STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
+  OPEN: { bg: "bg-green/10", text: "text-green-text", label: "Abierto" },
+  SOFT_CLOSED: { bg: "bg-amber-100", text: "text-amber-700", label: "Cierre provisional" },
+  CLOSED: { bg: "bg-red/10", text: "text-red-text", label: "Cerrado" },
+  LOCKED: { bg: "bg-gray-200", text: "text-gray-600", label: "Bloqueado" },
+};
+
+function PeriodsTab() {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [periods, setPeriods] = useState<PeriodRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [acting, setActing] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchPeriods();
+  }, [year]);
+
+  async function fetchPeriods() {
+    setLoading(true);
+    try {
+      const res = await api.get<{ periods: PeriodRow[] }>(`/api/settings/periods?year=${year}`);
+      setPeriods(res.periods);
+    } catch {
+      setPeriods([]);
+    }
+    setLoading(false);
+  }
+
+  async function handleAction(p: PeriodRow, action: string) {
+    setActing(p.id);
+    try {
+      await api.put("/api/settings/periods", { year: p.year, month: p.month, action });
+      fetchPeriods();
+    } catch (err) {
+      console.error("Period action error:", err);
+    } finally {
+      setActing(null);
+    }
+  }
+
+  if (loading) return <LoadingSpinner />;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-text-secondary">
+          Periodos contables. Controla el estado de cada mes.
+        </p>
+        <select
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+          className="border border-subtle rounded px-3 py-1.5 text-xs"
+        >
+          {[2024, 2025, 2026, 2027].map((y) => (
+            <option key={y}>{y}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="bg-white rounded-lg border border-subtle overflow-hidden">
+        <div className="flex items-center h-10 px-5 border-b border-subtle text-xs font-semibold text-text-secondary">
+          <span className="flex-1">Mes</span>
+          <span className="w-36 text-center">Estado</span>
+          <span className="w-40 text-right">Cerrado el</span>
+          <span className="w-52 text-right">Acciones</span>
+        </div>
+        {periods.map((p) => {
+          const style = PERIOD_STATUS_STYLE[p.status] ?? PERIOD_STATUS_STYLE.OPEN;
+          const isActing = acting === p.id;
+
+          return (
+            <div
+              key={p.id}
+              className="flex items-center h-11 px-5 border-b border-border-light text-[13px]"
+            >
+              <span className="flex-1 text-text-primary font-medium">
+                {MONTH_NAMES[p.month - 1]} {p.year}
+              </span>
+              <span className="w-36 flex justify-center">
+                <span
+                  className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${style.bg} ${style.text}`}
+                >
+                  {style.label}
+                </span>
+              </span>
+              <span className="w-40 text-right text-xs text-text-tertiary">
+                {p.closedAt ? new Date(p.closedAt).toLocaleDateString("es-ES") : ""}
+              </span>
+              <span className="w-52 flex justify-end gap-2">
+                {p.status === "OPEN" && (
+                  <>
+                    <button
+                      onClick={() => handleAction(p, "soft_close")}
+                      disabled={isActing}
+                      className="text-[11px] font-medium px-2.5 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50"
+                    >
+                      {isActing ? "..." : "Cierre provisional"}
+                    </button>
+                    <button
+                      onClick={() => handleAction(p, "close")}
+                      disabled={isActing}
+                      className="text-[11px] font-medium px-2.5 py-1 rounded bg-red/10 text-red-text hover:bg-red/20 disabled:opacity-50"
+                    >
+                      {isActing ? "..." : "Cerrar"}
+                    </button>
+                  </>
+                )}
+                {p.status === "SOFT_CLOSED" && (
+                  <>
+                    <button
+                      onClick={() => handleAction(p, "reopen")}
+                      disabled={isActing}
+                      className="text-[11px] font-medium px-2.5 py-1 rounded bg-green/10 text-green-text hover:bg-green/20 disabled:opacity-50"
+                    >
+                      {isActing ? "..." : "Reabrir"}
+                    </button>
+                    <button
+                      onClick={() => handleAction(p, "close")}
+                      disabled={isActing}
+                      className="text-[11px] font-medium px-2.5 py-1 rounded bg-red/10 text-red-text hover:bg-red/20 disabled:opacity-50"
+                    >
+                      {isActing ? "..." : "Cerrar definitivo"}
+                    </button>
+                  </>
+                )}
+                {p.status === "CLOSED" && (
+                  <>
+                    <button
+                      onClick={() => handleAction(p, "reopen")}
+                      disabled={isActing}
+                      className="text-[11px] font-medium px-2.5 py-1 rounded bg-green/10 text-green-text hover:bg-green/20 disabled:opacity-50"
+                    >
+                      {isActing ? "..." : "Reabrir"}
+                    </button>
+                    <button
+                      onClick={() => handleAction(p, "lock")}
+                      disabled={isActing}
+                      className="text-[11px] font-medium px-2.5 py-1 rounded bg-gray-200 text-gray-600 hover:bg-gray-300 disabled:opacity-50"
+                    >
+                      {isActing ? "..." : "Bloquear"}
+                    </button>
+                  </>
+                )}
+                {p.status === "LOCKED" && (
+                  <span className="text-[11px] text-text-tertiary">Permanente</span>
+                )}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

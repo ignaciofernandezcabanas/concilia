@@ -30,6 +30,7 @@ const TYPE_LABELS: Record<string, string> = {
   UNIDENTIFIED: "Movimiento no identificado",
   OVERDUE_INVOICE: "Factura vencida sin cobro",
   CREDIT_NOTE: "Nota de crédito",
+  PAYROLL: "Nómina detectada",
 };
 
 const DIFF_LABELS: Record<string, string> = {
@@ -100,6 +101,16 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
               ? (TYPE_LABELS[tx.detectedType] ?? tx.detectedType)
               : "Movimiento bancario pendiente de revisión."}
           </p>
+          {/* Payroll badge */}
+          {tx.detectedType === "PAYROLL" && (
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                Nomina
+              </span>
+              <span className="text-[11px] text-text-tertiary font-mono">Cuenta sugerida: 640</span>
+            </div>
+          )}
+
           <div className="flex flex-col gap-1.5 text-[12px]">
             <Row label="Fecha" value={formatDate(tx.valueDate)} />
             <div className="flex justify-between">
@@ -606,6 +617,17 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
               <FileCheck size={14} />
               Registrar documento soporte
             </Link>
+          )}
+
+          {/* Register as advance — no match + positive amount */}
+          {!hasMatch && tx.amount > 0 && tx.status === "PENDING" && (
+            <button
+              onClick={() => onResolve({ action: "register_advance", bankTransactionId: tx.id })}
+              disabled={resolving}
+              className="w-full h-9 border border-accent text-accent text-[13px] font-medium rounded-md hover:bg-accent-light disabled:opacity-50"
+            >
+              Registrar como anticipo
+            </button>
           )}
 
           {/* Classify manually */}
