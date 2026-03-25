@@ -509,14 +509,31 @@ model InvestmentTransaction {
 }
 
 model OwnBankAccount {
-  id              String           @id @default(cuid())
-  iban            String
-  bankName        String?
-  alias           String?
-  isActive        Boolean          @default(true)
-  companyId       String
-  company         Company          @relation(fields: [companyId], references: [id])
-  debtInstruments DebtInstrument[]
+  id                  String          @id @default(cuid())
+  iban                String
+  bankName            String?
+  alias               String?
+  isActive            Boolean         @default(true)
+  accountType         BankAccountType @default(CHECKING)
+  connectionMethod    String          @default("FILE_IMPORT")
+  pgcAccountCode      String?
+  lastFourDigits      String?
+  contractNumber      String?
+  detectionPattern    String?
+  creditLimit         Float?
+  interestRate        Float?
+  monthlyPayment      Float?
+  startDate           DateTime?
+  maturityDate        DateTime?
+  paymentDay          Int?
+  initialBalance      Float?
+  initialBalanceDate  DateTime?
+  currentBalance      Float?
+  currentBalanceDate  DateTime?
+  currency            String          @default("EUR")
+  companyId           String
+  company             Company         @relation(fields: [companyId], references: [id])
+  debtInstruments     DebtInstrument[]
 
   @@unique([iban, companyId])
 }
@@ -1224,6 +1241,16 @@ enum EconomicCategory {
   TAX_PAYMENT
   INTERCOMPANY
   UNCLASSIFIED
+}
+
+enum BankAccountType {
+  CHECKING
+  SAVINGS
+  CREDIT_LINE
+  LOAN
+  CREDIT_CARD
+  CONFIRMING
+  FACTORING
 }
 
 enum ContactType {
