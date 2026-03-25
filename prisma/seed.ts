@@ -976,6 +976,9 @@ async function main() {
   // ── New features data ──
   await seedNewFeatures(cid, org.id, userId);
 
+  // ── Comprehensive demo data (all pages) ──
+  await seedComprehensiveDemo(cid, org.id, userId, contacts, invoices);
+
   console.log("\n🌱 Seed completado:");
   console.log(`   🏢 Empresa: Alimentación Mediterránea SL`);
   console.log(`   👤 Login: ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
@@ -1467,6 +1470,880 @@ async function seedNewFeatures(cid: string, orgId: string, userId: string) {
     });
   }
   console.log("  ✅ 5 notifications");
+}
+
+async function seedComprehensiveDemo(
+  cid: string,
+  orgId: string,
+  userId: string,
+  contacts: Array<{
+    id: string;
+    name: string;
+    cif: string | null;
+    iban: string | null;
+    type: string;
+  }>,
+  _invoices: Array<{
+    id: string;
+    number: string;
+    type: string;
+    status: string;
+    totalAmount: number;
+    contactId: string | null;
+    issueDate: Date;
+  }>
+) {
+  console.log("📦 Creating comprehensive demo data...");
+  const p = prisma as any;
+
+  // ── 1. Second company: Distribuciones Norte SL ──
+  const company2 = await (prisma as any).company.create({
+    data: {
+      name: "Distribuciones Norte SL",
+      cif: "B76543210",
+      currency: "EUR",
+      type: "SUBSIDIARY",
+      autoApproveThreshold: 0.9,
+      materialityThreshold: 3000,
+      materialityMinor: 5,
+      preAlertDays: 7,
+      organizationId: orgId,
+      shortName: "Dist. Norte",
+      needsBusinessProfile: false,
+    },
+  });
+  const c2id = company2.id;
+
+  // CompanyScope for admin user
+  const membership = await prisma.membership.findFirst({
+    where: { userId, organizationId: orgId },
+  });
+  if (membership) {
+    await prisma.companyScope.create({
+      data: { role: "ADMIN", membershipId: membership.id, companyId: c2id },
+    });
+  }
+
+  // PGC accounts for company2 (minimal set)
+  const c2Accounts = [
+    { code: "100", name: "Capital social", group: 1 },
+    { code: "129", name: "Resultado del ejercicio", group: 1 },
+    { code: "430", name: "Clientes", group: 4 },
+    { code: "400", name: "Proveedores", group: 4 },
+    { code: "572", name: "Bancos c/c", group: 5 },
+    { code: "600", name: "Compras de mercaderías", group: 6 },
+    { code: "700", name: "Ventas de mercaderías", group: 7 },
+    { code: "705", name: "Prestaciones de servicios", group: 7 },
+    { code: "621", name: "Arrendamientos y cánones", group: 6 },
+    { code: "628", name: "Suministros", group: 6 },
+    { code: "640", name: "Sueldos y salarios", group: 6 },
+  ];
+  for (const a of c2Accounts) {
+    await prisma.account.create({
+      data: {
+        code: a.code,
+        name: a.name,
+        group: a.group,
+        parentCode: a.code.length > 1 ? a.code.slice(0, -1) : null,
+        companyId: c2id,
+      },
+    });
+  }
+
+  // Contacts for company2
+  const c2Contacts = await Promise.all([
+    mkContact(
+      c2id,
+      "Supermercados Bilbao SL",
+      "B20202020",
+      "ES2020202020202020202020",
+      "CUSTOMER",
+      30
+    ),
+    mkContact(
+      c2id,
+      "Mayorista Cantabria SL",
+      "B21212121",
+      "ES2121212121212121212121",
+      "CUSTOMER",
+      45
+    ),
+    mkContact(
+      c2id,
+      "Frigoríficos Asturias SA",
+      "A22222220",
+      "ES2222222022222220222222",
+      "SUPPLIER",
+      30
+    ),
+  ]);
+
+  // Invoices for company2
+  const c2Account705 = await prisma.account.findFirst({ where: { code: "705", companyId: c2id } });
+  const c2Account600 = await prisma.account.findFirst({ where: { code: "600", companyId: c2id } });
+
+  const c2Invoices = [
+    {
+      contactIdx: 0,
+      num: "DN-2026-001",
+      type: "ISSUED",
+      date: d(2026, 1, 10),
+      amount: 12500,
+      status: "PAID",
+    },
+    {
+      contactIdx: 0,
+      num: "DN-2026-002",
+      type: "ISSUED",
+      date: d(2026, 2, 8),
+      amount: 8900,
+      status: "PAID",
+    },
+    {
+      contactIdx: 1,
+      num: "DN-2026-003",
+      type: "ISSUED",
+      date: d(2026, 2, 20),
+      amount: 15300,
+      status: "PENDING",
+    },
+    {
+      contactIdx: 1,
+      num: "DN-2026-004",
+      type: "ISSUED",
+      date: d(2026, 3, 5),
+      amount: 7200,
+      status: "PENDING",
+    },
+    {
+      contactIdx: 2,
+      num: "DN-PROV-001",
+      type: "RECEIVED",
+      date: d(2026, 1, 15),
+      amount: 9800,
+      status: "PAID",
+    },
+  ];
+
+  for (const ci of c2Invoices) {
+    const inv = await prisma.invoice.create({
+      data: {
+        number: ci.num,
+        type: ci.type as "ISSUED",
+        issueDate: ci.date,
+        dueDate: new Date(ci.date.getTime() + 30 * 86400000),
+        totalAmount: ci.amount,
+        netAmount: net(ci.amount),
+        vatAmount: vat(ci.amount),
+        currency: "EUR",
+        status: ci.status as "PENDING",
+        amountPaid: ci.status === "PAID" ? ci.amount : 0,
+        amountPending: ci.status === "PAID" ? 0 : ci.amount,
+        companyId: c2id,
+        contactId: c2Contacts[ci.contactIdx].id,
+      },
+    });
+    const lineAccount = ci.type === "ISSUED" ? c2Account705 : c2Account600;
+    if (lineAccount) {
+      await prisma.invoiceLine.create({
+        data: {
+          description: `Línea ${ci.num}`,
+          quantity: 1,
+          unitPrice: net(ci.amount),
+          totalAmount: net(ci.amount),
+          vatRate: 0.21,
+          invoiceId: inv.id,
+          accountId: lineAccount.id,
+        },
+      });
+    }
+  }
+
+  // Bank transactions for company2
+  const c2OwnIban = "ES3030303030303030303030";
+  await prisma.ownBankAccount.create({
+    data: { iban: c2OwnIban, bankName: "Sabadell", alias: "Cuenta principal DN", companyId: c2id },
+  });
+
+  const c2Txs = [
+    {
+      amount: 12500,
+      date: d(2026, 1, 20),
+      concept: "COBRO SUPERMERCADOS BILBAO DN-2026-001",
+      iban: "ES2020202020202020202020",
+      name: "Supermercados Bilbao SL",
+      status: "RECONCILED",
+    },
+    {
+      amount: 8900,
+      date: d(2026, 2, 18),
+      concept: "COBRO SUPERMERCADOS BILBAO DN-2026-002",
+      iban: "ES2020202020202020202020",
+      name: "Supermercados Bilbao SL",
+      status: "RECONCILED",
+    },
+    {
+      amount: -9800,
+      date: d(2026, 1, 25),
+      concept: "PAGO FRIGORIFICOS ASTURIAS DN-PROV-001",
+      iban: "ES2222222022222220222222",
+      name: "Frigoríficos Asturias SA",
+      status: "RECONCILED",
+    },
+    {
+      amount: -3025,
+      date: d(2026, 1, 1),
+      concept: "RECIBO ALQUILER NAVE ENE 2026",
+      iban: null,
+      name: null,
+      status: "RECONCILED",
+    },
+    {
+      amount: -3025,
+      date: d(2026, 2, 1),
+      concept: "RECIBO ALQUILER NAVE FEB 2026",
+      iban: null,
+      name: null,
+      status: "RECONCILED",
+    },
+    {
+      amount: -3025,
+      date: d(2026, 3, 1),
+      concept: "RECIBO ALQUILER NAVE MAR 2026",
+      iban: null,
+      name: null,
+      status: "PENDING",
+    },
+    {
+      amount: -8500,
+      date: d(2026, 2, 28),
+      concept: "NOMINA EMPLEADOS FEB 2026",
+      iban: null,
+      name: "NOMINAS",
+      status: "RECONCILED",
+    },
+    {
+      amount: -8500,
+      date: d(2026, 3, 28),
+      concept: "NOMINA EMPLEADOS MAR 2026",
+      iban: null,
+      name: "NOMINAS",
+      status: "PENDING",
+    },
+    {
+      amount: 15300,
+      date: d(2026, 3, 10),
+      concept: "TRANSFERENCIA MAYORISTA CANTABRIA",
+      iban: "ES2121212121212121212121",
+      name: "Mayorista Cantabria SL",
+      status: "PENDING",
+    },
+    {
+      amount: -450,
+      date: d(2026, 3, 15),
+      concept: "RECIBO ENDESA ENERGIA MAR",
+      iban: null,
+      name: "Endesa Energía SA",
+      status: "PENDING",
+    },
+  ];
+
+  let c2Balance = 50000;
+  let c2TxIdx = 0;
+  for (const t of c2Txs) {
+    c2Balance = round(c2Balance + t.amount);
+    await prisma.bankTransaction.create({
+      data: {
+        externalId: `seed_c2_${++c2TxIdx}`,
+        valueDate: t.date,
+        bookingDate: t.date,
+        amount: t.amount,
+        currency: "EUR",
+        concept: t.concept,
+        counterpartIban: t.iban,
+        counterpartName: t.name,
+        balanceAfter: c2Balance,
+        status: t.status as "PENDING",
+        priority: "ROUTINE",
+        companyId: c2id,
+      },
+    });
+  }
+  console.log(
+    "  ✅ Company 2: Distribuciones Norte SL (11 accounts, 3 contacts, 5 invoices, 10 txs)"
+  );
+
+  // ── 2. Inquiries (6 records) ──
+  const fourDaysAgo = new Date();
+  fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
+  const twoDaysAgo = new Date();
+  twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+  const tenDaysAgo = new Date();
+  tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+  const twentyDaysAgo = new Date();
+  twentyDaysAgo.setDate(twentyDaysAgo.getDate() - 20);
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  // DRAFT — factura faltante
+  await p.inquiry.create({
+    data: {
+      triggerType: "MISSING_INVOICE",
+      contactId: contacts[0].id,
+      recipientEmail: "admin@distribuidoralevante.es",
+      recipientName: contacts[0].name,
+      subject: "Solicitud de factura — Pago de 8.500€ del 14/03/2026",
+      body: "<p>Estimados,</p><p>Hemos registrado un pago de 8.500€ el 14/03/2026 pero no disponemos de la factura correspondiente. ¿Podrían enviárnosla?</p><p>Gracias,<br/>Alimentación Mediterránea SL</p>",
+      bodyPlain:
+        "Estimados, hemos registrado un pago de 8.500€ el 14/03/2026 pero no disponemos de la factura correspondiente. ¿Podrían enviárnosla? Gracias, Alimentación Mediterránea SL",
+      status: "DRAFT",
+      companyId: cid,
+    },
+  });
+
+  // SENT — enviado hace 4 días
+  await p.inquiry.create({
+    data: {
+      triggerType: "MISSING_DOCUMENTATION",
+      contactId: contacts[6].id, // Materias Primas
+      recipientEmail: "facturacion@materiasprimas.es",
+      recipientName: contacts[6].name,
+      subject: "Documentación pendiente — Albarán entrega 02/03/2026",
+      body: "<p>Estimados,</p><p>Necesitamos el albarán de entrega correspondiente al pedido del 02/03/2026 por 11.890€ para completar la conciliación.</p>",
+      bodyPlain:
+        "Estimados, necesitamos el albarán de entrega correspondiente al pedido del 02/03/2026 por 11.890€ para completar la conciliación.",
+      status: "SENT",
+      sentAt: fourDaysAgo,
+      sentMessageId: "msg_demo_001@mail.concilia.es",
+      sentThreadId: "thread_demo_001",
+      nextFollowUpDate: new Date(fourDaysAgo.getTime() + 3 * 86400000),
+      followUpIntervalDays: 3,
+      companyId: cid,
+    },
+  });
+
+  // RESPONSE_RECEIVED — con responseSummary
+  await p.inquiry.create({
+    data: {
+      triggerType: "EXPENSE_CLARIFICATION",
+      contactId: contacts[7].id, // Envases y Packaging
+      recipientEmail: "contabilidad@envases.es",
+      recipientName: contacts[7].name,
+      subject: "Aclaración cargo duplicado — 3.500€ del 10/02/2026",
+      body: "<p>Estimados,</p><p>Hemos detectado un cargo duplicado de 3.500€ los días 10 y 11 de febrero. ¿Podrían confirmar si se trata de un error?</p>",
+      bodyPlain:
+        "Estimados, hemos detectado un cargo duplicado de 3.500€ los días 10 y 11 de febrero. ¿Podrían confirmar si se trata de un error?",
+      status: "RESPONSE_RECEIVED",
+      sentAt: tenDaysAgo,
+      sentMessageId: "msg_demo_002@mail.concilia.es",
+      sentThreadId: "thread_demo_002",
+      responseReceivedAt: new Date(tenDaysAgo.getTime() + 2 * 86400000),
+      responseMessageId: "msg_resp_002@envases.es",
+      responseSummary:
+        "Confirman que el segundo cargo del 11/02 fue un error. Emitirán nota de crédito por 3.500€ esta semana.",
+      responseResolved: false,
+      proposedAction: "CLOSE_WITH_NOTE",
+      proposedActionReason:
+        "El proveedor confirma duplicado y emitirá NC. Pendiente de recibir la NC.",
+      companyId: cid,
+    },
+  });
+
+  // FOLLOW_UP_DRAFT — followUpNumber: 2
+  await p.inquiry.create({
+    data: {
+      triggerType: "MISSING_INVOICE",
+      contactId: contacts[3].id, // Mercados Regionales
+      recipientEmail: "admin@mercadosregionales.es",
+      recipientName: contacts[3].name,
+      subject: "RE: Solicitud de factura — Cobro pendiente 6.200€",
+      body: "<p>Estimados,</p><p>Segundo recordatorio: seguimos a la espera de la factura correspondiente al cobro de 6.200€. Necesitamos la documentación para cerrar la conciliación.</p>",
+      bodyPlain:
+        "Estimados, segundo recordatorio: seguimos a la espera de la factura correspondiente al cobro de 6.200€. Necesitamos la documentación para cerrar la conciliación.",
+      status: "FOLLOW_UP_DRAFT",
+      sentAt: twentyDaysAgo,
+      sentMessageId: "msg_demo_003@mail.concilia.es",
+      sentThreadId: "thread_demo_003",
+      followUpNumber: 2,
+      maxFollowUps: 3,
+      nextFollowUpDate: twoDaysAgo,
+      followUpIntervalDays: 5,
+      proposedFollowUpBody: "<p>Tercer y último recordatorio antes de escalación...</p>",
+      companyId: cid,
+    },
+  });
+
+  // ESCALATED — followUpNumber: 3, maxFollowUps reached
+  await p.inquiry.create({
+    data: {
+      triggerType: "MISSING_INVOICE",
+      contactId: contacts[4].id, // Exportadora Ibérica
+      recipientEmail: "contabilidad@exportadoraiberica.es",
+      recipientName: contacts[4].name,
+      subject: "URGENTE: Documentación pendiente — Factura 48.500€",
+      body: "<p>Estimados,</p><p>Tras tres intentos de contacto sin respuesta, escalamos esta solicitud. Necesitamos la factura correspondiente a la transferencia de 48.500€ del 10/02/2026.</p>",
+      bodyPlain:
+        "Estimados, tras tres intentos de contacto sin respuesta, escalamos esta solicitud. Necesitamos la factura correspondiente a la transferencia de 48.500€ del 10/02/2026.",
+      status: "ESCALATED",
+      sentAt: thirtyDaysAgo,
+      sentMessageId: "msg_demo_004@mail.concilia.es",
+      sentThreadId: "thread_demo_004",
+      followUpNumber: 3,
+      maxFollowUps: 3,
+      tone: "URGENT",
+      companyId: cid,
+    },
+  });
+
+  // RESOLVED — responseResolved: true
+  await p.inquiry.create({
+    data: {
+      triggerType: "IC_CONFIRMATION",
+      contactId: contacts[13].id, // Grupo Alimentario Norte
+      recipientEmail: "contabilidad@grupoalimentario.es",
+      recipientName: contacts[13].name,
+      subject: "Confirmación operación intercompañía — 8.400€",
+      body: "<p>Estimados,</p><p>Solicitamos confirmación de la operación intercompañía por 8.400€ (FRA-2026-039) registrada el 15/01/2026.</p>",
+      bodyPlain:
+        "Estimados, solicitamos confirmación de la operación intercompañía por 8.400€ (FRA-2026-039) registrada el 15/01/2026.",
+      status: "RESOLVED",
+      sentAt: twentyDaysAgo,
+      sentMessageId: "msg_demo_005@mail.concilia.es",
+      sentThreadId: "thread_demo_005",
+      responseReceivedAt: new Date(twentyDaysAgo.getTime() + 1 * 86400000),
+      responseMessageId: "msg_resp_005@grupoalimentario.es",
+      responseSummary:
+        "Confirman la operación intercompañía. Adjuntan factura de compra correspondiente.",
+      responseResolved: true,
+      attachmentsReceived: 1,
+      companyId: cid,
+    },
+  });
+  console.log(
+    "  ✅ 6 inquiries (DRAFT, SENT, RESPONSE_RECEIVED, FOLLOW_UP_DRAFT, ESCALATED, RESOLVED)"
+  );
+
+  // ── 3. Supporting Documents (5 records) ──
+  await p.supportingDocument.create({
+    data: {
+      type: "MODELO_FISCAL",
+      reference: "303-T4-2025",
+      description: "Pago Modelo 303 IVA T4 2025",
+      date: d(2026, 1, 20),
+      amount: 3245.5,
+      debitAccountCode: "4750",
+      creditAccountCode: "572",
+      cashflowType: "OPERATING",
+      expectedDirection: "OUTFLOW",
+      status: "POSTED",
+      companyId: cid,
+    },
+  });
+
+  await p.supportingDocument.create({
+    data: {
+      type: "ACTA_JUNTA",
+      reference: "ACTA-2025-12",
+      description: "Acta Junta General Ordinaria — Aprobación cuentas 2025",
+      date: d(2026, 1, 15),
+      amount: 0,
+      debitAccountCode: "129",
+      creditAccountCode: "120",
+      cashflowType: "NON_CASH",
+      expectedDirection: "NONE",
+      status: "REGISTERED",
+      companyId: cid,
+    },
+  });
+
+  await p.supportingDocument.create({
+    data: {
+      type: "RECIBO_NOMINA",
+      reference: "NOM-2026-02",
+      description: "Nóminas empleados febrero 2026",
+      date: d(2026, 2, 28),
+      amount: 15200,
+      debitAccountCode: "640",
+      creditAccountCode: "572",
+      cashflowType: "OPERATING",
+      expectedDirection: "OUTFLOW",
+      status: "RECONCILED",
+      companyId: cid,
+    },
+  });
+
+  await p.supportingDocument.create({
+    data: {
+      type: "CONTRATO_ALQUILER",
+      reference: "ALQ-NAVE-2024",
+      description: "Contrato alquiler nave industrial — Inmobiliaria Nave Central SL",
+      date: d(2024, 6, 1),
+      amount: 3025,
+      contactId: contacts[10].id, // Inmobiliaria
+      debitAccountCode: "621",
+      creditAccountCode: "572",
+      cashflowType: "OPERATING",
+      expectedDirection: "OUTFLOW",
+      status: "POSTED",
+      companyId: cid,
+    },
+  });
+
+  await p.supportingDocument.create({
+    data: {
+      type: "POLIZA_SEGURO",
+      reference: "SEG-RC-2026",
+      description: "Póliza seguro RC empresa — Mapfre",
+      date: d(2026, 1, 1),
+      amount: 900,
+      debitAccountCode: "625",
+      creditAccountCode: "572",
+      cashflowType: "OPERATING",
+      expectedDirection: "OUTFLOW",
+      status: "POSTED",
+      companyId: cid,
+    },
+  });
+  console.log("  ✅ 5 supporting documents");
+
+  // ── 4. Recurring Accruals (3 records) ──
+  await p.recurringAccrual.create({
+    data: {
+      description: "Seguro RC anual — Mapfre",
+      totalAnnualAmount: 3600,
+      monthlyAmount: 300,
+      expenseAccountCode: "625",
+      accrualAccountCode: "480",
+      frequency: "MONTHLY",
+      startDate: d(2026, 1, 1),
+      autoReverse: true,
+      status: "ACTIVE",
+      lastAccruedDate: d(2026, 2, 28),
+      totalAccrued: 600,
+      companyId: cid,
+    },
+  });
+
+  await p.recurringAccrual.create({
+    data: {
+      description: "Auditoría anual — Ernst & Young",
+      totalAnnualAmount: 6000,
+      monthlyAmount: 500,
+      expenseAccountCode: "623",
+      accrualAccountCode: "480",
+      frequency: "MONTHLY",
+      startDate: d(2026, 1, 1),
+      autoReverse: true,
+      status: "ACTIVE",
+      lastAccruedDate: d(2026, 2, 28),
+      totalAccrued: 1000,
+      companyId: cid,
+    },
+  });
+
+  await p.recurringAccrual.create({
+    data: {
+      description: "Mantenimiento IT — Soporte anual servidores",
+      totalAnnualAmount: 2400,
+      monthlyAmount: 200,
+      expenseAccountCode: "629",
+      accrualAccountCode: "480",
+      frequency: "MONTHLY",
+      startDate: d(2026, 1, 1),
+      autoReverse: true,
+      status: "ACTIVE",
+      lastAccruedDate: d(2026, 2, 28),
+      totalAccrued: 400,
+      companyId: cid,
+    },
+  });
+  console.log("  ✅ 3 recurring accruals");
+
+  // ── 5. Investments (2 records) ──
+  await p.investment.create({
+    data: {
+      name: "Participación TechFood SL",
+      type: "EQUITY_OTHER",
+      pgcAccount: "250",
+      acquisitionDate: d(2025, 6, 15),
+      acquisitionCost: 25000,
+      ownershipPct: 5,
+      status: "ACTIVE",
+      valuationMethod: "COST",
+      notes: "Participación minoritaria en startup de food-tech",
+      companyId: cid,
+    },
+  });
+
+  await p.investment.create({
+    data: {
+      name: "Préstamo concedido a socio — Juan García",
+      type: "LOAN_GRANTED",
+      pgcAccount: "252",
+      acquisitionDate: d(2025, 3, 1),
+      acquisitionCost: 50000,
+      status: "ACTIVE",
+      valuationMethod: "COST",
+      currentValue: 45000,
+      lastValuationDate: d(2026, 2, 28),
+      notes: "Préstamo a 5 años, amortización semestral 5.000€",
+      companyId: cid,
+    },
+  });
+  console.log("  ✅ 2 investments");
+
+  // ── 6. Debt Instruments (3 records + schedule) ──
+  const icoLoan = await p.debtInstrument.create({
+    data: {
+      name: "Préstamo ICO Inversión 2024",
+      type: "TERM_LOAN",
+      bankEntityName: "Santander",
+      principalAmount: 120000,
+      outstandingBalance: 108000,
+      interestRateType: "FIXED",
+      interestRateValue: 3.5,
+      startDate: d(2024, 1, 15),
+      maturityDate: d(2029, 1, 15),
+      paymentFrequency: "MONTHLY",
+      paymentDay: 5,
+      status: "ACTIVE",
+      companyId: cid,
+    },
+  });
+
+  // 12 schedule entries (next 12 months)
+  for (let i = 1; i <= 12; i++) {
+    const dueDate = new Date(2026, i - 1, 5);
+    await p.debtScheduleEntry.create({
+      data: {
+        debtInstrumentId: icoLoan.id,
+        entryNumber: 24 + i,
+        dueDate,
+        principalAmount: 1800,
+        interestAmount: 315,
+        totalAmount: 2115,
+        outstandingAfter: 108000 - 1800 * i,
+        matched: i <= 3, // first 3 months already paid
+      },
+    });
+  }
+
+  await p.debtInstrument.create({
+    data: {
+      name: "Póliza de crédito CaixaBank",
+      type: "REVOLVING_CREDIT",
+      bankEntityName: "CaixaBank",
+      principalAmount: 200000,
+      outstandingBalance: 80000,
+      interestRateType: "VARIABLE",
+      interestRateValue: 1.5,
+      referenceRate: "EURIBOR_12M",
+      spread: 1.5,
+      startDate: d(2025, 6, 1),
+      maturityDate: d(2026, 6, 1),
+      paymentFrequency: "QUARTERLY",
+      creditLimit: 200000,
+      currentDrawdown: 80000,
+      status: "ACTIVE",
+      companyId: cid,
+    },
+  });
+
+  const leasing = await p.debtInstrument.create({
+    data: {
+      name: "Leasing furgoneta Iveco Daily",
+      type: "FINANCE_LEASE",
+      bankEntityName: "BBVA Leasing",
+      principalAmount: 28000,
+      outstandingBalance: 21000,
+      interestRateType: "FIXED",
+      interestRateValue: 4.2,
+      startDate: d(2025, 1, 15),
+      maturityDate: d(2029, 1, 15),
+      paymentFrequency: "MONTHLY",
+      paymentDay: 15,
+      status: "ACTIVE",
+      notes: "Opción de compra: 1.400€ (5%)",
+      companyId: cid,
+    },
+  });
+
+  // 6 schedule entries for leasing (next 6 months)
+  for (let i = 1; i <= 6; i++) {
+    const dueDate = new Date(2026, i - 1, 15);
+    await p.debtScheduleEntry.create({
+      data: {
+        debtInstrumentId: leasing.id,
+        entryNumber: 12 + i,
+        dueDate,
+        principalAmount: 486,
+        interestAmount: 98,
+        totalAmount: 584,
+        outstandingAfter: 21000 - 486 * i,
+        matched: i <= 2,
+      },
+    });
+  }
+  console.log(
+    "  ✅ 3 debt instruments (ICO loan + 12 schedule, revolving credit, leasing + 6 schedule)"
+  );
+
+  // ── 7. IntercompanyLink (2 records) ──
+  await prisma.intercompanyLink.create({
+    data: {
+      organizationId: orgId,
+      companyAId: cid,
+      companyBId: c2id,
+      amount: 15000,
+      date: d(2026, 2, 15),
+      concept: "Factura servicios distribución T1 2026",
+      status: "CONFIRMED",
+      matchedAt: d(2026, 2, 15),
+    },
+  });
+
+  await prisma.intercompanyLink.create({
+    data: {
+      organizationId: orgId,
+      companyAId: cid,
+      companyBId: c2id,
+      amount: 30000,
+      date: d(2026, 1, 10),
+      concept: "Préstamo intercompañía — financiación circulante",
+      status: "DETECTED",
+    },
+  });
+  console.log("  ✅ 2 intercompany links");
+
+  // ── 8. GestoriaConfig (1 record) ──
+  await p.gestoriaConfig.create({
+    data: {
+      companyId: cid,
+      gestoriaName: "Asesoría Fiscal López SL",
+      contactName: "María López",
+      phone: "+34 93 456 78 90",
+      email: "gestoria@asesorialopez.es",
+      accessLevel: "reportes",
+      manages: ["fiscal", "laboral"],
+    },
+  });
+  console.log("  ✅ 1 gestoría config");
+
+  // ── 9. BusinessProfile (1 record) ──
+  await p.businessProfile.create({
+    data: {
+      companyId: cid,
+      sector: "food_beverage",
+      actividad: "Importación y distribución de alimentación premium",
+      canales: ["b2b_directo", "distribuidores"],
+      regimenIva: "general",
+      modeloIngreso: "venta_producto",
+      modulosFiscales: ["303", "111", "200", "347"],
+      inferredAt: d(2026, 1, 2),
+    },
+  });
+
+  // Set needsBusinessProfile = false
+  await (prisma as any).company.update({
+    where: { id: cid },
+    data: { needsBusinessProfile: false },
+  });
+  console.log("  ✅ 1 business profile");
+
+  // ── 10. BadDebtTracker (2 records) ──
+  // Find overdue invoices
+  const overdueInvoices = await prisma.invoice.findMany({
+    where: { companyId: cid, type: "ISSUED", status: "OVERDUE" },
+    take: 2,
+    orderBy: { issueDate: "asc" },
+  });
+
+  if (overdueInvoices.length >= 1) {
+    await p.badDebtTracker.create({
+      data: {
+        invoiceId: overdueInvoices[0].id,
+        overdueDate: d(2025, 12, 15),
+        overdueMonths: 3,
+        provisionAmount: overdueInvoices[0].totalAmount,
+        status: "MONITORING",
+        companyId: cid,
+      },
+    });
+  }
+
+  if (overdueInvoices.length >= 2) {
+    await p.badDebtTracker.create({
+      data: {
+        invoiceId: overdueInvoices[1].id,
+        overdueDate: d(2025, 10, 1),
+        overdueMonths: 6,
+        provisionAmount: overdueInvoices[1].totalAmount,
+        claimType: "JUDICIAL",
+        claimDate: d(2026, 2, 1),
+        claimReference: "PROC-2026-00142",
+        isTaxDeductible: true,
+        taxDeductibleDate: d(2026, 2, 1),
+        status: "PROVISION_TAX",
+        companyId: cid,
+      },
+    });
+  }
+  console.log(`  ✅ ${Math.min(overdueInvoices.length, 2)} bad debt trackers`);
+
+  // ── 11. Reconciliation records (~18) ──
+  // Link RECONCILED bank transactions to matching invoices
+  const reconciledTxs = await prisma.bankTransaction.findMany({
+    where: { companyId: cid, status: "RECONCILED" },
+    orderBy: { valueDate: "asc" },
+  });
+
+  const paidInvoices = await prisma.invoice.findMany({
+    where: { companyId: cid, status: "PAID" },
+    orderBy: { issueDate: "asc" },
+  });
+
+  let reconCount = 0;
+  for (const tx of reconciledTxs) {
+    // Match by amount: positive tx → ISSUED invoices, negative → RECEIVED
+    const isIncome = tx.amount > 0;
+    const matchInvoice = paidInvoices.find((inv) => {
+      const amountMatch = isIncome
+        ? Math.abs(inv.totalAmount - tx.amount) < 0.01
+        : Math.abs(inv.totalAmount - Math.abs(tx.amount)) < 0.01;
+      const typeMatch = isIncome ? inv.type === "ISSUED" : inv.type === "RECEIVED";
+      return amountMatch && typeMatch;
+    });
+
+    if (matchInvoice) {
+      // Remove from pool to avoid duplicates
+      const idx = paidInvoices.indexOf(matchInvoice);
+      paidInvoices.splice(idx, 1);
+
+      await prisma.reconciliation.create({
+        data: {
+          type: "EXACT_MATCH",
+          confidenceScore: 0.95 + Math.random() * 0.05,
+          matchReason: `Coincidencia exacta: ${matchInvoice.number} = ${Math.abs(tx.amount).toFixed(2)}€`,
+          status: "AUTO_APPROVED",
+          invoiceAmount: matchInvoice.totalAmount,
+          bankAmount: Math.abs(tx.amount),
+          difference: 0,
+          resolvedAt: tx.valueDate,
+          resolvedById: userId,
+          resolution: "auto_approved",
+          bankTransactionId: tx.id,
+          invoiceId: matchInvoice.id,
+          companyId: cid,
+        },
+      });
+      reconCount++;
+    }
+
+    if (reconCount >= 18) break;
+  }
+  console.log(`  ✅ ${reconCount} reconciliation records`);
+
+  console.log("📦 Comprehensive demo data completado.");
 }
 
 main()
