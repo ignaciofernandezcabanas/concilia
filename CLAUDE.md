@@ -24,7 +24,7 @@ app/
   (app)/                    # Pages behind auth (AppShell layout)
     page.tsx                # Dashboard (briefing + 6 KPIs + acciones rápidas)
     conciliacion/           # Bandeja de conciliación
-    seguimientos/           # Inquiries: seguimiento de emails y documentos
+    seguimientos/           # Inquiries + AgentThreads: seguimiento de emails, documentos, follow-ups
     facturas/               # Invoices (import PDF, view, delete)
     movimientos/            # Bank transactions (import CSV/N43, delete)
     asientos/               # Journal entries (crear, aprobar, revertir)
@@ -40,15 +40,17 @@ app/
     consolidado/            # Consolidated reports (PyG/Balance multi-sociedad)
     inversiones/            # Investment portfolio (participaciones, préstamos)
     fiscal/                 # Fiscal: IVA, retenciones, reconciliación fiscal
-    notificaciones/         # Notifications (17+ tipos)
+    gestoria/               # Gestoría portal (alertas, borradores, subida, incidencias)
+    notificaciones/         # Notifications (21+ tipos)
     reglas/                 # Matching rules + NL creation
     ajustes/                # Settings: users, company, integrations, sociedades, periodos
       automatizacion/       # AI agent config + learning metrics
       sociedades/           # Multi-company management + consolidation setup
     onboarding/             # Onboarding v3 (individual vs grupo)
+    setup/                  # Onboarding wizard (8 steps, PGC inference, historical calibration)
   login/                    # Login page (email + OAuth)
   auth/callback/            # OAuth callback handler
-  api/                      # 90+ endpoints
+  api/                      # 123 endpoints
 
 lib/
   ai/                       # AI orchestration
@@ -68,7 +70,7 @@ lib/
     client.ts               # Anthropic SDK singleton
   reconciliation/
     engine.ts               # Pipeline de conciliación (5 fases: 0+1-4), recibe db: ScopedPrisma
-    resolver.ts             # Resolver unificado (16 acciones) en $transaction
+    resolver.ts             # Resolver unificado (23+ acciones) en $transaction
     invoice-payments.ts     # Actualizador de status de pago
     decision-tracker.ts     # Feedback loop: registra decisiones del controller
     detectors/              # Internal, duplicate, return, financial, intercompany, investment, payroll, equity, financing
@@ -103,6 +105,19 @@ lib/
     sender.ts               # Abstracción Gmail/Outlook para envío
     response-monitor.ts     # Monitoriza respuestas a inquiries + evalúa con AI
     response-evaluator.ts   # 3 fases: adjuntos (Haiku) → texto (Sonnet) → decisión (reglas)
+  contacts/                 # Contact management
+    utils.ts                # normalizeNif, updateContactIfNewData
+  fiscal/                   # Fiscal compliance
+    fiscal-matrix.ts        # 7 company types → applicable fiscal models + calendar
+  import/                   # Opening balance + file imports
+    balance-parser.ts       # CSV parser (separator detection, Spanish amounts)
+    account-mapper.ts       # 3-case mapping (exact, parent, needsReview)
+    opening-balance.ts      # JE generator from trial balance CSV
+  debt/                     # Debt management
+    amortization-schedule.ts # French amortization system
+    schedule-import.ts      # Schedule import + validation
+  threads/                  # AgentThread management
+    thread-manager.ts       # Lifecycle: create → draft → approve → send → follow-up → resolve
   holded/                   # Holded API client + sync modules
   bank/                     # Concept parser (Haiku), Norma43 parser
   invoices/                 # PDF extractor (Haiku), mailbox import, Drive uploader, Excel import
@@ -112,10 +127,10 @@ lib/
   db.ts                     # Prisma client singleton
   db-scoped.ts              # getScopedDb(companyId), getGroupDb(companyIds)
 
-components/                 # 17 React components: Sidebar, ContextSwitcher, ConfidenceBar, InlineChart...
+components/                 # 18 React components: Sidebar, ContextSwitcher, ConfidenceBar, InlineChart...
 hooks/useApi.ts             # useFetch, useInvoices, useTransactions...
-prisma/schema.prisma        # 42 modelos, 55 enums
-__tests__/                  # 69 archivos, 577 tests
+prisma/schema.prisma        # 52 modelos, 68 enums
+__tests__/                  # 77 archivos, 751 tests
 ```
 
 ## Setup Local
@@ -155,12 +170,12 @@ export const GET = withAuth(async (req, ctx) => {
 import { prisma } from "@/lib/db"; // PROHIBIDO excepto GLOBAL-PRISMA
 ```
 
-**SCOPED_MODELS** (30 modelos auto-filtrados por companyId):
-`company, user, account, ownBankAccount, contact, invoice, bankTransaction, reconciliation, matchingRule, categoryThreshold, integration, syncLog, archiveLog, notification, auditLog, accountingPeriod, journalEntry, fixedAsset, budget, confidenceAdjustment, controllerDecision, learnedPattern, thresholdCalibration, inquiry, investment, recurringAccrual, deferredEntry, badDebtTracker, exchangeRateDifference, supportingDocument, debtInstrument`
+**SCOPED_MODELS** (32 modelos auto-filtrados por companyId):
+`company, user, account, ownBankAccount, contact, invoice, bankTransaction, reconciliation, matchingRule, categoryThreshold, integration, syncLog, archiveLog, notification, auditLog, accountingPeriod, journalEntry, fixedAsset, budget, confidenceAdjustment, controllerDecision, learnedPattern, thresholdCalibration, inquiry, investment, recurringAccrual, deferredEntry, badDebtTracker, exchangeRateDifference, supportingDocument, debtInstrument, businessProfile, gestoriaConfig`
 
-**NO scoped** (sin companyId): InvoiceLine, BudgetLine, JournalEntryLine, BankTransactionClassification, DuplicateGroup, Payment, CompanyScope, InvestmentTransaction, DebtScheduleEntry, DebtTransaction, DebtCovenant.
+**NO scoped** (sin companyId): InvoiceLine, BudgetLine, JournalEntryLine, BankTransactionClassification, DuplicateGroup, Payment, CompanyScope, InvestmentTransaction, DebtScheduleEntry, DebtTransaction, DebtCovenant, ThreadMessage.
 
-**NO scoped** (organizationId): IntercompanyLink, AgentRun.
+**NO scoped** (organizationId): IntercompanyLink, AgentRun, AgentThread, FollowUpConfig.
 
 ### Error Handling
 
@@ -335,7 +350,7 @@ ContextSwitcher en sidebar. Vista consolidada (read-only) para OWNER/ADMIN. Dete
 
 ## Seguridad
 
-- **Scoped DB**: 29 modelos auto-filtrados. Imposible acceder a datos de otra empresa.
+- **Scoped DB**: 32 modelos auto-filtrados. Imposible acceder a datos de otra empresa.
 - **HTTP rate limiting**: read 100/min, write 30/min, auth 5/min, engine 3/min.
 - **LLM rate limiting**: max 5 concurrent, circuit breaker 3 errores → 60s.
 - **Prompt injection**: datos en XML tags + Zod schemas + system checks.
@@ -365,6 +380,35 @@ Importa un CSV de sumas y saldos (trial balance) para generar un asiento de aper
 - Duplicate opening JE per date is prevented
 - Accounts with 0 balance are filtered out
 - JE created as DRAFT (never auto-posted)
+
+## Autonomous Follow-Up System (AgentThread)
+
+Proactive follow-up threads managed by the AI agent across 8 scenarios:
+
+1. **Overdue receivables** — escalation emails to debtors
+2. **Duplicates** — confirm or dismiss with controller
+3. **Supplier discrepancies** — request clarification on amount mismatches
+4. **Fiscal documents** — request missing fiscal docs (modelos, certificados)
+5. **Gestoría** — coordinate with external firm on deadlines
+6. **Bank returns** — follow up on returned charges
+7. **Unidentified advances** — identify origin of unexplained inflows
+8. **Intercompany** — confirm cross-company transfers with counterparts
+
+### Models
+
+- **AgentThread**: scenario, status (OPEN/WAITING/RESOLVED/ESCALATED/EXPIRED), priority, auto-resolve rules, max follow-ups, supportingDocUrls
+- **ThreadMessage**: role (AGENT/CONTROLLER/EXTERNAL), content, attachments, import-on-reply with controller approval
+- **FollowUpConfig**: per-scenario configuration (intervals, max attempts, escalation rules)
+
+### Thread Manager
+
+Orchestrates the lifecycle: create thread → draft message → controller approval → send → monitor responses → follow-up cycle → auto-resolve or escalate. Integrates with daily-agent inquiry_followup step.
+
+### Thread Documents
+
+- `supportingDocUrls` on AgentThread for attaching evidence
+- Attachment display in ThreadMessage UI
+- Import-on-reply: when external party replies with document, agent proposes import pending controller approval
 
 ## Decisiones de Diseño
 

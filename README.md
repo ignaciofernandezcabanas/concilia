@@ -122,14 +122,48 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 
 ### Seguridad
 
-- **Scoped Prisma client**: auto-inyecta companyId en todas las queries (30 modelos)
+- **Scoped Prisma client**: auto-inyecta companyId en todas las queries (32 modelos)
 - **HTTP rate limiting**: 4 tiers (read 100/min, write 30/min, auth 5/min, engine 3/min)
 - **Prompt injection defense**: datos de usuario siempre en XML tags
 - **Output validation**: Zod schemas + system checks post-LLM
 - **Error sanitization**: producción nunca expone detalles internos
 - **AES-256-GCM encryption**: para credenciales almacenadas
 
-### Frontend (27 páginas)
+### Autonomous Follow-Up System (AgentThread)
+
+- **8 escenarios**: cobros vencidos, duplicados, discrepancias proveedor, documentos fiscales, gestoría, devoluciones bancarias, anticipos no identificados, intercompañía
+- **Thread manager**: ciclo completo — crear hilo → borrador → aprobación controller → envío → monitorizar → follow-up → auto-resolve o escalar
+- **3 modelos**: AgentThread (con supportingDocUrls), ThreadMessage (con attachments + import-on-reply), FollowUpConfig (intervalos + escalado por escenario)
+- **Thread documents**: adjuntos en mensajes, import-on-reply con aprobación del controller
+
+### Contacts Agent
+
+- **Importación CSV**: parsing AI (Haiku), deduplicación por NIF normalizado
+- **Enriquecimiento**: inferencia de condiciones de pago desde historial bancario (Sonnet)
+- **Detección en buzón**: crea contacto básico desde email del remitente antes de procesar factura
+
+### Onboarding Agent
+
+- **Wizard de 8 pasos**: datos empresa → actividad → fiscalidad → inferencia PGC → histórico → calibración → integraciones → resumen
+- **Inferencia PGC** (Sonnet): subplan de cuentas + módulos fiscales + contrapartidas desde perfil de negocio
+- **Calibración histórica**: parseo de ficheros contables (Haiku) + comparación con plan inferido (Sonnet) → patrones recurrentes
+- **BusinessProfile**: modelo 1:1 con Company para almacenar contexto de negocio inferido
+
+### Gestoría Portal
+
+- **Portal colaborativo**: 5 tabs (Alertas, Borradores, Subida, Incidencias, Paquete fiscal)
+- **Alertas fiscales AI** (Sonnet): deadlines próximos, borradores listos, anomalías
+- **Revisión de borradores**: AI review de modelos fiscales por trimestre con aprobación
+- **Subida de documentos**: clasificación automática (Haiku) + incidencias gestoría-controller
+- **Matriz fiscal**: 7 tipos de sociedad → modelos aplicables con calendario español completo
+
+### Opening Balance Import
+
+- **CSV parser**: detección automática de separador, importes españoles, columnas flexibles
+- **Account mapper**: 3 casos — match exacto, match padre, needsReview
+- **JE generator**: validación de cuadre (gap < 1 EUR), asiento DRAFT, idempotente por fecha
+
+### Frontend (28 páginas)
 
 - **Dashboard**: briefing diario + 6 KPIs + 3 acciones rápidas
 - **Conciliación**: bandeja con batch actions, barra de confianza, detalle de match
@@ -144,6 +178,8 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 - **Inversiones**: portfolio de participaciones, préstamos, dividendos
 - **Documentos soporte**: registro, aprobación, vinculación con banco
 - **Fiscal**: IVA, retenciones, modelos fiscales (303/111/115/390), calendario fiscal, reconciliación vs banco
+- **Gestoría**: portal colaborativo (alertas, borradores, subida docs, incidencias, paquete fiscal)
+- **Setup**: wizard onboarding 8 pasos con inferencia PGC y calibración histórica
 - **Intercompañía**: operaciones entre sociedades, confirmación/eliminación
 - **Consolidado**: PyG/Balance multi-sociedad con totales
 
@@ -200,7 +236,7 @@ CRON_SECRET=...              # Para cron endpoints en dev
 │  Dashboard · Conciliación · Seguimientos · Facturas  │
 │  Reportes · Fiscal · Inversiones · Deuda · Ajustes   │
 └──────────────────────┬──────────────────────────────┘
-                       │ API Routes (90+ endpoints)
+                       │ API Routes (123 endpoints)
 ┌──────────────────────┴──────────────────────────────┐
 │                  withAuth Middleware                   │
 │  JWT verification · Rate limiting · Scoped DB         │
@@ -217,7 +253,7 @@ CRON_SECRET=...              # Para cron endpoints en dev
 ┌───┴──────────────────┴───┐
 │     Model Router          │
 │  Haiku · Sonnet · Opus    │
-│  Prompt Registry (20+)    │
+│  Prompt Registry (30+)    │
 │  Rate Limiter + Breaker   │
 └───────────┬───────────────┘
             │
@@ -229,7 +265,7 @@ CRON_SECRET=...              # Para cron endpoints en dev
 └───────────┬───────────────┘
             │
 ┌───────────┴───────────────┐
-│  Scoped Prisma (30 models) │
+│  Scoped Prisma (32 models) │
 │  Multi-tenant isolation    │
 │  Auto companyId injection  │
 │  FX-aware matchers         │
@@ -239,11 +275,11 @@ CRON_SECRET=...              # Para cron endpoints en dev
 ## Testing
 
 ```bash
-npx vitest run              # 626 tests, 73 archivos
+npx vitest run              # 751 tests, 77 archivos
 npx tsc --noEmit            # Type-check completo
 ```
 
-Cobertura: motor de conciliación (5 fases, 22 escenarios), detectors (9 tipos incl. investment + payroll + equity + financing), matchers (FX-aware + supporting docs), classifiers, resolver (23 acciones), confidence engine (16 categorías), cascade, agente diario (11 steps), context retriever, calibrador, rate limiting, data isolation, seguridad, accruals, deferred entries, bad debt, supporting documents, equity (regularización + distribución + capital adequacy), fiscal models (303/111/115/390/calendario), seed coherence, VAT/withholding reconciliation, WC bridge, PyG comparativas, FX calculations, debt position report, debt API.
+Cobertura: motor de conciliación (5 fases, 22 escenarios + 8 follow-up), detectors (9 tipos incl. investment + payroll + equity + financing), matchers (FX-aware + supporting docs), classifiers, resolver (23+ acciones), confidence engine (16 categorías), cascade, agente diario (11 steps), context retriever, calibrador, rate limiting, data isolation, seguridad, accruals, deferred entries, bad debt, supporting documents, equity (regularización + distribución + capital adequacy), fiscal models (303/111/115/390/calendario), seed coherence, VAT/withholding reconciliation, WC bridge, PyG comparativas, FX calculations, debt position report, debt API, agent threads, contacts agent, onboarding agent, gestoría portal, opening balance import.
 
 ## Documentación técnica
 
@@ -251,18 +287,18 @@ Ver [CLAUDE.md](CLAUDE.md) para detalles del motor de conciliación, 22 escenari
 
 ## Estadísticas
 
-- **~46K líneas** de TypeScript
-- **44 modelos** Prisma, **60+ enums**
-- **95+ endpoints** API
-- **27 páginas** frontend
-- **17 componentes** React
-- **626+ tests** en 73 archivos
+- **~56K líneas** de TypeScript
+- **52 modelos** Prisma, **68 enums**
+- **123 endpoints** API
+- **28 páginas** frontend
+- **18 componentes** React
+- **751 tests** en 77 archivos
 - **16 categorías** de confianza
-- **23 acciones** de resolución
-- **22 escenarios** de conciliación
+- **23+ acciones** de resolución
+- **22 escenarios** de conciliación + **8 follow-up**
 - **11 steps** del agente diario
 - **31 divisas** soportadas (ECB)
-- **3 modelos AI** (Haiku/Sonnet/Opus) con 20+ tareas
+- **3 modelos AI** (Haiku/Sonnet/Opus) con 30+ tareas
 
 ## Licencia
 
