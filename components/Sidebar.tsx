@@ -57,8 +57,8 @@ const sections: NavSection[] = [
       { label: "Seguimientos", icon: Mail, href: "/seguimientos" },
       { label: "Movimientos", icon: Landmark, href: "/movimientos" },
       { label: "Facturas", icon: FileText, href: "/facturas" },
-      { label: "Contactos", icon: Users, href: "/contactos" },
       { label: "Docs. soporte", icon: FileCheck, href: "/documentos-soporte" },
+      { label: "Contactos", icon: Users, href: "/contactos" },
     ],
   },
   {
