@@ -118,6 +118,7 @@ model Company {
   supportingDocuments      SupportingDocument[]
   syncLogs                 SyncLog[]
   users                    User[]
+  openingBalanceImport     OpeningBalanceImport?
 }
 
 model AccountingPeriod {
@@ -211,6 +212,9 @@ model Account {
   pygLine            String?
   cashflowType       CashflowType?
   isActive           Boolean                         @default(true)
+  isCustom           Boolean                         @default(false)
+  needsReview        Boolean                         @default(false)
+  mappedToPgcCode    String?
   companyId          String
   company            Company                         @relation(fields: [companyId], references: [id])
   classifications    BankTransactionClassification[]
@@ -1626,6 +1630,22 @@ model DebtCovenant {
   isCompliant       Boolean?
 
   @@index([debtInstrumentId])
+}
+
+model OpeningBalanceImport {
+  id             String   @id @default(cuid())
+  companyId      String   @unique
+  company        Company  @relation(fields: [companyId], references: [id])
+  filename       String
+  periodDate     DateTime
+  totalAccounts  Int      @default(0)
+  autoMapped     Int      @default(0)
+  needsReview    Int      @default(0)
+  contactsFound  Int      @default(0)
+  journalEntryId String?  @unique
+  status         String   @default("PENDING")
+  createdAt      DateTime @default(now())
+  createdBy      String
 }
 
 // ── Debt enums ──

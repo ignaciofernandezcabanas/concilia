@@ -342,6 +342,30 @@ ContextSwitcher en sidebar. Vista consolidada (read-only) para OWNER/ADMIN. Dete
 - **AES-256-GCM**: credenciales encriptadas. Backward compatible.
 - **Security headers**: CSP, HSTS, X-Frame-Options, X-Content-Type-Options.
 
+## Opening Balance Import (optional)
+
+Importa un CSV de sumas y saldos (trial balance) para generar un asiento de apertura.
+
+**Modules:**
+
+- `lib/import/balance-parser.ts` — CSV parser: separator detection, Spanish amounts, column detection
+- `lib/import/account-mapper.ts` — 3-case mapping: exact match, parent match, needsReview
+- `lib/import/opening-balance.ts` — JE generator: validates balance squares, creates DRAFT JE
+
+**API:**
+
+- `POST /api/import/opening-balance` — Upload CSV + periodDate → parse, map, generate JE
+- `POST /api/import/resolve-accounts` — Resolve needsReview accounts with PGC mappings
+
+**Schema:** `OpeningBalanceImport` model (scoped, unique per company). `Account` gains `isCustom`, `needsReview`, `mappedToPgcCode` fields.
+
+**Rules:**
+
+- Balance must square (gap < 1 EUR) to generate JE
+- Duplicate opening JE per date is prevented
+- Accounts with 0 balance are filtered out
+- JE created as DRAFT (never auto-posted)
+
 ## Decisiones de Diseño
 
 - **Scoped DB over manual filters**: `ctx.db` inyecta companyId automáticamente.
