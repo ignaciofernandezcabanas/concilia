@@ -111,7 +111,44 @@ export default function Facturas() {
                 </button>
               ))}
             </div>
-            <button className="flex items-center gap-2 text-[13px] font-medium px-4 h-9 rounded-md border border-subtle text-text-primary hover:bg-hover">
+            <button
+              onClick={() => {
+                if (invoices.length === 0) return;
+                const headers = [
+                  "Nº",
+                  "Fecha",
+                  "Tipo",
+                  "Contacto",
+                  "Descripción",
+                  "Base",
+                  "IVA",
+                  "Total",
+                  "Estado",
+                ];
+                const rows = invoices.map((inv) => [
+                  inv.number ?? "",
+                  inv.issueDate
+                    ? new Date(inv.issueDate as string | Date).toISOString().slice(0, 10)
+                    : "",
+                  inv.type ?? "",
+                  (inv.contact?.name ?? "").replace(/;/g, ","),
+                  (inv.description ?? "").replace(/;/g, ","),
+                  String(inv.netAmount ?? ""),
+                  String(inv.vatAmount ?? ""),
+                  String(inv.totalAmount ?? ""),
+                  inv.status ?? "",
+                ]);
+                const csv = [headers, ...rows].map((r) => r.join(";")).join("\n");
+                const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `facturas_${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex items-center gap-2 text-[13px] font-medium px-4 h-9 rounded-md border border-subtle text-text-primary hover:bg-hover"
+            >
               <Download size={16} />
               Exportar
             </button>

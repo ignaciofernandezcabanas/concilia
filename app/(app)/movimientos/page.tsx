@@ -77,7 +77,40 @@ export default function Movimientos() {
               <Upload size={16} />
               Importar CSV
             </button>
-            <button className="flex items-center gap-2 text-[13px] font-medium px-4 h-9 rounded-md border border-subtle text-text-primary hover:bg-hover transition-colors">
+            <button
+              onClick={() => {
+                if (transactions.length === 0) return;
+                const headers = [
+                  "Fecha",
+                  "Concepto",
+                  "Contrapartida",
+                  "IBAN",
+                  "Importe",
+                  "Saldo",
+                  "Estado",
+                ];
+                const rows = transactions.map((tx) => [
+                  tx.valueDate
+                    ? new Date(tx.valueDate as string | Date).toISOString().slice(0, 10)
+                    : "",
+                  (tx.conceptParsed || tx.concept || "").replace(/;/g, ","),
+                  (tx.counterpartName ?? "").replace(/;/g, ","),
+                  tx.counterpartIban ?? "",
+                  String(tx.amount),
+                  String((tx as Record<string, unknown>).balance ?? ""),
+                  tx.status,
+                ]);
+                const csv = [headers, ...rows].map((r) => r.join(";")).join("\n");
+                const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `movimientos_${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex items-center gap-2 text-[13px] font-medium px-4 h-9 rounded-md border border-subtle text-text-primary hover:bg-hover transition-colors"
+            >
               <Download size={16} />
               Exportar
             </button>

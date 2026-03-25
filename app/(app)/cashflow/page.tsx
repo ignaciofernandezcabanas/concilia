@@ -136,7 +136,70 @@ export default function CashflowPage() {
               onPrev={() => setOffset((o) => o - 1)}
               onNext={() => setOffset((o) => o + 1)}
             />
-            <button className="flex items-center gap-1.5 px-3 h-8 border border-subtle rounded-md text-[13px] text-text-primary hover:bg-hover">
+            <button
+              onClick={() => {
+                const rows: string[][] = [];
+                if (mode === "indirect" && data?.mode === "indirect") {
+                  const efe = data as EFEReport;
+                  rows.push(["Sección", "Línea", "Importe"]);
+                  for (const section of efe.sections) {
+                    rows.push([section.label, "", String(section.amount)]);
+                    if (section.children) {
+                      for (const child of section.children) {
+                        rows.push(["", child.label.trim(), String(child.amount)]);
+                      }
+                    }
+                  }
+                } else if (mode === "direct" && data?.mode === "direct") {
+                  const treasury = data as TreasuryReport;
+                  const months = treasury.months;
+                  rows.push(["Concepto", ...months.map((m) => m.month), "Total"]);
+                  const addRow = (label: string, vals: number[], total: number) => {
+                    rows.push([label, ...vals.map(String), String(total)]);
+                  };
+                  addRow(
+                    "Saldo inicial",
+                    months.map((m) => m.saldoInicial),
+                    treasury.totals.saldoInicial ?? 0
+                  );
+                  for (const r of ROWS) {
+                    const vals = months.map((m) => m[r.key] as number);
+                    addRow(
+                      r.label,
+                      vals,
+                      vals.reduce((s, v) => s + v, 0)
+                    );
+                  }
+                  addRow(
+                    "Diferencia neta",
+                    months.map((m) => m.diferenciaNeta),
+                    treasury.totals.diferenciaNeta ?? 0
+                  );
+                  addRow(
+                    "Saldo final",
+                    months.map((m) => m.saldoFinal),
+                    treasury.totals.saldoFinal ?? 0
+                  );
+                } else if (mode === "bridge" && bridgeData) {
+                  rows.push(["Concepto", "Importe"]);
+                  for (const step of bridgeData.steps) {
+                    rows.push([step.label, String(step.amount)]);
+                  }
+                  rows.push(["Variación real banco", String(bridgeData.bankChangeActual)]);
+                  rows.push(["Gap de reconciliación", String(bridgeData.reconciliationGap)]);
+                }
+                if (rows.length === 0) return;
+                const csv = rows.map((r) => r.join(";")).join("\n");
+                const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `cashflow_${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex items-center gap-1.5 px-3 h-8 border border-subtle rounded-md text-[13px] text-text-primary hover:bg-hover"
+            >
               <Download size={14} />
               Exportar
             </button>
