@@ -113,8 +113,10 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         type: isFirstCompany ? "PARENT" : "SUBSIDIARY",
         isHoldingCompany: isFirstCompany,
         parentCompanyId: data.parentCompanyId,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         consolidationMethod: data.consolidationMethod as any,
         ownershipPercentage: data.ownershipPercentage,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         nciMethod: (data.nciMethod as any) ?? undefined,
         acquisitionDate: data.acquisitionDate ? new Date(data.acquisitionDate) : undefined,
         fiscalYearEndMonth: data.fiscalYearEndMonth,

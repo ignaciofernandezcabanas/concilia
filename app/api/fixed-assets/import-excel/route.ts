@@ -50,6 +50,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
           depreciationAccountId: depAccId,
           accumDepAccountId: accumAccId,
           companyId: ctx.company.id,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
       });
       imported++;

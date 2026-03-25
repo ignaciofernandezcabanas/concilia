@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Parse fixed assets from an Excel file.
  * Headers: Nombre, Fecha adquisición, Coste, Vida útil (meses), Cuenta activo, Cuenta amortización, Cuenta amort. acumulada

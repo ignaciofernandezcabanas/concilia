@@ -41,7 +41,7 @@ export async function exportToExcel(
   columns: ExportColumn[],
   options: ExportOptions
 ): Promise<Buffer> {
-  const { viewName, filters, numberFormat = "eu", currency = "EUR" } = options;
+  const { viewName, filters, numberFormat = "eu" } = options;
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Concilia";

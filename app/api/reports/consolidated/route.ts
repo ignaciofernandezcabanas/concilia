@@ -81,11 +81,13 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         }
         // Calculate NCI if <100% ownership
         if (pct < 1) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const resultado = (r.report as any).results?.resultadoEjercicio ?? 0;
           nciTotal += (1 - pct) * resultado;
         }
       } else if (method === "EQUITY") {
         // Single line: ownership% × resultado
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const resultado = (r.report as any).results?.resultadoEjercicio ?? 0;
         const equityAmount = pct * resultado;
         // Add to financial income line (line 12 in PGC)

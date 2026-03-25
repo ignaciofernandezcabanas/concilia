@@ -77,6 +77,7 @@ export async function runMonthlyDepreciation(
       if (depAmount <= 0) continue;
 
       // Create journal entry (companyId injected by scoped db)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (db as any).journalEntry.create({
         data: {
           number: nextNumber++,

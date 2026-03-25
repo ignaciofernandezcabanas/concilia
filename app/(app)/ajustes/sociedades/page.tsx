@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Building2, Plus, ChevronDown, ChevronRight, Check, X, AlertTriangle } from "lucide-react";
+import { Building2, Plus, ChevronDown, ChevronRight, X, AlertTriangle } from "lucide-react";
 
 interface CompanyData {
   id: string;
@@ -251,7 +251,8 @@ export default function SociedadesPage() {
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };

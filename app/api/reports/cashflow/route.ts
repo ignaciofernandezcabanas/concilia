@@ -15,7 +15,6 @@ import { generateCashflow, type CashflowMode } from "@/lib/reports/cashflow-gene
  *   mode - "direct" (treasury) or "indirect" (EFE). Default: "direct".
  */
 export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
-  const { company } = ctx;
   const searchParams = req.nextUrl.searchParams;
 
   const parsed = cashflowQuerySchema.safeParse(Object.fromEntries(searchParams.entries()));

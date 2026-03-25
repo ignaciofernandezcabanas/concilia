@@ -8,7 +8,7 @@ import Badge from "@/components/Badge";
 import { useFetch } from "@/hooks/useApi";
 import { api, qs } from "@/lib/api-client";
 import { formatAmount } from "@/lib/format";
-import { ArrowLeftRight, Check, X } from "lucide-react";
+import { ArrowLeftRight, Check } from "lucide-react";
 
 interface IntercompanyLink {
   id: string;

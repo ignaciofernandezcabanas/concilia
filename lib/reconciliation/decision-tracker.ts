@@ -192,8 +192,6 @@ async function updateLearnedPattern(db: ScopedPrisma, ctx: DecisionContext): Pro
   if (!reco?.bankTransaction) return;
 
   const tx = reco.bankTransaction;
-  const patternKey = `${ctx.correctedField}:${tx.counterpartIban ?? "noiban"}`;
-
   const existing = await db.learnedPattern.findFirst({
     where: {
       companyId: ctx.companyId,

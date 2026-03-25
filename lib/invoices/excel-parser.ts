@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Parse invoices from an Excel file.
  * Headers: Número, Tipo, Fecha emisión, Importe total, Base imponible, IVA, Contacto, CIF contacto

@@ -94,7 +94,7 @@ async function enrichWithHistory(
     valueDate: Date;
   }[],
   contacts: { id: string; name: string; cif: string | null; iban: string | null }[],
-  _companyId: string
+  _companyId: string // eslint-disable-line @typescript-eslint/no-unused-vars
 ): Promise<{ overrides: Record<string, unknown>; assumptions: string[]; suggestions: string[] }> {
   const assumptions: string[] = [];
   const suggestions: string[] = [];

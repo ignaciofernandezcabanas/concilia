@@ -8,6 +8,7 @@ import { withCronAuth } from "@/lib/auth/cron-guard";
  *
  * Protected by QStash signature or CRON_SECRET.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const POST = withCronAuth(async (_req: NextRequest) => {
   try {
     const companies = await prisma.company.findMany({

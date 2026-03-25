@@ -2,7 +2,7 @@ import { errorResponse } from "@/lib/utils/error-response";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db"; // GLOBAL-PRISMA: cron creates scoped db per company
 import { HoldedClient } from "@/lib/holded/client";
-import type { HoldedInvoice, HoldedContact } from "@/lib/holded/client";
+import type { HoldedInvoice } from "@/lib/holded/client";
 
 /**
  * POST /api/sync/holded
@@ -260,6 +260,7 @@ function mapContactType(holdedType: string): "CUSTOMER" | "SUPPLIER" | "BOTH" {
 }
 
 async function syncAccountsRecursive(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   accounts: { id: string; accountNum: string; name: string; children?: any[] }[],
   companyId: string,
   parentCode: string | null
@@ -328,6 +329,7 @@ async function upsertInvoice(
     vatAmount: inv.tax,
     currency: inv.currency || "EUR",
     description: inv.desc,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     status: status as any,
     amountPaid: inv.paid,
     amountPending: inv.total - inv.paid,

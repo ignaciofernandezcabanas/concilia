@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Parse contacts from an Excel file.
  * Headers: Nombre, CIF, Tipo, Email, IBAN

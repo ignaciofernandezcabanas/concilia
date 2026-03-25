@@ -15,6 +15,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
 
     let imported = 0;
     for (const row of rows) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (db as any).contact.upsert({
         where: {
           holdedId_companyId: {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Import invoices from a connected storage folder (Drive/OneDrive).
  *

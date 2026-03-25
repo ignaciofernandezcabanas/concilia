@@ -61,6 +61,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         detectedType: "OPENING_BALANCE",
         priority: "ROUTINE",
         companyId: ctx.company.id,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     });
 

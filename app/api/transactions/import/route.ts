@@ -67,6 +67,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
             balanceAfter: null,
             status: "PENDING",
             companyId: company.id,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any,
         });
         imported++;

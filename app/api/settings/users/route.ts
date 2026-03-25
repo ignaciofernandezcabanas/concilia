@@ -81,17 +81,14 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   try {
     // Create Supabase auth user with invite
     const supabase = createServerClient();
-    const { data: authData, error: authError } = await supabase.auth.admin.inviteUserByEmail(
-      email,
-      {
-        data: {
-          company_id: company.id,
-          company_name: company.name,
-          role,
-        },
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-      }
-    );
+    const { error: authError } = await supabase.auth.admin.inviteUserByEmail(email, {
+      data: {
+        company_id: company.id,
+        company_name: company.name,
+        role,
+      },
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+    });
 
     if (authError) {
       console.error("[settings/users] Supabase invite error:", authError);
@@ -109,6 +106,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       data: {
         email,
         name: name ?? null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         role: role as any,
         status: "PENDING",
         companyId: company.id,

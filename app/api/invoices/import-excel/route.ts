@@ -17,6 +17,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     for (const row of rows) {
       let contactId: string | null = null;
       if (row.contactName) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const contact = await (db as any).contact.upsert({
           where: {
             holdedId_companyId: {
@@ -50,6 +51,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
           amountPending: row.totalAmount,
           contactId,
           companyId: ctx.company.id,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
       });
       imported++;

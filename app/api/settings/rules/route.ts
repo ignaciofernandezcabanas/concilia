@@ -122,6 +122,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   const rule = await db.matchingRule.create({
     data: {
       companyId: company.id,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       type: input.type as any,
       pattern: input.pattern ?? null,
       counterpartIban: input.counterpartIban ?? null,
@@ -130,6 +131,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       maxAmount: input.maxAmount ?? null,
       action: input.action,
       accountCode: input.accountCode ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       cashflowType: (input.cashflowType as any) ?? null,
       createdById: user.id,
     },

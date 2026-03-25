@@ -145,10 +145,12 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       },
       company: { name: ctx.company.name },
       followUpNumber: 0,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tone: data.tone as any,
     });
 
     // 5. Create Inquiry with DRAFT status
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const inquiry = await (db.inquiry as any).create({
       data: {
         triggerType: data.triggerType,

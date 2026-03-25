@@ -9,7 +9,6 @@
 import { prisma } from "@/lib/db";
 import { HoldedClient } from "@/lib/holded/client";
 import { GoogleDriveClient, type DriveClientConfig } from "./client";
-import type { InvoiceType } from "@prisma/client";
 
 // ---------------------------------------------------------------------------
 // Types

@@ -6,7 +6,7 @@
  */
 
 import type { ScopedPrisma } from "@/lib/db-scoped";
-import { HoldedClient, type HoldedPayment } from "./client";
+import { HoldedClient } from "./client";
 import type { InvoiceStatus } from "@prisma/client";
 
 // ---------------------------------------------------------------------------
@@ -48,8 +48,6 @@ export async function syncPayments(
 
     try {
       const payments = await client.getPayments(invoice.holdedId);
-      let paymentTotal = 0;
-
       for (const payment of payments) {
         const existing = payment.id
           ? await db.payment.findUnique({ where: { holdedId: payment.id } })
@@ -77,8 +75,6 @@ export async function syncPayments(
           });
           result.created++;
         }
-
-        paymentTotal += payment.amount;
       }
 
       // Recalculate amountPaid from all payments in the database

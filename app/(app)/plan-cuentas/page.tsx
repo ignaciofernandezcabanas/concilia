@@ -6,8 +6,7 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import { useFetch } from "@/hooks/useApi";
 import { qs } from "@/lib/api-client";
 import { formatAmount } from "@/lib/format";
-import PeriodSelector from "@/components/PeriodSelector";
-import { List, ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface Account {
   id: string;

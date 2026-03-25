@@ -6,7 +6,7 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import EmptyState from "@/components/EmptyState";
 import Badge from "@/components/Badge";
 import { useFetch } from "@/hooks/useApi";
-import { api, qs } from "@/lib/api-client";
+import { api } from "@/lib/api-client";
 import { formatAmount } from "@/lib/format";
 import { Package, Plus, X } from "lucide-react";
 

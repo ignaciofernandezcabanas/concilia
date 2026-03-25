@@ -21,6 +21,7 @@ import { withCronAuth } from "@/lib/auth/cron-guard";
  * - If autoApprovedErrors = 0 for 3+ months AND manualApproved > 10% of bandeja → LOWER by 2%
  * - Never go below 0.50 or above 0.99
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const POST = withCronAuth(async (_req: NextRequest) => {
   try {
     const now = new Date();

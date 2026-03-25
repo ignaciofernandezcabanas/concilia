@@ -13,7 +13,6 @@ import { generateReconciliationReport } from "@/lib/reports/reconciliation-repor
  */
 export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   const db = ctx.db;
-  const { company } = ctx;
   const month = req.nextUrl.searchParams.get("month");
 
   if (!month || !/^\d{4}-\d{2}$/.test(month)) {

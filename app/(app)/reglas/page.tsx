@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import TopBar from "@/components/TopBar";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import Badge from "@/components/Badge";
 import { useFetch } from "@/hooks/useApi";
 import { api } from "@/lib/api-client";
-import { Sparkles, Pause, Play, Archive, Trash2, Check, X, ArrowRight } from "lucide-react";
+import { Sparkles, Pause, Play, Trash2 } from "lucide-react";
 
 // ── Types ──
 
@@ -144,7 +143,7 @@ function RulesTab() {
           <p className="text-[13px] text-text-primary font-medium">Sin reglas</p>
           <p className="text-[11px] text-text-tertiary mt-1">
             Crea tu primera regla con lenguaje natural o resuelve conciliaciones marcando
-            "recordar".
+            &quot;recordar&quot;.
           </p>
         </div>
       ) : (

@@ -3,7 +3,7 @@
  * Routes through the model router (Haiku for extraction).
  */
 
-import { callAIWithDocument, callAIJson } from "@/lib/ai/model-router";
+import { callAIWithDocument } from "@/lib/ai/model-router";
 import { EXTRACT_INVOICE_PDF } from "@/lib/ai/prompt-registry";
 
 export interface ExtractedInvoice {

@@ -33,6 +33,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     );
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { report, code, account, cashflowType, treasuryCategory, group, from, to, asOf, month } =
     parsed.data;
   const cid = company.id;
@@ -302,7 +303,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
 
       if (treasuryCategory) {
         // Treasury drill-down: return individual transactions for this category
-        let where: Record<string, unknown> = {
+        const where: Record<string, unknown> = {
           companyId: cid,
           valueDate: { gte: periodFrom, lte: periodTo },
           status: { notIn: ["DUPLICATE", "IGNORED"] },
@@ -392,6 +393,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     }
 
     if (report === "balance" && group != null) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const asOfDate = asOf ?? new Date();
       const accounts = await db.account.findMany({
         where: { companyId: cid, group, isActive: true },

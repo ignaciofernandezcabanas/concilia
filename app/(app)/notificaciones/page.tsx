@@ -9,7 +9,6 @@ import { api } from "@/lib/api-client";
 import {
   AlertCircle,
   AlertTriangle,
-  CheckCircle,
   Bell,
   FileText,
   RefreshCw,
@@ -69,7 +68,6 @@ export default function Notificaciones() {
   });
 
   const notifications = data?.data ?? [];
-  const total = data?.pagination?.total ?? 0;
 
   async function markAllRead() {
     try {

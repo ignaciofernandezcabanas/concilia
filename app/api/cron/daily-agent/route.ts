@@ -9,6 +9,7 @@ import { runDailyAgent } from "@/lib/ai/daily-agent";
  * Runs the daily AI agent for all organizations.
  * Protected by cron auth (QStash or CRON_SECRET).
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const POST = withCronAuth(async (_req: NextRequest) => {
   const orgs = await prisma.organization.findMany({
     select: { id: true, name: true },

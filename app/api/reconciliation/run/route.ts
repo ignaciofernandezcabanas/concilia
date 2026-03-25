@@ -17,7 +17,7 @@ import { detectInternalTransfer } from "@/lib/reconciliation/detectors/internal-
  */
 export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   const db = ctx.db;
-  const { company, user } = ctx;
+  const { company } = ctx;
   const startedAt = Date.now();
 
   // Get company settings
@@ -133,7 +133,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         const confidence = calculateMatchScore(tx, exactMatch, "exact");
         const shouldAutoApprove = confidence >= autoApproveThreshold;
 
-        const reconciliation = await db.reconciliation.create({
+        await db.reconciliation.create({
           data: {
             companyId: company.id,
             type: "EXACT_MATCH",
@@ -329,6 +329,7 @@ function findDifferenceMatch(
 
 function findMatchingRule(
   tx: { amount: number; concept: string | null; counterpartIban: string | null },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   rules: Awaited<any[]>
 ): (typeof rules)[number] | null {
   for (const rule of rules) {

@@ -90,6 +90,7 @@ export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       );
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const inquiry = await (db.inquiry as any).create({
       data: { ...parsed.data, status: "DRAFT" },
     });
