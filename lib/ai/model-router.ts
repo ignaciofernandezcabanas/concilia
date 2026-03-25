@@ -52,6 +52,12 @@ export type AITask =
   | "analyze_debt_position"
   | "classify_financing_movement"
   | "decompose_interest_settlement"
+  // Follow-up system
+  | "compose_followup"
+  | "followup_parse_response"
+  | "followup_decide_action"
+  | "controller_conversation"
+  | "thread_subject"
   // Opus — síntesis compleja
   | "daily_briefing"
   | "weekly_briefing"
@@ -149,6 +155,12 @@ const TASK_CONFIG: Record<AITask, TaskConfig> = {
     maxTokens: 800,
     temperature: 0.1,
   },
+  // Follow-up system
+  compose_followup: { model: "claude-sonnet-4-20250514", maxTokens: 1000, temperature: 0.3 },
+  followup_parse_response: { model: "claude-haiku-4-5-20251001", maxTokens: 500, temperature: 0.0 },
+  followup_decide_action: { model: "claude-sonnet-4-20250514", maxTokens: 800, temperature: 0.1 },
+  controller_conversation: { model: "claude-sonnet-4-20250514", maxTokens: 1000, temperature: 0.2 },
+  thread_subject: { model: "claude-haiku-4-5-20251001", maxTokens: 100, temperature: 0.2 },
   // Opus
   daily_briefing: { model: "claude-opus-4-6", maxTokens: 1500, temperature: 0.3 },
   weekly_briefing: { model: "claude-opus-4-6", maxTokens: 2000, temperature: 0.3 },
