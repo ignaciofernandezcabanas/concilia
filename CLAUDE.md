@@ -71,7 +71,7 @@ lib/
     resolver.ts             # Resolver unificado (16 acciones) en $transaction
     invoice-payments.ts     # Actualizador de status de pago
     decision-tracker.ts     # Feedback loop: registra decisiones del controller
-    detectors/              # Internal, duplicate, return, financial, intercompany, investment, payroll, equity
+    detectors/              # Internal, duplicate, return, financial, intercompany, investment, payroll, equity, financing
     matchers/               # Exact (FX-aware), grouped, fuzzy (FX-aware), LLM
     classifiers/            # Rule-based, LLM-based
     prioritizer.ts          # URGENT / DECISION / CONFIRMATION / ROUTINE
@@ -155,10 +155,10 @@ export const GET = withAuth(async (req, ctx) => {
 import { prisma } from "@/lib/db"; // PROHIBIDO excepto GLOBAL-PRISMA
 ```
 
-**SCOPED_MODELS** (29 modelos auto-filtrados por companyId):
-`company, user, account, ownBankAccount, contact, invoice, bankTransaction, reconciliation, matchingRule, categoryThreshold, integration, syncLog, archiveLog, notification, auditLog, accountingPeriod, journalEntry, fixedAsset, budget, confidenceAdjustment, controllerDecision, learnedPattern, thresholdCalibration, inquiry, investment, recurringAccrual, deferredEntry, badDebtTracker, exchangeRateDifference, supportingDocument`
+**SCOPED_MODELS** (30 modelos auto-filtrados por companyId):
+`company, user, account, ownBankAccount, contact, invoice, bankTransaction, reconciliation, matchingRule, categoryThreshold, integration, syncLog, archiveLog, notification, auditLog, accountingPeriod, journalEntry, fixedAsset, budget, confidenceAdjustment, controllerDecision, learnedPattern, thresholdCalibration, inquiry, investment, recurringAccrual, deferredEntry, badDebtTracker, exchangeRateDifference, supportingDocument, debtInstrument`
 
-**NO scoped** (sin companyId): InvoiceLine, BudgetLine, JournalEntryLine, BankTransactionClassification, DuplicateGroup, Payment, CompanyScope, InvestmentTransaction.
+**NO scoped** (sin companyId): InvoiceLine, BudgetLine, JournalEntryLine, BankTransactionClassification, DuplicateGroup, Payment, CompanyScope, InvestmentTransaction, DebtScheduleEntry, DebtTransaction, DebtCovenant.
 
 **NO scoped** (organizationId): IntercompanyLink, AgentRun.
 
@@ -210,11 +210,11 @@ Archivos que usan `prisma` global con `// GLOBAL-PRISMA: <razón>`:
 
 ### Model Router (`lib/ai/model-router.ts`)
 
-| Modelo | Tareas                                                                                                                                                                             | Max tokens |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| Haiku  | parse_concept, extract_invoice_pdf, explain_bandeja, classify_quick, classify_email_attachment, parse_clarification_reply                                                          | 150-300    |
-| Sonnet | match_llm, classify_llm, parse_rule_nl, draft_reminder, explain_anomaly, treasury_advice, draft_inquiry, draft_clarification, classify_match_difference, classify_investment_capex | 500-1200   |
-| Opus   | daily_briefing, weekly_briefing, close_proposal, risk_analysis                                                                                                                     | 800-2000   |
+| Modelo | Tareas                                                                                                                                                                                                 | Max tokens |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| Haiku  | parse_concept, extract_invoice_pdf, explain_bandeja, classify_quick, classify_email_attachment, parse_clarification_reply                                                                              | 150-300    |
+| Sonnet | match_llm, classify_llm, parse_rule_nl, draft_reminder, explain_anomaly, treasury_advice, draft_inquiry, draft_clarification, classify_match_difference, classify_investment_capex, classify_financing | 500-1200   |
+| Opus   | daily_briefing, weekly_briefing, close_proposal, risk_analysis                                                                                                                                         | 800-2000   |
 
 ### Classification Cascade (`lib/ai/cascade.ts`)
 
@@ -253,7 +253,7 @@ Controller action → trackControllerDecision → calibrateFromDecision
 
 11 steps por organización (cada uno en try/catch):
 
-**Per-company:** sync, engine, auto_entries (amortización + accruals + deferred matches), intercompany, provisions, inquiry_followup, reminders.
+**Per-company:** sync, engine, auto_entries (amortización + accruals + deferred matches), intercompany, provisions, inquiry_followup, debt_monitoring (overdue installments, covenant checks, reclassification proposals), reminders.
 
 **Group-level:** treasury (forecast + alertas), anomalies (z-score >2σ), fiscal (calendario español + reconciliación IVA/retenciones), close_proposal (días 1-3), briefing (Opus).
 
@@ -263,14 +263,14 @@ Controller action → trackControllerDecision → calibrateFromDecision
 
 0. **Investment/CAPEX/Equity** — detector determinístico, confidence 0.0 forzado, NUNCA auto-aprueba
    - También detecta: payroll (SALARY, SS, IRPF), equity (dividendos, ampliación capital, modelos fiscales, nóminas)
-1. **Detectors** — internal transfer, intercompany, duplicate, return, financial, credit note
+1. **Detectors** — internal transfer, intercompany, duplicate, return, financial, credit note, financing (debt)
 2. **Matchers** — exact (FX-aware, 2% cross-currency) → partial → grouped → learned patterns → fuzzy (FX-aware, 7% cross-currency) → LLM
 3. **Classifiers** — rule-based → cascade (Haiku → Sonnet) → unresolved
 4. **Priority** — URGENT / DECISION / CONFIRMATION / ROUTINE
 
 Auto-aprobación: `confidence >= categoryThreshold AND amount <= materialityThreshold`
 
-16 acciones del resolver: approve, reject, investigate, manual_match (con DifferenceType + aclaración por email), classify, mark_internal, mark_intercompany, mark_duplicate, mark_legitimate, mark_return, ignore, split_financial, register_fixed_asset, register_investment, register_advance.
+23 acciones del resolver: approve, reject, investigate, manual_match (con DifferenceType + aclaración por email), classify, mark_internal, mark_intercompany, mark_duplicate, mark_legitimate, mark_return, ignore, split_financial, register_fixed_asset, register_investment, register_advance, match_debt_installment, match_debt_interest, record_debt_commission, record_debt_drawdown, record_debt_repayment, match_discount_advance, match_discount_settlement, match_lease_payment.
 
 ## 22 Escenarios de Conciliación
 
@@ -390,3 +390,47 @@ ContextSwitcher en sidebar. Vista consolidada (read-only) para OWNER/ADMIN. Dete
 ### Regla invariante
 
 CAPEX e inversiones financieras NUNCA entran en auto-aprobación. NUNCA en batch-resolve. SIEMPRE requieren decisión del controller.
+
+## Debt Module
+
+### Modelos
+
+- **DebtInstrument**: 7 tipos (TERM_LOAN, REVOLVING_CREDIT, DISCOUNT_LINE, CONFIRMING, FINANCE_LEASE, OVERDRAFT, GUARANTEE). Status: ACTIVE, MATURED, REFINANCED, DEFAULT.
+- **DebtScheduleEntry**: Cuadro de amortización por instrumento. `matched` flag para conciliación.
+- **DebtTransaction**: 13 tipos de transacción (DRAWDOWN, REPAYMENT, INSTALLMENT\_\*, COMMISSION, RECLASSIFICATION_LP_CP, etc.)
+- **DebtCovenant**: 6 métricas (DEBT_TO_EBITDA, DSCR, CURRENT_RATIO, NET_WORTH, EQUITY_RATIO, LEVERAGE_RATIO). Test frequency configurable.
+
+### Financing Detector (`detectors/financing-detector.ts`)
+
+- Fase 0 del engine, junto con investment-detector
+- Detecta: cuotas de préstamo, comisiones bancarias, disposiciones de crédito, pagos de leasing, descuentos comerciales, avales
+- Priority: siempre DECISION para nuevos instrumentos, CONFIRMATION para cuotas matched
+- Crea propuesta de match con DebtScheduleEntry cuando detecta cuota coincidente
+
+### Amortización
+
+- **Sistema francés** (`lib/debt/amortization-schedule.ts`): cuota constante, carencia opcional
+- **Import/validación** (`lib/debt/schedule-import.ts`): validación de sumas, cronología, totales
+
+### Agent debt monitoring
+
+- Step en daily-agent per-company: detecta cuotas vencidas no pagadas, evalúa covenants, propone reclasificación LP→CP al cierre
+
+### API Endpoints (7)
+
+| Method   | Path                                    | Description                     |
+| -------- | --------------------------------------- | ------------------------------- |
+| GET/POST | /api/debt-instruments                   | Listar/crear instrumentos       |
+| GET/PUT  | /api/debt-instruments/[id]              | Detalle/actualizar instrumento  |
+| POST     | /api/debt-instruments/[id]/schedule     | Regenerar/importar cuadro       |
+| POST     | /api/debt-instruments/[id]/transactions | Registrar transacción manual    |
+| POST     | /api/debt-instruments/[id]/reclassify   | Reclasificación LP→CP           |
+| GET      | /api/debt-instruments/summary           | Posición de deuda consolidada   |
+| GET      | /api/debt-instruments/covenants         | Covenants con estado compliance |
+
+### Debt Position Report (`lib/reports/debt-position.ts`)
+
+- Total debt (LP + CP), cash balance, net debt
+- Available credit lines, weighted avg rate
+- DSCR (Debt Service Coverage Ratio)
+- Overdue installments, covenant compliance

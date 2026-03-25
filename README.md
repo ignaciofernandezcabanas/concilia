@@ -103,6 +103,15 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 - **Verificación mensual**: comprueba que todos los componentes de nómina (salario + SS + IRPF) están presentes
 - **Cuentas PGC**: 640 (sueldos), 642 (SS empresa), 476 (SS empleado), 4751 (IRPF)
 
+### Gestión de deuda
+
+- **7 tipos de instrumento**: préstamos, pólizas de crédito, líneas de descuento, confirming, leasing, descubiertos, avales
+- **Cuadro de amortización**: generación automática (sistema francés), importación, regeneración parcial
+- **Covenants**: 6 métricas financieras con monitorización automática y alertas de incumplimiento
+- **Reclasificación LP→CP**: propuesta automática al cierre con preview y asiento contable
+- **Financing detector**: detecta cuotas de préstamo, comisiones, disposiciones y pagos de leasing en fase 0 del engine
+- **Posición de deuda**: deuda total/neta, DSCR, cuotas vencidas, líneas disponibles, tipo medio ponderado
+
 ### Integraciones
 
 - **Holded**: sync de contactos, facturas, cuentas, pagos
@@ -113,14 +122,14 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 
 ### Seguridad
 
-- **Scoped Prisma client**: auto-inyecta companyId en todas las queries (29 modelos)
+- **Scoped Prisma client**: auto-inyecta companyId en todas las queries (30 modelos)
 - **HTTP rate limiting**: 4 tiers (read 100/min, write 30/min, auth 5/min, engine 3/min)
 - **Prompt injection defense**: datos de usuario siempre en XML tags
 - **Output validation**: Zod schemas + system checks post-LLM
 - **Error sanitization**: producción nunca expone detalles internos
 - **AES-256-GCM encryption**: para credenciales almacenadas
 
-### Frontend (25 páginas)
+### Frontend (27 páginas)
 
 - **Dashboard**: briefing diario + 6 KPIs + 3 acciones rápidas
 - **Conciliación**: bandeja con batch actions, barra de confianza, detalle de match
@@ -130,6 +139,7 @@ Conecta tu ERP (Holded) con los movimientos bancarios, concilia transacciones au
 - **Activos fijos**: registro con barra de amortización visual, alta con cuentas PGC
 - **Periodificaciones**: devengos recurrentes con progreso, vinculación con facturas
 - **Tesorería**: forecast 13 semanas con gráfico SVG inline, detalle semanal expandible
+- **Deuda**: posición de deuda (5 KPIs), instrumentos con cuadro amortización expandible, wizard de creación, covenants
 - **Cuentas a cobrar/pagar**: aging con 5 buckets, DSO/DPO, riesgo, tracker de impagados
 - **Inversiones**: portfolio de participaciones, préstamos, dividendos
 - **Documentos soporte**: registro, aprobación, vinculación con banco
@@ -188,7 +198,7 @@ CRON_SECRET=...              # Para cron endpoints en dev
 ┌─────────────────────────────────────────────────────┐
 │                    Frontend (Next.js)                 │
 │  Dashboard · Conciliación · Seguimientos · Facturas  │
-│  Reportes · Fiscal · Inversiones · Ajustes           │
+│  Reportes · Fiscal · Inversiones · Deuda · Ajustes   │
 └──────────────────────┬──────────────────────────────┘
                        │ API Routes (90+ endpoints)
 ┌──────────────────────┴──────────────────────────────┐
@@ -219,7 +229,7 @@ CRON_SECRET=...              # Para cron endpoints en dev
 └───────────┬───────────────┘
             │
 ┌───────────┴───────────────┐
-│  Scoped Prisma (29 models) │
+│  Scoped Prisma (30 models) │
 │  Multi-tenant isolation    │
 │  Auto companyId injection  │
 │  FX-aware matchers         │
@@ -229,11 +239,11 @@ CRON_SECRET=...              # Para cron endpoints en dev
 ## Testing
 
 ```bash
-npx vitest run              # 577 tests, 69 archivos
+npx vitest run              # 626 tests, 73 archivos
 npx tsc --noEmit            # Type-check completo
 ```
 
-Cobertura: motor de conciliación (5 fases, 22 escenarios), detectors (8 tipos incl. investment + payroll + equity), matchers (FX-aware + supporting docs), classifiers, resolver (16 acciones), confidence engine (16 categorías), cascade, agente diario (11 steps), context retriever, calibrador, rate limiting, data isolation, seguridad, accruals, deferred entries, bad debt, supporting documents, equity (regularización + distribución + capital adequacy), fiscal models (303/111/115/390/calendario), seed coherence, VAT/withholding reconciliation, WC bridge, PyG comparativas, FX calculations.
+Cobertura: motor de conciliación (5 fases, 22 escenarios), detectors (9 tipos incl. investment + payroll + equity + financing), matchers (FX-aware + supporting docs), classifiers, resolver (23 acciones), confidence engine (16 categorías), cascade, agente diario (11 steps), context retriever, calibrador, rate limiting, data isolation, seguridad, accruals, deferred entries, bad debt, supporting documents, equity (regularización + distribución + capital adequacy), fiscal models (303/111/115/390/calendario), seed coherence, VAT/withholding reconciliation, WC bridge, PyG comparativas, FX calculations, debt position report, debt API.
 
 ## Documentación técnica
 
@@ -241,14 +251,14 @@ Ver [CLAUDE.md](CLAUDE.md) para detalles del motor de conciliación, 22 escenari
 
 ## Estadísticas
 
-- **~44K líneas** de TypeScript
-- **42 modelos** Prisma, **55+ enums**
-- **90+ endpoints** API
-- **25 páginas** frontend
+- **~46K líneas** de TypeScript
+- **44 modelos** Prisma, **60+ enums**
+- **95+ endpoints** API
+- **27 páginas** frontend
 - **17 componentes** React
-- **577 tests** en 69 archivos
+- **626+ tests** en 73 archivos
 - **16 categorías** de confianza
-- **16 acciones** de resolución
+- **23 acciones** de resolución
 - **22 escenarios** de conciliación
 - **11 steps** del agente diario
 - **31 divisas** soportadas (ECB)
