@@ -11,6 +11,7 @@ import { formatAmount, formatDate, getYearMonth } from "@/lib/format";
 import { Download, Check, X, ChevronLeft, ChevronRight } from "lucide-react";
 import ReconciliationPanel from "@/components/ReconciliationPanel";
 import Toast from "@/components/Toast";
+import BankConnectionBanner from "@/components/BankConnectionBanner";
 
 export default function Conciliacion() {
   // ── Bandeja de conciliación ──
@@ -102,6 +103,7 @@ export default function Conciliacion() {
     <div className="flex flex-col min-h-full">
       <TopBar title="Conciliación" />
       <div className="flex flex-col gap-8 p-6 px-8 flex-1">
+        <BankConnectionBanner />
         {/* ═══════════════════════════════════════════════════════ */}
         {/* SECCIÓN 1: Bandeja de conciliación                    */}
         {/* ═══════════════════════════════════════════════════════ */}

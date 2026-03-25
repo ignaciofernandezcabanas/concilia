@@ -31,6 +31,7 @@ import {
   Briefcase,
   CreditCard,
   FileCheck,
+  Building2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -91,6 +92,7 @@ const sections: NavSection[] = [
   {
     title: "SISTEMA",
     items: [
+      { label: "Cuentas bancarias", icon: Building2, href: "/ajustes/bancos" },
       { label: "Reglas", icon: ListFilter, href: "/reglas" },
       { label: "Gestoría", icon: Briefcase, href: "/gestoria" },
       { label: "Notificaciones", icon: Bell, href: "/notificaciones" },

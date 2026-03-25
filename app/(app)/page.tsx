@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import TopBar from "@/components/TopBar";
 import SetupBanner from "@/components/SetupBanner";
+import BankConnectionBanner from "@/components/BankConnectionBanner";
 import { useFetch } from "@/hooks/useApi";
 import { qs } from "@/lib/api-client";
 import { formatAmount, formatMonth, getMonthRange } from "@/lib/format";
@@ -88,6 +89,7 @@ export default function Dashboard() {
       <div className="flex flex-col gap-5 p-6 px-8 flex-1 overflow-auto">
         {/* Setup banner */}
         {companyData?.needsBusinessProfile && <SetupBanner />}
+        <BankConnectionBanner />
 
         {/* Briefing */}
         {todayBriefing && (
