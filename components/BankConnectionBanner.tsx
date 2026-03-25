@@ -18,13 +18,17 @@ interface AccountsResponse {
  */
 export default function BankConnectionBanner() {
   const { data, loading } = useFetch<AccountsResponse>("/api/bank-accounts");
+  const { data: txData } = useFetch<{ pagination: { total: number } }>(
+    "/api/transactions?pageSize=1"
+  );
 
   if (loading) return null;
 
   const hasActive =
     (data?.accounts?.operativas?.length ?? 0) + (data?.accounts?.financiacion?.length ?? 0) > 0;
+  const hasTxData = (txData?.pagination?.total ?? 0) > 0;
 
-  if (hasActive) return null;
+  if (hasActive || hasTxData) return null;
 
   return (
     <Link

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useFetch } from "@/hooks/useApi";
 import { FileCheck, Plus, RefreshCw, PieChart } from "lucide-react";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Toast from "@/components/Toast";
 import { formatAmount, formatDate } from "@/lib/format";
 
 interface SupportingDoc {
@@ -57,6 +59,11 @@ export default function DocumentosSoportePage() {
   const [showRegularization, setShowRegularization] = useState(false);
   const [showDistribution, setShowDistribution] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pendingCancel, setPendingCancel] = useState<{ id: string; description: string } | null>(
+    null
+  );
+  const [cancelling, setCancelling] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const statusParam = filter === "ALL" ? "" : `&status=${filter}`;
   const { data, refetch } = useFetch<{ data: SupportingDoc[]; total: number }>(
@@ -158,9 +165,19 @@ export default function DocumentosSoportePage() {
     }
   }
 
-  async function handleCancel(id: string) {
-    await fetch(`/api/supporting-documents/${id}`, { method: "DELETE" });
-    refetch();
+  async function executeCancel() {
+    if (!pendingCancel) return;
+    setCancelling(true);
+    try {
+      await fetch(`/api/supporting-documents/${pendingCancel.id}`, { method: "DELETE" });
+      refetch();
+      setToast({ message: "Documento cancelado", type: "success" });
+    } catch {
+      setToast({ message: "Error al cancelar documento", type: "error" });
+    } finally {
+      setCancelling(false);
+      setPendingCancel(null);
+    }
   }
 
   const filters: { label: string; value: FilterStatus }[] = [
@@ -222,8 +239,8 @@ export default function DocumentosSoportePage() {
       </div>
 
       {/* Table */}
-      <div className="border border-subtle rounded-lg overflow-hidden">
-        <table className="w-full text-[13px]">
+      <div className="border border-subtle rounded-lg overflow-x-auto">
+        <table className="w-full min-w-[850px] text-[13px]">
           <thead>
             <tr className="bg-context border-b border-subtle text-left text-[11px] text-text-secondary uppercase">
               <th className="px-4 py-2 font-semibold">Fecha</th>
@@ -266,7 +283,9 @@ export default function DocumentosSoportePage() {
                   <td className="px-4 py-2.5">
                     {doc.status !== "CANCELLED" && doc.status !== "RECONCILED" && (
                       <button
-                        onClick={() => handleCancel(doc.id)}
+                        onClick={() =>
+                          setPendingCancel({ id: doc.id, description: doc.description || doc.type })
+                        }
                         className="text-[11px] text-red hover:underline"
                       >
                         Cancelar
@@ -509,6 +528,20 @@ export default function DocumentosSoportePage() {
             </div>
           </div>
         </div>
+      )}
+
+      <ConfirmDialog
+        open={pendingCancel !== null}
+        title="¿Cancelar este documento?"
+        description={`Cancelar "${pendingCancel?.description}" puede afectar a los asientos contables asociados. Esta acción no se puede deshacer.`}
+        confirmLabel="Sí, cancelar"
+        variant="destructive"
+        loading={cancelling}
+        onConfirm={executeCancel}
+        onCancel={() => setPendingCancel(null)}
+      />
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
       )}
     </div>
   );

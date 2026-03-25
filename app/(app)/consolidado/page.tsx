@@ -5,7 +5,7 @@ import TopBar from "@/components/TopBar";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { useFetch } from "@/hooks/useApi";
 import { qs } from "@/lib/api-client";
-import { formatAmount, getMonthRange } from "@/lib/format";
+import { formatAmount, getMonthRange, formatPeriodLabel } from "@/lib/format";
 import { Layers, ChevronLeft, ChevronRight } from "lucide-react";
 
 type Tab = "pyg" | "balance";
@@ -56,7 +56,7 @@ export default function ConsolidadoPage() {
               <ChevronLeft size={16} className="text-text-secondary" />
             </button>
             <span className="text-[13px] font-medium text-text-primary capitalize w-24 text-center">
-              {date.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
+              {formatPeriodLabel(date)}
             </span>
             <button onClick={() => setDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}>
               <ChevronRight size={16} className="text-text-secondary" />

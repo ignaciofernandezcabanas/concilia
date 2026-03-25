@@ -56,6 +56,29 @@ export function formatMonth(date: Date): string {
   return new Intl.DateTimeFormat("es-ES", { month: "long", year: "numeric" }).format(date);
 }
 
+/**
+ * Capitalized period label for month selectors: "Marzo de 2026"
+ * Use this instead of formatMonth() when rendering period navigator labels.
+ */
+export function formatPeriodLabel(date: Date): string {
+  const raw = new Intl.DateTimeFormat("es-ES", { month: "long", year: "numeric" }).format(date);
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+/**
+ * Table date format: "28/02/2026"
+ * Use for date cells in data tables.
+ */
+export function formatTableDate(date: Date | string | null | undefined): string {
+  if (!date) return "—";
+  const d = typeof date === "string" ? new Date(date) : date;
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(d);
+}
+
 /** Format a local Date as YYYY-MM-DD without UTC conversion */
 function localDateStr(d: Date): string {
   const y = d.getFullYear();

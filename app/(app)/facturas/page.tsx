@@ -4,10 +4,13 @@ import { useState, useRef } from "react";
 import TopBar from "@/components/TopBar";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import EmptyState from "@/components/EmptyState";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Toast from "@/components/Toast";
 import Badge from "@/components/Badge";
 import { useInvoices } from "@/hooks/useApi";
 import { api } from "@/lib/api-client";
 import { formatAmount, formatDate } from "@/lib/format";
+import { INVOICE_STATUS, INVOICE_TYPE, t } from "@/lib/i18n/enums";
 import { Download, Upload, FileText, X, FolderOpen, Eye, Trash2 } from "lucide-react";
 
 export default function Facturas() {
@@ -19,6 +22,8 @@ export default function Facturas() {
   const [viewingPdf, setViewingPdf] = useState<{ id: string; number: string } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string[] | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const { data, loading, refetch } = useInvoices({
     type: type || undefined,
@@ -49,36 +54,48 @@ export default function Facturas() {
     }
   }
 
-  async function handleDelete(ids: string[]) {
-    if (!confirm(`¿Eliminar ${ids.length} factura${ids.length > 1 ? "s" : ""}?`)) return;
+  function requestDelete(ids: string[]) {
+    setPendingDelete(ids);
+  }
+
+  async function executeDelete() {
+    if (!pendingDelete) return;
     setDeleting(true);
     try {
-      if (ids.length === 1) {
-        await api.delete(`/api/invoices/${ids[0]}`);
+      if (pendingDelete.length === 1) {
+        await api.delete(`/api/invoices/${pendingDelete[0]}`);
       } else {
-        await api.post("/api/invoices/batch-delete", { ids });
+        await api.post("/api/invoices/batch-delete", { ids: pendingDelete });
       }
       setSelected(new Set());
       refetch();
+      setToast({
+        message: `${pendingDelete.length} factura${pendingDelete.length > 1 ? "s" : ""} eliminada${pendingDelete.length > 1 ? "s" : ""}`,
+        type: "success",
+      });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al eliminar");
+      setToast({
+        message: err instanceof Error ? err.message : "Error al eliminar",
+        type: "error",
+      });
     } finally {
       setDeleting(false);
+      setPendingDelete(null);
     }
   }
 
   const types = [
     { value: "", label: "Todas" },
-    { value: "ISSUED", label: "Emitidas" },
-    { value: "RECEIVED", label: "Recibidas" },
+    { value: "ISSUED", label: t(INVOICE_TYPE, "ISSUED") },
+    { value: "RECEIVED", label: t(INVOICE_TYPE, "RECEIVED") },
   ];
 
   const statuses = [
     { value: "", label: "Todos" },
-    { value: "PENDING", label: "Pendiente" },
+    { value: "PENDING", label: t(INVOICE_STATUS, "PENDING") },
     { value: "PAID", label: "Cobrada" },
-    { value: "OVERDUE", label: "Vencida" },
-    { value: "PARTIAL", label: "Parcial" },
+    { value: "OVERDUE", label: t(INVOICE_STATUS, "OVERDUE") },
+    { value: "PARTIAL", label: t(INVOICE_STATUS, "PARTIAL") },
   ];
 
   return (
@@ -96,18 +113,20 @@ export default function Facturas() {
               Importar facturas
             </button>
             <div className="flex items-center gap-0 bg-white border border-subtle rounded-md overflow-hidden">
-              {types.map((t) => (
+              {types.map((tp) => (
                 <button
-                  key={t.value}
+                  key={tp.value}
                   onClick={() => {
-                    setType(t.value);
+                    setType(tp.value);
                     setPage(1);
                   }}
                   className={`px-3 py-1.5 text-[13px] font-medium ${
-                    type === t.value ? "bg-accent text-white" : "text-text-secondary hover:bg-hover"
+                    type === tp.value
+                      ? "bg-accent text-white"
+                      : "text-text-secondary hover:bg-hover"
                   }`}
                 >
-                  {t.label}
+                  {tp.label}
                 </button>
               ))}
             </div>
@@ -205,7 +224,7 @@ export default function Facturas() {
           <p className="text-xs text-text-tertiary">{total} facturas</p>
           {selected.size > 0 && (
             <button
-              onClick={() => handleDelete(Array.from(selected))}
+              onClick={() => requestDelete(Array.from(selected))}
               disabled={deleting}
               className="flex items-center gap-1.5 px-3 h-8 bg-red text-white text-[13px] font-medium rounded-md hover:bg-red-text transition-colors disabled:opacity-50"
             >
@@ -281,7 +300,7 @@ export default function Facturas() {
                       </button>
                     )}
                     <button
-                      onClick={() => handleDelete([inv.id])}
+                      onClick={() => requestDelete([inv.id])}
                       className="p-1 rounded hover:bg-red-light text-text-tertiary hover:text-red"
                       title="Eliminar"
                     >
@@ -316,6 +335,27 @@ export default function Facturas() {
           </>
         )}
       </div>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={
+          pendingDelete?.length === 1
+            ? "¿Eliminar esta factura?"
+            : `¿Eliminar ${pendingDelete?.length} facturas?`
+        }
+        description={
+          pendingDelete?.length === 1
+            ? "La factura será eliminada permanentemente. Esta acción no se puede deshacer."
+            : `Se eliminarán ${pendingDelete?.length} facturas permanentemente. Esta acción no se puede deshacer.`
+        }
+        confirmLabel="Eliminar"
+        variant="destructive"
+        loading={deleting}
+        onConfirm={executeDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
+      )}
     </div>
   );
 }

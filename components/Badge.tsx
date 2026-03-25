@@ -1,5 +1,7 @@
 "use client";
 
+import { LABELS } from "@/lib/i18n/enums";
+
 const STATUS_STYLES: Record<string, string> = {
   // Invoice statuses
   PENDING: "bg-amber-light text-amber-text",
@@ -38,48 +40,10 @@ const STATUS_STYLES: Record<string, string> = {
   INTERNAL_TRANSFER: "bg-hover text-text-secondary",
   POSSIBLE_DUPLICATE: "bg-red-light text-red-text",
   UNIDENTIFIED: "bg-purple-light text-purple",
-};
-
-const LABELS: Record<string, string> = {
-  PENDING: "Pendiente",
-  PARTIAL: "Parcial",
-  PAID: "Cobrada",
-  OVERDUE: "Vencida",
-  PROVISIONED: "Provisionada",
-  WRITTEN_OFF: "Incobrable",
-  CANCELLED: "Anulada",
-  RECONCILED: "Conciliado",
-  CLASSIFIED: "Clasificado",
-  REJECTED: "Rechazado",
-  INVESTIGATING: "Investigar",
-  INTERNAL: "Interno",
-  DUPLICATE: "Duplicado",
-  IGNORED: "Ignorado",
-  URGENT: "Urgente",
-  DECISION: "Decisión",
-  CONFIRMATION: "Confirmar",
-  ROUTINE: "Rutina",
-  CONNECTED: "Conectado",
-  DISCONNECTED: "Desconectado",
-  ERROR: "Error",
-  ACTIVE: "Activo",
-  DISABLED: "Deshabilitado",
-  ISSUED: "Emitida",
-  RECEIVED: "Recibida",
-  CREDIT_ISSUED: "NC Emitida",
-  CREDIT_RECEIVED: "NC Recibida",
-  MATCH_SIMPLE: "Match",
-  MATCH_GROUPED: "Match agrupado",
-  MATCH_PARTIAL: "Parcial",
-  MATCH_DIFFERENCE: "Diferencia",
-  EXPENSE_NO_INVOICE: "Sin factura",
-  INTERNAL_TRANSFER: "Interno",
-  POSSIBLE_DUPLICATE: "Duplicado",
-  UNIDENTIFIED: "Sin identificar",
-  FINANCIAL_OPERATION: "Financiero",
-  RETURN: "Devolución",
-  OVERDUE_INVOICE: "Vencido",
-  CREDIT_NOTE: "Abono",
+  // Journal entry
+  POSTED: "bg-green-light text-green-text",
+  DRAFT: "bg-amber-light text-amber-text",
+  REVERSED: "bg-hover text-text-secondary",
 };
 
 export default function Badge({ value, label }: { value: string; label?: string }) {

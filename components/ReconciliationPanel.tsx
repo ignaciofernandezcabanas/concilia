@@ -6,6 +6,7 @@ import { X, Check, Search, Eye, FileCheck } from "lucide-react";
 import InvoicePdfModal from "@/components/InvoicePdfModal";
 import { api, qs } from "@/lib/api-client";
 import { formatAmount, formatDate } from "@/lib/format";
+import { DETECTED_TYPE_VERBOSE, DIFFERENCE_TYPE, t } from "@/lib/i18n/enums";
 import type { BankTransactionResponse } from "@/lib/types/api";
 
 interface Props {
@@ -14,32 +15,6 @@ interface Props {
   onClose: () => void;
   resolving: boolean;
 }
-
-// ── Detected type labels ──
-const TYPE_LABELS: Record<string, string> = {
-  MATCH_SIMPLE: "Cobro/pago que coincide con una factura",
-  MATCH_GROUPED: "Cobro/pago agrupado de varias facturas",
-  MATCH_PARTIAL: "Cobro/pago parcial",
-  MATCH_DIFFERENCE: "Cobro/pago con diferencia de importe",
-  EXPENSE_NO_INVOICE: "Gasto sin factura asociada",
-  INTERNAL_TRANSFER: "Transferencia interna entre cuentas propias",
-  INTERCOMPANY: "Transferencia intercompañía detectada",
-  POSSIBLE_DUPLICATE: "Posible duplicado detectado",
-  RETURN: "Posible devolución",
-  FINANCIAL_OPERATION: "Operación financiera recurrente",
-  UNIDENTIFIED: "Movimiento no identificado",
-  OVERDUE_INVOICE: "Factura vencida sin cobro",
-  CREDIT_NOTE: "Nota de crédito",
-  PAYROLL: "Nómina detectada",
-};
-
-const DIFF_LABELS: Record<string, string> = {
-  BANK_COMMISSION: "Comisión bancaria",
-  EARLY_PAYMENT: "Descuento por pronto pago",
-  COMMERCIAL_DISCOUNT: "Descuento comercial",
-  PARTIAL_PAYMENT: "Pago parcial",
-  OTHER: "Otro motivo",
-};
 
 export default function ReconciliationPanel({ tx, onResolve, onClose, resolving }: Props) {
   const reco = tx.reconciliation;
@@ -98,7 +73,7 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
           <h3 className="text-[14px] font-semibold text-text-primary mb-2">{txType} recibido</h3>
           <p className="text-[12px] text-text-secondary mb-3">
             {tx.detectedType
-              ? (TYPE_LABELS[tx.detectedType] ?? tx.detectedType)
+              ? t(DETECTED_TYPE_VERBOSE, tx.detectedType)
               : "Movimiento bancario pendiente de revisión."}
           </p>
           {/* Payroll badge */}
@@ -211,7 +186,7 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
                 {reco.differenceReason && (
                   <span className="text-text-tertiary">
                     {" "}
-                    — {DIFF_LABELS[reco.differenceReason] ?? reco.differenceReason}
+                    — {t(DIFFERENCE_TYPE, reco.differenceReason)}
                   </span>
                 )}
               </div>
@@ -775,16 +750,22 @@ export default function ReconciliationPanel({ tx, onResolve, onClose, resolving 
 
         {/* Block 4 — Create rule checkbox */}
         {(hasMatch || showClassify) && (
-          <label className="flex items-center gap-2 p-3 border border-subtle rounded-md cursor-pointer">
+          <label className="flex items-start gap-2 p-3 border border-subtle rounded-md cursor-pointer">
             <input
               type="checkbox"
               checked={createRule}
               onChange={(e) => setCreateRule(e.target.checked)}
-              className="rounded border-subtle"
+              className="rounded border-subtle mt-0.5"
             />
-            <span className="text-[12px] text-text-secondary">
-              Recordar esta decisión para el futuro
-            </span>
+            <div>
+              <span className="text-[12px] text-text-secondary">
+                Recordar esta decisión para el futuro
+              </span>
+              <p className="text-[11px] text-text-tertiary mt-1">
+                Los movimientos futuros con el mismo concepto y contrapartida se clasificarán
+                automáticamente con la misma cuenta PGC.
+              </p>
+            </div>
           </label>
         )}
       </div>

@@ -4,6 +4,14 @@ import { useState, useEffect } from "react";
 import { Plus, ChevronDown, ChevronRight, Landmark, AlertTriangle, Check } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { api } from "@/lib/api-client";
+import {
+  DEBT_TYPE,
+  DEBT_STATUS,
+  DEBT_TX_TYPE,
+  DEBT_FREQUENCY,
+  COVENANT_OPERATOR,
+  t,
+} from "@/lib/i18n/enums";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -73,16 +81,6 @@ interface Summary {
 // Labels
 // ---------------------------------------------------------------------------
 
-const TYPE_LABELS: Record<string, string> = {
-  TERM_LOAN: "Pr\u00e9stamo",
-  REVOLVING_CREDIT: "P\u00f3liza cr\u00e9dito",
-  DISCOUNT_LINE: "L\u00ednea descuento",
-  CONFIRMING: "Confirming",
-  FINANCE_LEASE: "Leasing",
-  OVERDRAFT: "Descubierto",
-  GUARANTEE: "Aval",
-};
-
 const TYPE_COLORS: Record<string, string> = {
   TERM_LOAN: "bg-blue-100 text-blue-700",
   REVOLVING_CREDIT: "bg-purple-100 text-purple-700",
@@ -91,45 +89,6 @@ const TYPE_COLORS: Record<string, string> = {
   FINANCE_LEASE: "bg-accent/10 text-accent",
   OVERDRAFT: "bg-red-100 text-red-600",
   GUARANTEE: "bg-hover text-gray-600",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  ACTIVE: "Activo",
-  MATURED: "Vencido",
-  REFINANCED: "Refinanciado",
-  DEFAULT: "Default",
-};
-
-const FREQ_LABELS: Record<string, string> = {
-  MONTHLY: "Mensual",
-  QUARTERLY: "Trimestral",
-  SEMIANNUAL: "Semestral",
-  ANNUAL: "Anual",
-  ON_DEMAND: "A demanda",
-  BULLET: "Bullet",
-};
-
-const TX_LABELS: Record<string, string> = {
-  DRAWDOWN: "Disposici\u00f3n",
-  REPAYMENT: "Amortizaci\u00f3n",
-  INSTALLMENT_PRINCIPAL: "Cuota principal",
-  INSTALLMENT_INTEREST: "Cuota inter\u00e9s",
-  INTEREST_PAYMENT: "Pago intereses",
-  COMMISSION: "Comisi\u00f3n",
-  INTEREST_ACCRUAL: "Devengo inter\u00e9s",
-  RECLASSIFICATION_LP_CP: "Reclass. LP\u2192CP",
-  DISCOUNT_ADVANCE: "Anticipo dto.",
-  DISCOUNT_SETTLEMENT: "Liquid. dto.",
-  DISCOUNT_DEFAULT: "Impago dto.",
-  EARLY_REPAYMENT: "Amort. anticipada",
-  LEASE_PAYMENT: "Cuota leasing",
-};
-
-const OPERATOR_LABELS: Record<string, string> = {
-  LT: "<",
-  LTE: "\u2264",
-  GT: ">",
-  GTE: "\u2265",
 };
 
 const TYPE_DESCRIPTIONS: Record<string, string> = {
@@ -331,7 +290,7 @@ export default function DeudaPage() {
             {wizardStep === 1 && (
               <div className="space-y-2">
                 <p className="text-sm text-text-secondary mb-3">Selecciona el tipo:</p>
-                {Object.entries(TYPE_LABELS).map(([key, label]) => (
+                {Object.entries(DEBT_TYPE).map(([key, label]) => (
                   <button
                     key={key}
                     onClick={() => {
@@ -458,7 +417,7 @@ export default function DeudaPage() {
                       onChange={(e) => setForm((f) => ({ ...f, paymentFrequency: e.target.value }))}
                       className="w-full border border-border rounded px-3 py-1.5 text-sm"
                     >
-                      {Object.entries(FREQ_LABELS).map(([k, v]) => (
+                      {Object.entries(DEBT_FREQUENCY).map(([k, v]) => (
                         <option key={k} value={k}>
                           {v}
                         </option>
@@ -517,7 +476,7 @@ export default function DeudaPage() {
                       <p>
                         Plazo: {form.startDate} &rarr; {form.maturityDate}
                       </p>
-                      <p>Frecuencia: {FREQ_LABELS[form.paymentFrequency]}</p>
+                      <p>Frecuencia: {t(DEBT_FREQUENCY, form.paymentFrequency)}</p>
                     </div>
                     <div className="mt-3">
                       <label className="block text-xs text-text-secondary mb-1">
@@ -648,7 +607,7 @@ export default function DeudaPage() {
                     <td className="px-4 py-2 text-text-primary">{cov.debtInstrumentName}</td>
                     <td className="px-3 py-2 text-text-secondary">{cov.name}</td>
                     <td className="px-3 py-2 text-center font-mono text-xs">
-                      {OPERATOR_LABELS[cov.operator] ?? cov.operator} {cov.threshold}
+                      {t(COVENANT_OPERATOR, cov.operator)} {cov.threshold}
                     </td>
                     <td className="px-3 py-2 text-center font-mono text-xs">
                       {cov.lastTestedValue != null ? cov.lastTestedValue.toFixed(2) : "\u2014"}
@@ -725,7 +684,7 @@ function InstrumentRow({
           <span
             className={`text-[11px] px-2 py-0.5 rounded ${TYPE_COLORS[inst.type] ?? "bg-hover"}`}
           >
-            {TYPE_LABELS[inst.type] ?? inst.type}
+            {t(DEBT_TYPE, inst.type)}
           </span>
         </td>
         <td className="px-3 py-2 text-text-secondary text-xs">{inst.bankEntityName}</td>
@@ -748,7 +707,7 @@ function InstrumentRow({
                   : "bg-hover text-gray-500"
             }`}
           >
-            {STATUS_LABELS[inst.status] ?? inst.status}
+            {t(DEBT_STATUS, inst.status)}
           </span>
         </td>
       </tr>
@@ -876,7 +835,7 @@ function RevolvingDetail({
               className="flex items-center text-xs py-1 border-b border-border-light last:border-0"
             >
               <span className="w-20 text-text-tertiary">{fmtDate(tx.date)}</span>
-              <span className="w-36 text-text-secondary">{TX_LABELS[tx.type] ?? tx.type}</span>
+              <span className="w-36 text-text-secondary">{t(DEBT_TX_TYPE, tx.type)}</span>
               <span className="font-mono text-text-primary">{fmt(tx.amount)} &euro;</span>
             </div>
           ))}

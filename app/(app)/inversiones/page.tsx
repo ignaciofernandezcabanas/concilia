@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Briefcase, Plus, ChevronDown, ChevronRight } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { api } from "@/lib/api-client";
+import { INVESTMENT_TYPE, INVESTMENT_TX_TYPE, t } from "@/lib/i18n/enums";
 
 interface InvTx {
   id: string;
@@ -30,15 +31,6 @@ interface Investment {
   transactions: InvTx[];
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  EQUITY_SUBSIDIARY: "Filial (>50%)",
-  EQUITY_ASSOCIATE: "Asociada (20-50%)",
-  EQUITY_OTHER: "Participación (<20%)",
-  DEBT_INSTRUMENT: "Deuda/Bonos",
-  LOAN_GRANTED: "Préstamo concedido",
-  FUND: "Fondo de inversión",
-};
-
 const TYPE_COLORS: Record<string, string> = {
   EQUITY_SUBSIDIARY: "bg-accent/10 text-accent",
   EQUITY_ASSOCIATE: "bg-amber-100 text-amber-700",
@@ -46,18 +38,6 @@ const TYPE_COLORS: Record<string, string> = {
   DEBT_INSTRUMENT: "bg-hover text-gray-600",
   LOAN_GRANTED: "bg-purple-100 text-purple-700",
   FUND: "bg-green-100 text-green-700",
-};
-
-const TX_TYPE_LABELS: Record<string, string> = {
-  ACQUISITION: "Adquisición",
-  PARTIAL_DIVESTMENT: "Desinversión parcial",
-  FULL_DIVESTMENT: "Desinversión total",
-  DIVIDEND_RECEIVED: "Dividendo cobrado",
-  INTEREST_RECEIVED: "Interés cobrado",
-  CAPITAL_CALL: "Llamada de capital",
-  RETURN_OF_CAPITAL: "Devolución de capital",
-  VALUATION_ADJUSTMENT: "Ajuste valoración",
-  IMPAIRMENT: "Deterioro",
 };
 
 export default function InversionesPage() {
@@ -191,7 +171,7 @@ export default function InversionesPage() {
                 onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
                 className="w-full border border-border rounded px-3 py-1.5 text-sm"
               >
-                {Object.entries(TYPE_LABELS).map(([k, v]) => (
+                {Object.entries(INVESTMENT_TYPE).map(([k, v]) => (
                   <option key={k} value={k}>
                     {v}
                   </option>
@@ -300,7 +280,7 @@ export default function InversionesPage() {
                       <span
                         className={`text-[11px] px-2 py-0.5 rounded ${TYPE_COLORS[inv.type] ?? "bg-hover"}`}
                       >
-                        {TYPE_LABELS[inv.type] ?? inv.type}
+                        {t(INVESTMENT_TYPE, inv.type)}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-center font-mono text-xs">{inv.pgcAccount}</td>
@@ -346,7 +326,7 @@ export default function InversionesPage() {
                           >
                             <span className="w-16 text-text-tertiary">{fmtDate(tx.date)}</span>
                             <span className="w-32 text-text-secondary">
-                              {TX_TYPE_LABELS[tx.type] ?? tx.type}
+                              {t(INVESTMENT_TX_TYPE, tx.type)}
                             </span>
                             <span className="font-mono text-text-primary">{fmt(tx.amount)} €</span>
                             <span className="ml-auto font-mono text-[10px] text-text-tertiary">

@@ -3,17 +3,23 @@
 import { useEffect } from "react";
 import { Check, X, AlertTriangle } from "lucide-react";
 
+interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface ToastProps {
   message: string;
   type: "success" | "error" | "warning";
   onDismiss: () => void;
+  action?: ToastAction;
 }
 
-export default function Toast({ message, type, onDismiss }: ToastProps) {
+export default function Toast({ message, type, onDismiss, action }: ToastProps) {
   useEffect(() => {
-    const timer = setTimeout(onDismiss, 4000);
+    const timer = setTimeout(onDismiss, action ? 10000 : 4000);
     return () => clearTimeout(timer);
-  }, [onDismiss]);
+  }, [onDismiss, action]);
 
   const styles = {
     success: "bg-green-light border-green text-green-text",
@@ -33,6 +39,20 @@ export default function Toast({ message, type, onDismiss }: ToastProps) {
     >
       {icons[type]}
       {message}
+      {action && (
+        <>
+          <span className="opacity-40">·</span>
+          <button
+            onClick={() => {
+              action.onClick();
+              onDismiss();
+            }}
+            className="underline font-semibold hover:opacity-80 transition-opacity"
+          >
+            {action.label}
+          </button>
+        </>
+      )}
     </div>
   );
 }

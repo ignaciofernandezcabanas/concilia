@@ -80,7 +80,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
           },
         },
         reconciliations: {
-          where: { status: "PROPOSED" },
+          where: { status: { in: ["PROPOSED", "AUTO_APPROVED", "APPROVED"] } },
           take: 1,
           orderBy: { createdAt: "desc" },
           select: {

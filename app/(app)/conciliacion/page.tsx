@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useMemo } from "react";
@@ -7,11 +8,13 @@ import EmptyState from "@/components/EmptyState";
 import Badge from "@/components/Badge";
 import { useTransactions, useReconciliationReport } from "@/hooks/useApi";
 import { api } from "@/lib/api-client";
-import { formatAmount, formatDate, getYearMonth } from "@/lib/format";
+import { formatAmount, formatDate, formatPeriodLabel, getYearMonth } from "@/lib/format";
+import { BANK_TRANSACTION_STATUS, RECONCILIATION_ACTION, t } from "@/lib/i18n/enums";
 import { Download, Check, X, ChevronLeft, ChevronRight } from "lucide-react";
 import ReconciliationPanel from "@/components/ReconciliationPanel";
 import Toast from "@/components/Toast";
 import BankConnectionBanner from "@/components/BankConnectionBanner";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 export default function Conciliacion() {
   // ── Bandeja de conciliación ──
@@ -19,7 +22,13 @@ export default function Conciliacion() {
   const [page, setPage] = useState(1);
   const [resolving, setResolving] = useState<string | null>(null);
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error" | "warning";
+    action?: { label: string; onClick: () => void };
+  } | null>(null);
+  const [pendingIgnore, setPendingIgnore] = useState<{ id: string; concept: string } | null>(null);
+  const [ignoring, setIgnoring] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchProcessing, setBatchProcessing] = useState(false);
 
@@ -40,12 +49,59 @@ export default function Conciliacion() {
   const reconMonth = useMemo(() => getYearMonth(reconDate), [reconDate]);
   const { data: reconData, loading: reconLoading } = useReconciliationReport(reconMonth);
 
-  const reconMonthLabel = reconDate.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+  const reconMonthLabel = formatPeriodLabel(reconDate);
+
+  async function executeIgnore() {
+    if (!pendingIgnore) return;
+    setIgnoring(true);
+    try {
+      await api.post(`/api/transactions/${pendingIgnore.id}/action`, {
+        action: "ignore",
+        bankTransactionId: pendingIgnore.id,
+        reason: "Ignorado por el controller",
+      });
+      const ignoredId = pendingIgnore.id;
+      refetch();
+      setSelectedTxId(null);
+      setToast({
+        message: "Movimiento ignorado",
+        type: "success" as const,
+        action: {
+          label: "Deshacer",
+          onClick: async () => {
+            try {
+              await api.post(`/api/transactions/${ignoredId}/action`, {
+                action: "unignore",
+                bankTransactionId: ignoredId,
+              });
+              refetch();
+            } catch {
+              setToast({ message: "Error al deshacer", type: "error" as const });
+            }
+          },
+        },
+      });
+    } catch {
+      setToast({ message: "Error al ignorar movimiento", type: "error" as const });
+    } finally {
+      setIgnoring(false);
+      setPendingIgnore(null);
+    }
+  }
 
   async function handleResolve(payload: Record<string, unknown>) {
     const action = payload.action as string;
     const recoId = payload.reconciliationId as string | undefined;
     const txId = payload.bankTransactionId as string | undefined;
+
+    if (action === "ignore") {
+      const tx = transactions.find((t: any) => t.id === txId);
+      setPendingIgnore({
+        id: txId || "",
+        concept: tx?.concept || tx?.conceptParsed || "este movimiento",
+      });
+      return;
+    }
 
     // Route to the correct endpoint
     const recoActions = ["approve", "reject", "investigate", "mark_return", "split_financial"];
@@ -64,19 +120,8 @@ export default function Conciliacion() {
       await api.post(url, payload);
       refetch();
       setSelectedTxId(null);
-      const labels: Record<string, string> = {
-        approve: "Match aprobado",
-        reject: "Match rechazado",
-        classify: "Transacción clasificada",
-        mark_internal: "Transferencia interna confirmada",
-        mark_duplicate: "Duplicado confirmado",
-        mark_legitimate: "Marcada como legítima",
-        mark_return: "Devolución confirmada",
-        ignore: "Transacción ignorada",
-        manual_match: "Match manual creado",
-      };
       setToast({
-        message: labels[payload.action as string] ?? "Acción completada",
+        message: t(RECONCILIATION_ACTION, payload.action as string) ?? "Acción completada",
         type: "success",
       });
     } catch (err) {
@@ -92,11 +137,12 @@ export default function Conciliacion() {
 
   const statuses = [
     { value: "", label: "Todos" },
-    { value: "PENDING", label: "Pendiente" },
-    { value: "RECONCILED", label: "Conciliado" },
-    { value: "CLASSIFIED", label: "Clasificado" },
-    { value: "INVESTIGATING", label: "Investigar" },
-    { value: "DUPLICATE", label: "Duplicado" },
+    { value: "PENDING", label: t(BANK_TRANSACTION_STATUS, "PENDING") },
+    { value: "RECONCILED", label: t(BANK_TRANSACTION_STATUS, "RECONCILED") },
+    { value: "CLASSIFIED", label: t(BANK_TRANSACTION_STATUS, "CLASSIFIED") },
+    { value: "INVESTIGATING", label: t(BANK_TRANSACTION_STATUS, "INVESTIGATING") },
+    { value: "DUPLICATE", label: t(BANK_TRANSACTION_STATUS, "DUPLICATE") },
+    { value: "IGNORED", label: t(BANK_TRANSACTION_STATUS, "IGNORED") },
   ];
 
   return (
@@ -590,8 +636,23 @@ export default function Conciliacion() {
         </section>
       </div>
       {toast && (
-        <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onDismiss={() => setToast(null)}
+          action={toast.action}
+        />
       )}
+      <ConfirmDialog
+        open={pendingIgnore !== null}
+        title="¿Ignorar este movimiento?"
+        description="El movimiento dejará de aparecer en la bandeja de conciliación. Puedes recuperarlo filtrando por estado «Ignorado»."
+        confirmLabel="Sí, ignorar"
+        variant="destructive"
+        loading={ignoring}
+        onConfirm={executeIgnore}
+        onCancel={() => setPendingIgnore(null)}
+      />
     </div>
   );
 }

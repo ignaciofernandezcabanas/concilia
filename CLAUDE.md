@@ -155,6 +155,75 @@ GitHub Actions pipeline (`.github/workflows/ci.yml`):
 
 ## Convenciones y Patrones
 
+### i18n de Enums (CRÍTICO)
+
+Todos los valores de enum se traducen mediante `lib/i18n/enums.ts`. **Nunca renderizar valores de enum directamente en componentes (.tsx).**
+
+```typescript
+// ✅ CORRECTO
+import { BANK_TRANSACTION_STATUS, t } from "@/lib/i18n/enums";
+<span>{t(BANK_TRANSACTION_STATUS, transaction.status)}</span>
+
+// ❌ INCORRECTO — nunca renderizar el valor raw del enum
+<span>{transaction.status}</span> // Muestra "PENDING" en vez de "Pendiente"
+```
+
+Para nuevos enums: añadir al archivo centralizado **antes** de usarlos en UI. El mapa `LABELS` es el superset usado por `components/Badge.tsx`.
+
+### Formateo de Fechas
+
+Usar `lib/format.ts` para todos los formatos de fecha en la app:
+
+- `formatPeriodLabel(date)` → selectores de período mensual: "Marzo de 2026" (capitalizado)
+- `formatTableDate(date)` → fechas en celdas de tabla: "28/02/2026"
+- `formatDate(date, "short")` → fechas cortas: "5 ene 2025"
+- `formatDate(date, "long")` → fechas largas: "5 de enero de 2025"
+
+```typescript
+// ✅ CORRECTO
+import { formatPeriodLabel } from "@/lib/format";
+const label = formatPeriodLabel(currentMonth); // "Marzo de 2026"
+
+// ❌ INCORRECTO — produce "marzo de 2026" sin capitalizar
+date.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+```
+
+### Tablas
+
+Todo contenedor de tabla usa `overflow-x-auto` (nunca `overflow-hidden`). Las tablas tienen `min-w-[...]` para no colapsar en pantallas pequeñas.
+
+### Acciones Destructivas
+
+Toda acción que elimine, cancele o revierta datos usa el componente `components/ui/ConfirmDialog.tsx`. **Nunca ejecutar acciones destructivas sin confirmación explícita.**
+
+```typescript
+// ✅ CORRECTO — dialog de confirmación
+const [pendingDelete, setPendingDelete] = useState<string[] | null>(null);
+// onClick → setPendingDelete(ids) → ConfirmDialog → onConfirm → ejecutar
+<ConfirmDialog
+  open={pendingDelete !== null}
+  title="¿Eliminar?"
+  description="Esta acción no se puede deshacer."
+  confirmLabel="Eliminar"
+  variant="destructive"
+  onConfirm={executeDelete}
+  onCancel={() => setPendingDelete(null)}
+/>
+
+// ❌ INCORRECTO — confirm() nativo o sin confirmación
+if (!confirm("¿Seguro?")) return; // PROHIBIDO
+await api.delete(...); // sin confirmación previa — PROHIBIDO
+```
+
+**Acciones con UNDO**: para acciones reversibles (ej. ignorar movimiento), usar Toast con acción "Deshacer" (ventana 10 segundos).
+
+**Acciones que requieren confirmación:**
+
+- Eliminar factura (individual y masiva)
+- Cancelar documento soporte
+- Ignorar movimiento bancario (con undo)
+- _Añadir aquí cualquier nueva acción destructiva_
+
 ### Scoped DB (CRÍTICO)
 
 Todos los endpoints con `withAuth` usan `ctx.db` (ScopedPrisma), que auto-inyecta `companyId` en todas las queries.
@@ -208,6 +277,20 @@ Datos financieros del usuario van SIEMPRE entre XML tags:
 <company_data>...</company_data>
 <controller_decisions>...</controller_decisions>
 ```
+
+### Búsquedas Prisma
+
+Todas las cláusulas `contains` sobre campos de texto en endpoints usan `mode: "insensitive"`:
+
+```typescript
+where: { concept: { contains: search, mode: "insensitive" } }
+```
+
+### Bandeja de Conciliación (`/conciliacion`)
+
+- La query de `/api/transactions` incluye `reconciliations` con status `in: ["PROPOSED", "AUTO_APPROVED", "APPROVED"]` para obtener confidenceScore
+- Columnas Prior., Tipo, Conf. leen de `BankTransaction.priority`, `BankTransaction.detectedType`, `reconciliations[0].confidenceScore`
+- El `BankConnectionBanner` se oculta si hay cuentas bancarias activas O transacciones existentes (más robusto que solo comprobar Integration)
 
 ### GLOBAL-PRISMA (11 excepciones)
 

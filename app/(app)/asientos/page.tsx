@@ -8,6 +8,7 @@ import Badge from "@/components/Badge";
 import { useFetch } from "@/hooks/useApi";
 import { api, qs } from "@/lib/api-client";
 import { formatAmount } from "@/lib/format";
+import { JOURNAL_ENTRY_STATUS, t } from "@/lib/i18n/enums";
 import { BookOpen, Plus, Bot, ChevronDown, ChevronRight, Check, X } from "lucide-react";
 
 interface JournalLine {
@@ -64,9 +65,9 @@ export default function AsientosPage() {
               className="h-8 px-3 text-[12px] border border-subtle rounded-md"
             >
               <option value="">Todos</option>
-              <option value="DRAFT">Borrador</option>
-              <option value="POSTED">Contabilizado</option>
-              <option value="REVERSED">Revertido</option>
+              <option value="DRAFT">{t(JOURNAL_ENTRY_STATUS, "DRAFT")}</option>
+              <option value="POSTED">{t(JOURNAL_ENTRY_STATUS, "POSTED")}</option>
+              <option value="REVERSED">{t(JOURNAL_ENTRY_STATUS, "REVERSED")}</option>
             </select>
             <button
               onClick={() => setShowCreate(true)}

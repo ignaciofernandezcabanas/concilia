@@ -36,6 +36,7 @@ export type ResolveAction =
   | "mark_legitimate"
   | "mark_return"
   | "ignore"
+  | "unignore"
   | "split_financial"
   | "register_fixed_asset"
   | "register_investment"
@@ -803,6 +804,39 @@ export async function resolveItem(
           action,
           bankTransactionId: bankTx.id,
           message: "Transaction ignored.",
+        };
+      }
+
+      // ─── UNIGNORE (undo ignore — restore to PENDING) ───
+      case "unignore": {
+        const bankTx = await tx.bankTransaction.findFirstOrThrow({
+          where: { id: payload.bankTransactionId!, companyId },
+        });
+
+        await tx.bankTransaction.update({
+          where: { id: bankTx.id },
+          data: {
+            status: "PENDING",
+            note: null,
+            noteAuthorId: null,
+            noteCreatedAt: null,
+          },
+        });
+
+        await createAuditLog(
+          tx,
+          userId,
+          "reconciliation.unignore",
+          "BankTransaction",
+          bankTx.id,
+          {}
+        );
+
+        return {
+          success: true,
+          action,
+          bankTransactionId: bankTx.id,
+          message: "Transaction restored to pending.",
         };
       }
 

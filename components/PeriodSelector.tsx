@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { formatPeriodLabel } from "@/lib/format";
 
 export type PeriodType = "month" | "quarter" | "year";
 
@@ -61,7 +62,7 @@ export function usePeriodData(periodType: PeriodType, offset: number) {
     return {
       from: fmt(d),
       to: fmt(end),
-      label: d.toLocaleDateString("es-ES", { month: "long", year: "numeric" }),
+      label: formatPeriodLabel(d),
       months: [
         { key: fmt(d).slice(0, 7), label: d.toLocaleDateString("es-ES", { month: "short" }) },
       ],

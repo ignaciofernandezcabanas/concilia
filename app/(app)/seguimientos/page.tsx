@@ -4,6 +4,13 @@ import { useState } from "react";
 import { useFetch } from "@/hooks/useApi";
 import { Bot, Send, Search, FileText } from "lucide-react";
 import { api } from "@/lib/api-client";
+import {
+  FOLLOWUP_SCENARIO,
+  THREAD_STATUS,
+  THREAD_PRIORITY,
+  MESSAGE_ROLE,
+  t,
+} from "@/lib/i18n/enums";
 
 // ── Types ──
 
@@ -41,17 +48,6 @@ interface AgentThread {
 
 // ── Constants ──
 
-const SCENARIO_LABELS: Record<string, string> = {
-  OVERDUE_RECEIVABLE: "Cobro pendiente",
-  DUPLICATE_OR_OVERPAYMENT: "Cobro duplicado",
-  SUPPLIER_DISCREPANCY: "Discrepancia proveedor",
-  MISSING_FISCAL_DOCS: "Doc. fiscal faltante",
-  GESTORIA_RECONCILIATION: "Gestoría",
-  BANK_RETURN: "Devolución bancaria",
-  UNIDENTIFIED_ADVANCE: "Anticipo sin identificar",
-  INTERCOMPANY: "Intercompañía",
-};
-
 const PRIORITY_COLORS: Record<string, string> = {
   CRITICAL: "border-l-4 border-l-red-500 bg-red-50/50",
   HIGH: "border-l-4 border-l-amber-500 bg-amber-50/30",
@@ -60,25 +56,25 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 const PRIORITY_BADGE: Record<string, { label: string; className: string }> = {
-  CRITICAL: { label: "Crítico", className: "bg-red-100 text-red-700" },
-  HIGH: { label: "Alto", className: "bg-amber-100 text-amber-700" },
-  MEDIUM: { label: "Medio", className: "bg-blue-100 text-blue-700" },
-  LOW: { label: "Bajo", className: "bg-gray-100 text-gray-600" },
+  CRITICAL: { label: t(THREAD_PRIORITY, "CRITICAL"), className: "bg-red-100 text-red-700" },
+  HIGH: { label: t(THREAD_PRIORITY, "HIGH"), className: "bg-amber-100 text-amber-700" },
+  MEDIUM: { label: t(THREAD_PRIORITY, "MEDIUM"), className: "bg-blue-100 text-blue-700" },
+  LOW: { label: t(THREAD_PRIORITY, "LOW"), className: "bg-gray-100 text-gray-600" },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  AGENT_WORKING: { label: "Agente trabajando", color: "text-blue-600" },
-  WAITING_EXTERNAL: { label: "Esperando respuesta", color: "text-amber-600" },
-  WAITING_CONTROLLER: { label: "Requiere decisión", color: "text-red-600" },
-  RESOLVED: { label: "Resuelto", color: "text-green-600" },
-  STALE: { label: "Sin actividad", color: "text-gray-500" },
+  AGENT_WORKING: { label: t(THREAD_STATUS, "AGENT_WORKING"), color: "text-blue-600" },
+  WAITING_EXTERNAL: { label: t(THREAD_STATUS, "WAITING_EXTERNAL"), color: "text-amber-600" },
+  WAITING_CONTROLLER: { label: t(THREAD_STATUS, "WAITING_CONTROLLER"), color: "text-red-600" },
+  RESOLVED: { label: t(THREAD_STATUS, "RESOLVED"), color: "text-green-600" },
+  STALE: { label: t(THREAD_STATUS, "STALE"), color: "text-gray-500" },
 };
 
 const ROLE_STYLES: Record<string, { label: string; bg: string }> = {
-  SYSTEM: { label: "Sistema", bg: "bg-gray-50" },
-  AGENT: { label: "Agente", bg: "bg-blue-50" },
-  EXTERNAL: { label: "Respuesta externa", bg: "bg-amber-50" },
-  CONTROLLER: { label: "Tú", bg: "bg-green-50" },
+  SYSTEM: { label: t(MESSAGE_ROLE, "SYSTEM"), bg: "bg-gray-50" },
+  AGENT: { label: t(MESSAGE_ROLE, "AGENT"), bg: "bg-blue-50" },
+  EXTERNAL: { label: t(MESSAGE_ROLE, "EXTERNAL"), bg: "bg-amber-50" },
+  CONTROLLER: { label: t(MESSAGE_ROLE, "CONTROLLER"), bg: "bg-green-50" },
 };
 
 type FilterKey = "all" | "decision" | "active" | "resolved";
@@ -115,7 +111,7 @@ function ThreadCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <span className="text-[10px] uppercase tracking-wide text-gray-500">
-            {SCENARIO_LABELS[thread.scenario] ?? thread.scenario}
+            {t(FOLLOWUP_SCENARIO, thread.scenario)}
           </span>
           <p className="font-medium text-sm text-gray-900 truncate">{thread.subject}</p>
           <p className="text-xs text-gray-500 mt-0.5 truncate">
@@ -170,9 +166,7 @@ function ThreadDetailPanel({
           >
             {priorityCfg.label}
           </span>
-          <span className="text-xs text-gray-500">
-            {SCENARIO_LABELS[thread.scenario] ?? thread.scenario}
-          </span>
+          <span className="text-xs text-gray-500">{t(FOLLOWUP_SCENARIO, thread.scenario)}</span>
           {thread.externalName && (
             <span className="text-xs text-gray-400">— {thread.externalName}</span>
           )}
