@@ -1239,22 +1239,111 @@ export const CALIBRATE_ACCOUNT_PLAN = {
 export const GESTORIA_DAILY_ALERTS = {
   task: "gestoria_daily_alerts" as const,
   version: "1.0",
-  system: "TODO: Implement in gestoría agent module",
-  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+  system:
+    `You are a Spanish fiscal advisor assistant for gestoría firms. ` +
+    `Generate prioritized fiscal alerts based on the Spanish tax calendar and company data.\n\n` +
+    `Hardcoded deadlines (Spain):\n` +
+    `- Modelo 303/111/115 trimestral: 20 Apr (T1), 20 Jul (T2), 20 Oct (T3), 30 Jan (T4)\n` +
+    `- Modelo 200 (IS): 25 Jul\n` +
+    `- Modelo 347: 28 Feb\n` +
+    `- Modelo 390: 30 Jan\n\n` +
+    `Priority levels:\n` +
+    `- urgent: deadline ≤5 days away\n` +
+    `- high: deadline ≤15 days away\n` +
+    `- normal: deadline ≤30 days away\n` +
+    `- info: informational, no deadline pressure\n\n` +
+    `Respond with ONLY valid JSON matching the requested schema. No markdown.`,
+  buildUser: (data: {
+    companies: Array<{ name: string; cif: string; companyType: string; pendingModels: string[] }>;
+    currentDate: string;
+    upcomingDeadlines: Array<{ model: string; period: string; dueDate: string }>;
+    pendingDocs: number;
+    overdueItems: number;
+  }) =>
+    `Generate fiscal alerts for this gestoría portfolio.\n\n` +
+    `<company_data>\n${JSON.stringify(data.companies, null, 2)}\n</company_data>\n\n` +
+    `<fiscal_calendar>\nCurrent date: ${data.currentDate}\nUpcoming deadlines:\n${JSON.stringify(data.upcomingDeadlines, null, 2)}\n</fiscal_calendar>\n\n` +
+    `<pending_items>\nPending documents: ${data.pendingDocs}\nOverdue items: ${data.overdueItems}\n</pending_items>\n\n` +
+    `Return JSON array of alerts: [{ priority: "urgent"|"high"|"normal"|"info", title: string, description: string, dueDate: string|null, fiscalRef: string|null, companyName: string|null }]`,
+  schema: z.array(
+    z.object({
+      priority: z.enum(["urgent", "high", "normal", "info"]),
+      title: z.string(),
+      description: z.string(),
+      dueDate: z.string().nullable(),
+      fiscalRef: z.string().nullable(),
+      companyName: z.string().nullable(),
+    })
+  ),
 };
 
 export const GESTORIA_REVIEW_DRAFT = {
   task: "gestoria_review_draft" as const,
   version: "1.0",
-  system: "TODO: Implement in gestoría agent module",
-  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+  system:
+    `You are a Spanish tax expert reviewing fiscal model drafts (303/111/115). ` +
+    `Check calculations: base × rate = cuota. Compare with prior period. ` +
+    `Flag discrepancies, missing data, or unusual variations (>20% change).\n\n` +
+    `Respond with ONLY valid JSON matching the requested schema. No markdown.`,
+  buildUser: (data: {
+    model: string;
+    period: string;
+    companyName: string;
+    currentDraft: Record<string, unknown>;
+    priorPeriod: Record<string, unknown> | null;
+  }) =>
+    `Review this fiscal draft.\n\n` +
+    `<fiscal_draft>\nModel: ${data.model}\nPeriod: ${data.period}\nCompany: ${data.companyName}\n` +
+    `Current: ${JSON.stringify(data.currentDraft, null, 2)}\n</fiscal_draft>\n\n` +
+    `<prior_period>\n${data.priorPeriod ? JSON.stringify(data.priorPeriod, null, 2) : "No prior period data"}\n</prior_period>\n\n` +
+    `Return JSON: { status: "ok"|"warning"|"error", discrepancies: [{ field: string, expected: number|null, actual: number|null, severity: "error"|"warning"|"info", message: string }], summary: string, priorComparison: { changed: boolean, percentChange: number|null, note: string|null } }`,
+  schema: z.object({
+    status: z.enum(["ok", "warning", "error"]),
+    discrepancies: z.array(
+      z.object({
+        field: z.string(),
+        expected: z.number().nullable(),
+        actual: z.number().nullable(),
+        severity: z.enum(["error", "warning", "info"]),
+        message: z.string(),
+      })
+    ),
+    summary: z.string(),
+    priorComparison: z.object({
+      changed: z.boolean(),
+      percentChange: z.number().nullable(),
+      note: z.string().nullable(),
+    }),
+  }),
 };
 
 export const GESTORIA_PROCESS_UPLOAD = {
   task: "gestoria_process_upload" as const,
   version: "1.0",
-  system: "TODO: Implement in gestoría agent module",
-  buildUser: (data: Record<string, unknown>) => JSON.stringify(data),
+  system:
+    `You are a document classifier for Spanish accounting firms. ` +
+    `Classify uploaded documents by type and extract key metadata.\n\n` +
+    `Document types: modelo_303, modelo_111, modelo_115, modelo_200, modelo_347, ` +
+    `nomina, factura, escritura, contrato, certificado_retencion, recibo, extracto_bancario, otro.\n\n` +
+    `Respond with ONLY valid JSON matching the requested schema. No markdown.`,
+  buildUser: (data: { filename: string; contentPreview?: string }) =>
+    `Classify this uploaded document.\n\n` +
+    `<document>\nFilename: ${data.filename}\n` +
+    `${data.contentPreview ? `Preview: ${data.contentPreview}\n` : ""}` +
+    `</document>\n\n` +
+    `Return JSON: { documentType: string, period: string|null, keyAmounts: { base: number|null, cuota: number|null, total: number|null }, completeness: "complete"|"partial"|"unknown", confidence: number (0-1), notes: string|null }`,
+  schema: z.object({
+    documentType: z.string(),
+    period: z.string().nullable(),
+    keyAmounts: z.object({
+      base: z.number().nullable(),
+      cuota: z.number().nullable(),
+      total: z.number().nullable(),
+    }),
+    completeness: z.enum(["complete", "partial", "unknown"]),
+    confidence: z.number().min(0).max(1),
+    notes: z.string().nullable(),
+  }),
 };
 
 // ── Module 06: Debt Analysis ──

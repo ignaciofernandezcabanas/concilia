@@ -536,3 +536,37 @@ Multi-step setup wizard (`/setup`) that infers PGC 2007 accounts, fiscal modules
 ### Calibration → LearnedPattern
 
 Recurring patterns from historical calibration are stored as `LearnedPattern` entries with `type: "historical_calibration"`. These feed into the reconciliation engine's pattern matching phase.
+
+## Gestoría Portal
+
+Collaborative portal between controllers and external gestoría firms for fiscal compliance.
+
+### Architecture
+
+- **Fiscal Matrix** (`lib/fiscal/fiscal-matrix.ts`): Hardcoded mapping of 7 company types → applicable fiscal models (303, 111, 115, 200, 347, 349, 390, 130, 202). Includes Spanish fiscal calendar with all deadlines.
+- **Access Check** (`lib/auth/gestoria-check.ts`): Helper to verify GestoriaConfig exists and access level is sufficient. Hierarchy: `subir_docs < reportes < completo`.
+- **3 AI Prompts**: `GESTORIA_DAILY_ALERTS` (Sonnet), `GESTORIA_REVIEW_DRAFT` (Sonnet), `GESTORIA_PROCESS_UPLOAD` (Haiku).
+- **Daily Agent Step**: `gestoria_sync` runs after fiscal step. Generates alerts for companies with GestoriaConfig, creates GESTORIA_ALERT notifications.
+
+### Endpoints
+
+| Method   | Path                                  | Description                   | Access Level |
+| -------- | ------------------------------------- | ----------------------------- | ------------ |
+| GET      | /api/gestoria/alerts                  | AI-generated fiscal alerts    | reportes     |
+| GET      | /api/gestoria/drafts                  | List fiscal drafts by quarter | reportes     |
+| GET      | /api/gestoria/drafts/[model]/[period] | AI review of specific draft   | reportes     |
+| POST     | /api/gestoria/drafts/[model]/[period] | Approve draft                 | completo     |
+| POST     | /api/gestoria/upload                  | Upload + classify document    | subir_docs   |
+| GET/POST | /api/gestoria/incidents               | CRUD gestoría incidents       | subir_docs   |
+| GET      | /api/gestoria/package/[period]        | Fiscal summary package (JSON) | reportes     |
+| GET/PUT  | /api/gestoria/config                  | Gestoría configuration        | any          |
+
+### Frontend
+
+- **Portal page** (`app/(app)/gestoria/page.tsx`): 5 tabs (Alerts, Drafts, Upload, Incidents, Package). Summary cards with urgent alerts, ready drafts, open incidents.
+- **Settings tab** (`app/(app)/ajustes/page.tsx` → Gestoría tab): Configure gestoría name, contact, email, phone, manages areas (fiscal/laboral/mercantil/contable), access level.
+- **Sidebar**: "Gestoría" link in SISTEMA section.
+
+### Notification Types
+
+`GESTORIA_ALERT`, `GESTORIA_UPLOAD`, `GESTORIA_INCIDENT`, `GESTORIA_DRAFT_APPROVED`.

@@ -92,6 +92,7 @@ const sections: NavSection[] = [
     title: "SISTEMA",
     items: [
       { label: "Reglas", icon: ListFilter, href: "/reglas" },
+      { label: "Gestoría", icon: Briefcase, href: "/gestoria" },
       { label: "Notificaciones", icon: Bell, href: "/notificaciones" },
       { label: "Ajustes", icon: Settings, href: "/ajustes" },
     ],

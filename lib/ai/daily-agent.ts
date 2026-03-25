@@ -22,7 +22,9 @@ import {
   TREASURY_ADVICE,
   DAILY_BRIEFING,
   CLOSE_PROPOSAL,
+  GESTORIA_DAILY_ALERTS,
 } from "@/lib/ai/prompt-registry";
+import { getUpcomingDeadlines, type FiscalCompanyType } from "@/lib/fiscal/fiscal-matrix";
 import type { AgentRunStatus } from "@prisma/client";
 
 // ── Types ──
@@ -842,6 +844,71 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
   });
   if (!step10d.success && step10d.error)
     stepErrors.push(`group/clarification_overdue: ${step10d.error}`);
+
+  // Step 10e: Gestoría sync — only if company has GestoriaConfig
+  const step10e = await runStep("gestoria_sync", async () => {
+    let alertsGenerated = 0;
+    for (const company of org.companies) {
+      const companyDb = getScopedDb(company.id);
+      const gestoriaConfig = await (companyDb as any).gestoriaConfig?.findFirst?.();
+      if (!gestoriaConfig) continue;
+
+      const now = new Date();
+      const businessProfile = await (companyDb as any).businessProfile?.findFirst?.();
+      const companyType: FiscalCompanyType =
+        (businessProfile?.tipoSociedad as FiscalCompanyType) ?? "SL_GENERAL";
+
+      const upcomingDeadlines = getUpcomingDeadlines(companyType, 15, now);
+      if (upcomingDeadlines.length === 0) continue;
+
+      // Generate alerts (1 Sonnet call)
+      const alerts = await callAI(
+        "gestoria_daily_alerts",
+        GESTORIA_DAILY_ALERTS.system,
+        GESTORIA_DAILY_ALERTS.buildUser({
+          companies: [
+            {
+              name: company.name,
+              cif: "",
+              companyType,
+              pendingModels: upcomingDeadlines.map((d) => d.model),
+            },
+          ],
+          currentDate: now.toISOString().slice(0, 10),
+          upcomingDeadlines: upcomingDeadlines.map((d) => ({
+            model: d.model,
+            period: d.period,
+            dueDate: d.dueDate,
+          })),
+          pendingDocs: 0,
+          overdueItems: 0,
+        })
+      );
+
+      if (alerts && notificationCount < MAX_NOTIFICATIONS_PER_RUN) {
+        const adminUsers = await getOrgAdminUsers(organizationId);
+        for (const userId of adminUsers.slice(0, 2)) {
+          await createNotification(
+            company.id,
+            userId,
+            "GESTORIA_ALERT",
+            `Alertas fiscales gestoría: ${company.shortName ?? company.name}`,
+            typeof alerts === "string" ? alerts.slice(0, 500) : JSON.stringify(alerts).slice(0, 500)
+          );
+          notificationCount++;
+          alertsGenerated++;
+        }
+      }
+
+      // Update lastAlertSentAt
+      await (companyDb as any).gestoriaConfig?.update?.({
+        where: { id: gestoriaConfig.id },
+        data: { lastAlertSentAt: now },
+      });
+    }
+    return { alertsGenerated };
+  });
+  if (!step10e.success && step10e.error) stepErrors.push(`group/gestoria_sync: ${step10e.error}`);
 
   // Step 11: Daily briefing
   let briefingText: string | null = null;

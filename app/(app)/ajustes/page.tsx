@@ -11,7 +11,15 @@ import { useAuth } from "@/components/AuthProvider";
 import LearningTab from "@/components/LearningTab";
 import { Plus, Save, RefreshCw, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 
-type Tab = "users" | "company" | "societies" | "periods" | "fiscal" | "integrations" | "learning";
+type Tab =
+  | "users"
+  | "company"
+  | "societies"
+  | "periods"
+  | "fiscal"
+  | "integrations"
+  | "learning"
+  | "gestoria";
 const VALID_TABS: Tab[] = [
   "users",
   "company",
@@ -20,6 +28,7 @@ const VALID_TABS: Tab[] = [
   "fiscal",
   "integrations",
   "learning",
+  "gestoria",
 ];
 
 export default function Ajustes() {
@@ -36,6 +45,7 @@ export default function Ajustes() {
     { value: "fiscal", label: "Fiscal" },
     { value: "integrations", label: "Integraciones" },
     { value: "learning", label: "Aprendizaje" },
+    { value: "gestoria", label: "Gestoría" },
   ];
 
   return (
@@ -67,6 +77,7 @@ export default function Ajustes() {
         {tab === "fiscal" && <FiscalTab />}
         {tab === "integrations" && <IntegrationsTab />}
         {tab === "learning" && <LearningTab />}
+        {tab === "gestoria" && <GestoriaSettingsTab />}
       </div>
     </div>
   );
@@ -1496,5 +1507,189 @@ function FiscalTab() {
         <p className="text-sm text-text-tertiary">Sin datos fiscales para este periodo.</p>
       )}
     </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// Gestoría Settings Tab
+// ══════════════════════════════════════════════════════════════
+
+function GestoriaSettingsTab() {
+  const [form, setForm] = useState({
+    gestoriaName: "",
+    contactName: "",
+    email: "",
+    phone: "",
+    accessLevel: "subir_docs",
+    manages: [] as string[],
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    api
+      .get<{ config: Record<string, unknown> | null }>("/api/gestoria/config")
+      .then((res) => {
+        if (res.config) {
+          setForm({
+            gestoriaName: (res.config.gestoriaName as string) ?? "",
+            contactName: (res.config.contactName as string) ?? "",
+            email: (res.config.email as string) ?? "",
+            phone: (res.config.phone as string) ?? "",
+            accessLevel: (res.config.accessLevel as string) ?? "subir_docs",
+            manages: (res.config.manages as string[]) ?? [],
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setSuccess("");
+    try {
+      await api.put("/api/gestoria/config", {
+        ...form,
+        email: form.email || null,
+        phone: form.phone || null,
+      });
+      setSuccess("Configuración guardada correctamente.");
+    } catch (err) {
+      console.error("Error saving gestoría config:", err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function toggleManage(area: string) {
+    setForm((prev) => ({
+      ...prev,
+      manages: prev.manages.includes(area)
+        ? prev.manages.filter((m) => m !== area)
+        : [...prev.manages, area],
+    }));
+  }
+
+  if (loading) return <LoadingSpinner />;
+
+  return (
+    <form onSubmit={handleSave} className="max-w-lg space-y-4">
+      <h2 className="text-[15px] font-semibold text-text-primary">Configuración de Gestoría</h2>
+      <p className="text-xs text-text-secondary">
+        Configura los datos de tu gestoría externa para habilitar el portal de colaboración.
+      </p>
+
+      <div>
+        <label className="text-xs font-medium text-text-secondary block mb-1">
+          Nombre de la gestoría
+        </label>
+        <input
+          type="text"
+          value={form.gestoriaName}
+          onChange={(e) => setForm({ ...form, gestoriaName: e.target.value })}
+          className="w-full h-9 px-3 text-[13px] border border-subtle rounded-md"
+          placeholder="Ej. Asesoría García & López"
+        />
+      </div>
+
+      <div>
+        <label className="text-xs font-medium text-text-secondary block mb-1">
+          Persona de contacto
+        </label>
+        <input
+          type="text"
+          value={form.contactName}
+          onChange={(e) => setForm({ ...form, contactName: e.target.value })}
+          className="w-full h-9 px-3 text-[13px] border border-subtle rounded-md"
+          placeholder="Nombre del contacto"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs font-medium text-text-secondary block mb-1">Email</label>
+          <input
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            className="w-full h-9 px-3 text-[13px] border border-subtle rounded-md"
+            placeholder="gestoria@example.com"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-text-secondary block mb-1">Teléfono</label>
+          <input
+            type="tel"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            className="w-full h-9 px-3 text-[13px] border border-subtle rounded-md"
+            placeholder="+34 912 345 678"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="text-xs font-medium text-text-secondary block mb-2">
+          Áreas que gestiona
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {["fiscal", "laboral", "mercantil", "contable"].map((area) => (
+            <label
+              key={area}
+              className="flex items-center gap-1.5 text-[13px] text-text-primary cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={form.manages.includes(area)}
+                onChange={() => toggleManage(area)}
+                className="rounded border-subtle"
+              />
+              {area.charAt(0).toUpperCase() + area.slice(1)}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="text-xs font-medium text-text-secondary block mb-2">
+          Nivel de acceso
+        </label>
+        <div className="flex flex-col gap-1.5">
+          {[
+            { value: "subir_docs", label: "Solo subir documentos" },
+            { value: "reportes", label: "Ver reportes y borradores" },
+            { value: "completo", label: "Acceso completo (incluye aprobar)" },
+          ].map((opt) => (
+            <label
+              key={opt.value}
+              className="flex items-center gap-2 text-[13px] text-text-primary cursor-pointer"
+            >
+              <input
+                type="radio"
+                name="accessLevel"
+                value={opt.value}
+                checked={form.accessLevel === opt.value}
+                onChange={() => setForm({ ...form, accessLevel: opt.value })}
+              />
+              {opt.label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {success && <p className="text-[13px] text-green-600">{success}</p>}
+
+      <button
+        type="submit"
+        disabled={saving}
+        className="flex items-center gap-2 bg-accent text-white text-[13px] font-medium px-4 h-9 rounded-md hover:bg-accent-dark transition-colors disabled:opacity-50"
+      >
+        <Save size={14} />
+        {saving ? "Guardando..." : "Guardar configuración"}
+      </button>
+    </form>
   );
 }
