@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useFetch } from "@/hooks/useApi";
 import { Mail, Send, CheckCircle, AlertTriangle, XCircle, RotateCw, FileText } from "lucide-react";
 import { formatAmount } from "@/lib/format";
 import { api } from "@/lib/api-client";
@@ -80,27 +81,21 @@ const TRIGGER_LABELS: Record<string, string> = {
 };
 
 export default function SeguimientosPage() {
-  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const [search, setSearch] = useState("");
 
-  const fetchInquiries = useCallback(async () => {
-    try {
-      const params = filter !== "all" ? `?status=${filter}` : "";
-      const json = await api.get<{ data: Inquiry[] }>(`/api/inquiries${params}`);
-      setInquiries(json.data ?? []);
-    } catch {
-      /* ignore */
-    }
-    setLoading(false);
-  }, [filter]);
+  const apiPath = `/api/inquiries${filter !== "all" ? `?status=${filter}` : ""}`;
+  const {
+    data: apiData,
+    loading,
+    refetch,
+  } = useFetch<{ data: Inquiry[]; pagination: { total: number } }>(apiPath, [filter]);
+  const inquiries = apiData?.data ?? [];
 
-  useEffect(() => {
-    fetchInquiries();
-  }, [fetchInquiries]);
+  // Keep fetchInquiries as alias for refetch (used by action handlers)
+  const fetchInquiries = refetch;
 
   const approveInquiry = async (id: string) => {
     setActing(true);
