@@ -806,6 +806,43 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
   });
   if (!step10c.success && step10c.error) stepErrors.push(`group/debt_monitoring: ${step10c.error}`);
 
+  // Step 10d: Overdue clarifications (>3 days without response)
+  const step10d = await runStep("clarification_overdue", async () => {
+    let alertCount = 0;
+    for (const company of org.companies) {
+      const companyDb = getScopedDb(company.id);
+      const overdue =
+        (await (companyDb as any).reconciliation?.findMany?.({
+          where: {
+            status: "PENDING_CLARIFICATION",
+            clarificationEmailSentAt: { lte: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+            clarificationReceivedAt: null,
+          },
+          select: { id: true, clarificationEmailTo: true, clarificationEmailSentAt: true },
+          take: 5,
+        })) ?? [];
+      const admins = await getOrgAdminUsers(organizationId);
+      for (const rec of overdue) {
+        const daysSince = Math.floor(
+          (Date.now() - new Date(rec.clarificationEmailSentAt).getTime()) / (24 * 60 * 60 * 1000)
+        );
+        for (const uid of admins.slice(0, 2)) {
+          await createNotification(
+            company.id,
+            uid,
+            "CLARIFICATION_OVERDUE",
+            `Sin respuesta a aclaración — ${rec.clarificationEmailTo ?? "contacto"}`,
+            `Enviado hace ${daysSince} días. Considere reenviar o resolver manualmente.`
+          );
+        }
+        alertCount++;
+      }
+    }
+    return { alertCount };
+  });
+  if (!step10d.success && step10d.error)
+    stepErrors.push(`group/clarification_overdue: ${step10d.error}`);
+
   // Step 11: Daily briefing
   let briefingText: string | null = null;
   const step11 = await runStep("briefing", async () => {

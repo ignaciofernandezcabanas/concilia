@@ -79,11 +79,34 @@ export async function importInvoicesFromMailbox(
         select: { id: true },
       });
       if (clarificationMatch) {
-        // This is a reply to our clarification — don't process as invoice
-        console.log(
-          `[mailbox] Reply to clarification ${clarificationMatch.id} — skipping invoice pipeline`
-        );
-        // TODO: handleClarificationReply() to be implemented in agent module 04
+        // This is a reply to our clarification — handle and skip invoice pipeline
+        try {
+          await (db as any).reconciliation.update({
+            where: { id: clarificationMatch.id },
+            data: {
+              status: "PROPOSED",
+              clarificationReceivedAt: new Date(),
+              clarificationSummary: (email as any).snippet || "Respuesta recibida",
+            },
+          });
+          // Notification — best effort, don't block on missing userId
+          try {
+            await (db as any).notification.create({
+              data: {
+                type: "CLARIFICATION_RECEIVED",
+                title: "Respuesta recibida — aclaración de diferencia",
+                body: `El contacto ha respondido. Revisa y confirma el tipo de diferencia.`,
+                metadata: { reconciliationId: clarificationMatch.id },
+                userId: "system",
+              },
+            });
+          } catch {
+            /* notification creation is best-effort */
+          }
+          console.log(`[mailbox] Clarification reply processed for ${clarificationMatch.id}`);
+        } catch (err) {
+          console.error("[mailbox] Failed to process clarification reply:", err);
+        }
         continue;
       }
     }
