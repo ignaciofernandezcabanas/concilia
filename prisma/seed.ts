@@ -103,9 +103,21 @@ async function main() {
     const p = prisma as any;
     const hasEntries = await p.journalEntry.findFirst({ where: { companyId: existing.id } });
     if (hasEntries) {
-      console.log(
-        "⚠️  Seed data already exists (including new features). Run prisma migrate reset to re-seed."
-      );
+      // Check if comprehensive demo data exists
+      const hasInquiries =
+        (await p.inquiry?.count?.({ where: { companyId: existing.id } }).catch(() => 0)) ?? 0;
+      if (hasInquiries > 0) {
+        console.log("⚠️  All seed data exists. Run prisma migrate reset to re-seed.");
+        return;
+      }
+      // Seed comprehensive demo data only
+      console.log("📦 Adding comprehensive demo data...");
+      const user = await prisma.user.findFirst({ where: { companyId: existing.id } });
+      const orgId = (existing as any).organizationId ?? "";
+      const contacts = await prisma.contact.findMany({ where: { companyId: existing.id } });
+      const invoices = await prisma.invoice.findMany({ where: { companyId: existing.id } });
+      await seedComprehensiveDemo(existing.id, orgId, user?.id ?? "", contacts, invoices);
+      console.log("🌱 Comprehensive demo seed completado.");
       return;
     }
     console.log("📦 Company exists — seeding new features only...");
