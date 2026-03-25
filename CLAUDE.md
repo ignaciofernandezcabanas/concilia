@@ -192,6 +192,15 @@ date.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 
 Todo contenedor de tabla usa `overflow-x-auto` (nunca `overflow-hidden`). Las tablas tienen `min-w-[...]` para no colapsar en pantallas pequeñas.
 
+**Convenciones de tablas (Sprint 7):**
+
+- **Texto truncado**: toda celda con clase `truncate` debe tener `title={fullText}` para tooltip nativo
+- **Fechas relativas**: usar `formatRelativeWithTitle()` de `lib/format.ts` — devuelve `{ relative, absolute }`. Renderizar: `<span title={absolute}>{relative}</span>`
+- **Fechas en celdas**: usar `formatTableDate()` de `lib/format.ts` → "28/02/2026" en una línea. Añadir `whitespace-nowrap` a la celda
+- **Contactos**: nunca mostrar solo CIF sin nombre comercial. Formato: `"{nombre}"` o `"{nombre} ({cif})"`. Si no hay CIF, no renderizar placeholder "Sin CIF"
+- **Columnas con ancho controlado**: usar `min-w-[Xpx]` o `max-w-[Xpx]` según el contenido
+- **Tablas con distribución fija**: usar `table-fixed` en el `<table>` cuando las columnas tienen anchos explícitos
+
 ### Acciones Destructivas
 
 Toda acción que elimine, cancele o revierta datos usa el componente `components/ui/ConfirmDialog.tsx`. **Nunca ejecutar acciones destructivas sin confirmación explícita.**
@@ -239,8 +248,8 @@ export const GET = withAuth(async (req, ctx) => {
 import { prisma } from "@/lib/db"; // PROHIBIDO excepto GLOBAL-PRISMA
 ```
 
-**SCOPED_MODELS** (32 modelos auto-filtrados por companyId):
-`company, user, account, ownBankAccount, contact, invoice, bankTransaction, reconciliation, matchingRule, categoryThreshold, integration, syncLog, archiveLog, notification, auditLog, accountingPeriod, journalEntry, fixedAsset, budget, confidenceAdjustment, controllerDecision, learnedPattern, thresholdCalibration, inquiry, investment, recurringAccrual, deferredEntry, badDebtTracker, exchangeRateDifference, supportingDocument, debtInstrument, businessProfile, gestoriaConfig`
+**SCOPED_MODELS** (33 modelos auto-filtrados por companyId):
+`company, user, account, ownBankAccount, contact, invoice, bankTransaction, reconciliation, matchingRule, categoryThreshold, integration, syncLog, archiveLog, notification, auditLog, accountingPeriod, journalEntry, fixedAsset, budget, confidenceAdjustment, controllerDecision, learnedPattern, thresholdCalibration, inquiry, investment, recurringAccrual, deferredEntry, badDebtTracker, exchangeRateDifference, supportingDocument, debtInstrument, businessProfile, gestoriaConfig, fiscalObligation`
 
 **NO scoped** (sin companyId): InvoiceLine, BudgetLine, JournalEntryLine, BankTransactionClassification, DuplicateGroup, Payment, CompanyScope, InvestmentTransaction, DebtScheduleEntry, DebtTransaction, DebtCovenant, ThreadMessage.
 
@@ -276,6 +285,36 @@ Datos financieros del usuario van SIEMPRE entre XML tags:
 <pending_invoices>...</pending_invoices>
 <company_data>...</company_data>
 <controller_decisions>...</controller_decisions>
+```
+
+### Chat/Mensajes con Auto-scroll
+
+Componentes con listas de mensajes (ej. seguimientos) usan `useRef` + `useEffect` para auto-scroll:
+
+```typescript
+const bottomRef = useRef<HTMLDivElement>(null);
+useEffect(() => {
+  bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+}, [messages]);
+// <div ref={bottomRef} /> al final de la lista
+```
+
+### onClick en Filas de Tabla
+
+Siempre definir el handler dentro del `.map()` para evitar closures stale:
+
+```typescript
+{items.map((item) => (
+  <tr key={item.id} onClick={() => setSelected(item)}>
+```
+
+### URL Search Params
+
+Las páginas que aceptan `?search=` desde links externos leen el param con `useSearchParams()`:
+
+```typescript
+const searchParams = useSearchParams();
+const [search, setSearch] = useState(searchParams.get("search") ?? "");
 ```
 
 ### Búsquedas Prisma
@@ -381,6 +420,7 @@ Auto-aprobación: `confidence >= categoryThreshold AND amount <= materialityThre
 
 ## Contabilidad
 
+- **Balance descuadrado**: `/balance` muestra banner sticky rojo antes de la tabla cuando `|Activo - (Pasivo+PN)| >= 0.01`, con enlace a `/conciliacion?filter=pending`. La validación existente al final de la página se mantiene.
 - **Asientos** (JournalEntry): DRAFT → POSTED → REVERSED. Balance validado.
 - **Activos fijos** (FixedAsset): depreciación lineal automática, 3 cuentas PGC.
 - **Periodificaciones** (RecurringAccrual): devengos recurrentes (mensual/trimestral/anual), auto-reversión al vincular factura.
@@ -493,6 +533,44 @@ Orchestrates the lifecycle: create thread → draft message → controller appro
 - Attachment display in ThreadMessage UI
 - Import-on-reply: when external party replies with document, agent proposes import pending controller approval
 
+## Convenciones de Datos (Sprint 4)
+
+### Invoice.description vs InvoiceLine.description
+
+El modelo `Invoice` tiene un campo `description` (`String?`) pero para facturas importadas desde Holded suele estar vacío. La descripción real está en `InvoiceLine.description`. En la UI se muestra: `inv.description || inv.lines?.[0]?.description || "—"`. La columna se llama "Concepto", no "Descripción".
+
+### Query de /facturas
+
+La query GET `/api/invoices` siempre incluye:
+
+```typescript
+include: {
+  contact: { select: { id: true, name: true, cif: true } },
+  lines: { select: { description: true }, take: 1 },
+  _count: { select: { reconciliations: true, payments: true } },
+}
+```
+
+Incluye también un `aggregate` con `_sum: { totalAmount: true }` para mostrar totales al filtrar.
+
+La query GET `/api/invoices/[id]` (detalle) incluye: `{ lines: true, payments: true, contact: true, reconciliations: true }`.
+
+### Panel de detalle de facturas
+
+`InvoiceDetailPanel` es un componente inline en `app/(app)/facturas/page.tsx`. Sigue el patrón visual de `ReconciliationPanel` (panel lateral derecho, 480px, cierre con X/Esc) pero es un componente independiente — no comparte código con ReconciliationPanel.
+
+### Filtros de estado: siempre WHERE en Prisma
+
+Todos los filtros de estado (facturas, documentos soporte, etc.) se aplican como `WHERE` en la query de Prisma, nunca filtrando arrays en el frontend. El dropdown envía el valor del enum directamente (ej. `PENDING`, no `"Pendiente"`).
+
+### Counts de tabs con groupBy
+
+Los contadores de tabs (ej. "Registrado (3)") se calculan con `groupBy` en la query GET inicial. Se retornan como `counts: { [status]: number }` en la respuesta de la API.
+
+### api.patch en api-client
+
+`lib/api-client.ts` expone `api.patch()` para peticiones PATCH autenticadas. Usar siempre `api.post/put/patch/delete` en vez de `fetch()` directo para garantizar el token de Supabase.
+
 ## Decisiones de Diseño
 
 - **Scoped DB over manual filters**: `ctx.db` inyecta companyId automáticamente.
@@ -550,6 +628,10 @@ CAPEX e inversiones financieras NUNCA entran en auto-aprobación. NUNCA en batch
 - **DebtScheduleEntry**: Cuadro de amortización por instrumento. `matched` flag para conciliación.
 - **DebtTransaction**: 13 tipos de transacción (DRAWDOWN, REPAYMENT, INSTALLMENT\_\*, COMMISSION, RECLASSIFICATION_LP_CP, etc.)
 - **DebtCovenant**: 6 métricas (DEBT_TO_EBITDA, DSCR, CURRENT_RATIO, NET_WORTH, EQUITY_RATIO, LEVERAGE_RATIO). Test frequency configurable.
+
+### Alertas de vencimiento (frontend)
+
+La tabla de instrumentos en `/deuda` muestra badges de proximidad junto a `maturityDate`: < 0 días → rojo "Vencido", ≤ 30 días → rojo "Vence en Nd", ≤ 90 días → ámbar "Vence en Nd". Sin cambios en schema — lógica frontend con Date nativo.
 
 ### Financing Detector (`detectors/financing-detector.ts`)
 
@@ -721,3 +803,125 @@ Collaborative portal between controllers and external gestoría firms for fiscal
 ### Notification Types
 
 `GESTORIA_ALERT`, `GESTORIA_UPLOAD`, `GESTORIA_INCIDENT`, `GESTORIA_DRAFT_APPROVED`.
+
+## Módulo Cuentas Bancarias
+
+### Modelo OwnBankAccount (`prisma/schema.prisma`)
+
+23 campos: `id`, `iban` (required, unique per company), `bankName?`, `alias?`, `isActive` (default true), `accountType` (BankAccountType enum), `connectionMethod` (default "FILE_IMPORT"), `pgcAccountCode?`, `lastFourDigits?`, `contractNumber?`, `detectionPattern?`, `creditLimit?`, `interestRate?`, `monthlyPayment?`, `startDate?`, `maturityDate?`, `paymentDay?`, `initialBalance?`, `initialBalanceDate?`, `currentBalance?`, `currentBalanceDate?`, `currency` (default "EUR"), `companyId`.
+
+### BankAccountType Enum (7 valores)
+
+`CHECKING`, `SAVINGS`, `CREDIT_LINE`, `LOAN`, `CREDIT_CARD`, `CONFIRMING`, `FACTORING`
+
+### Auto-asignación de cuenta PGC (`lib/bank/detect-bank.ts`)
+
+Función `suggestPGCAccount(type, existingCodes)` — prefijo por tipo + contador auto-incremental:
+
+| Tipo        | Prefijo PGC | Cuenta PGC                                   |
+| ----------- | ----------- | -------------------------------------------- |
+| CHECKING    | 57200       | 572 — Bancos e instituciones de crédito      |
+| SAVINGS     | 57100       | 571 — Caja, euros                            |
+| CREDIT_LINE | 52010       | 5201 — Deudas a c/p por crédito dispuesto    |
+| LOAN        | 17000       | 170 — Deudas a l/p con entidades de crédito  |
+| CREDIT_CARD | 52660       | 5266 — Tarjetas de crédito                   |
+| CONFIRMING  | 52130       | 5213 — Deudas por confirming                 |
+| FACTORING   | 43100       | 431 — Clientes, efectos comerciales a cobrar |
+
+### Detección de banco (`lib/bank/detect-bank.ts`)
+
+`detectBankFromIBAN(iban)` — extrae código entidad (dígitos 5-8 del IBAN español) y devuelve nombre + BIC. 35 bancos españoles soportados.
+
+### Conexión PSD2
+
+Al seleccionar Open Banking, el flujo de callback está en `/api/integrations/bank/callback`. El formulario muestra texto informativo sobre la redirección bancaria.
+
+### Motor de conciliación y OwnBankAccount
+
+El motor usa `OwnBankAccount.iban` para detectar transferencias internas (`lib/reconciliation/detectors/internal-detector.ts`). Busca `iban` en todas las cuentas activas. Cualquier IBAN añadido (incluyendo el IBAN de cargos de Préstamo) queda automáticamente incluido en la detección.
+
+### Endpoints API
+
+| Method | Path                               | Description                | Permission        |
+| ------ | ---------------------------------- | -------------------------- | ----------------- |
+| GET    | /api/bank-accounts                 | Listar cuentas (agrupadas) | read:transactions |
+| POST   | /api/bank-accounts                 | Crear cuenta               | manage:settings   |
+| GET    | /api/bank-accounts/[id]            | Detalle cuenta             | read:transactions |
+| PUT    | /api/bank-accounts/[id]            | Actualizar cuenta          | manage:settings   |
+| POST   | /api/bank-accounts/[id]/deactivate | Desactivar                 | manage:settings   |
+| POST   | /api/bank-accounts/[id]/reactivate | Reactivar                  | manage:settings   |
+| GET    | /api/bank-accounts/detect-bank     | Detectar banco por IBAN    | read:transactions |
+
+### Validación del formulario (Sprint 9)
+
+Campos requeridos por tipo:
+
+- **Todos**: alias
+- **CHECKING, SAVINGS, CREDIT_LINE, CONFIRMING, FACTORING**: IBAN
+- **CREDIT_CARD**: últimos 4 dígitos
+- **LOAN, CREDIT_LINE, CONFIRMING, FACTORING**: límite de crédito, fecha de constitución
+- **LOAN**: cuota mensual
+
+Validación client-side antes de llamar al API. Error de IBAN duplicado (409) se muestra inline bajo el campo IBAN.
+
+## Módulo Fiscal
+
+### Cálculos de IVA
+
+Los cálculos de IVA por período se centralizan en `lib/reports/vat-generator.ts` (`generateVatReport`). Tanto el Modelo 303 como el Resumen 390 usan la misma función — nunca duplicar la query. El 390 (`calculateModel390`) llama a `calculateModel303` para cada trimestre.
+
+**vatRate en DB**: se almacena como decimal (0.21 = 21%). La función `groupByRate()` en `vat-generator.ts` normaliza automáticamente: si `vatRate > 0 && vatRate < 1`, lo multiplica por 100. Las condiciones de clasificación por tramo en `fiscal-models.ts` comparan contra enteros (21, 10, 4).
+
+**Línea "Tipos no clasificados"** en el 303: catch-all que muestra la diferencia entre el total y la suma de los tres tramos estándar. Si aparece con importe > 0, hay vatRates fuera de los tramos estándar.
+
+### Impuesto de Sociedades
+
+Ajustes extracontables (gastos no deducibles, ingresos exentos) son campos editables que persisten en el modelo `FiscalAdjustment` (scoped, unique por company+year). La función `calculateModelIS(db, companyId, year)` lee los ajustes de DB.
+
+**PATCH /api/reports/fiscal/is**: persiste los ajustes extracontables (upsert por companyId+year) y devuelve el IS recalculado. Permiso: `manage:settings`.
+
+### Calendario fiscal
+
+Interactivo: cada ítem es clickable y navega al tab correcto con el trimestre preseleccionado. El fiscal page lee `searchParams` al montar: `?tab=303&periodo=T1&ejercicio=2026`.
+
+**Badges de urgencia** (5 niveles): vencido (rojo), urgente ≤5 días (rojo), ≤15 días (amarillo), ≤30 días (ámbar), pendiente (gris). Presentado (verde) override todos los niveles.
+
+**Tracking de presentación**: `FiscalObligation` model (scoped, `@@unique([companyId, model, quarter, year])`). Campo `presentedAt: DateTime?`. Botón toggle en cada obligación del calendario. Endpoint: `GET/PATCH /api/fiscal/obligations`.
+
+### Selector de Trimestre
+
+Siempre presente en el DOM, deshabilitado (opacity 40%, no oculto) en los tabs donde no aplica (390, IS, Calendario).
+
+### Alertas de verificación
+
+Las alertas `UNUSUAL_RATE` del 303 incluyen un enlace "Ver facturas →" que navega a `/facturas?vatRate=X&type=ISSUED|RECEIVED`. El endpoint `/api/invoices` soporta el filtro `vatRate` (filtra por `InvoiceLine.vatRate`).
+
+### Modelos y Endpoints
+
+| Method | Path                              | Description                            |
+| ------ | --------------------------------- | -------------------------------------- |
+| GET    | /api/reports/fiscal/303?from&to   | Modelo 303 trimestral                  |
+| GET    | /api/reports/fiscal/111?from&to   | Modelo 111 retenciones trabajo         |
+| GET    | /api/reports/fiscal/115?from&to   | Modelo 115 retenciones alquileres      |
+| GET    | /api/reports/fiscal/390?year      | Resumen anual 390                      |
+| GET    | /api/reports/fiscal/is?year       | Impuesto Sociedades                    |
+| PATCH  | /api/reports/fiscal/is            | Ajustes extracontables IS              |
+| GET    | /api/reports/fiscal/calendar?year | Calendario fiscal                      |
+| GET    | /api/fiscal/obligations?year      | Obligaciones fiscales (presentación)   |
+| PATCH  | /api/fiscal/obligations           | Marcar/desmarcar obligación presentada |
+
+## Páginas Públicas
+
+### Rutas públicas (no requieren auth)
+
+`/landing`, `/login`, `/signup`, `/recuperar-contrasena`, `/auth/callback`, `/para-gestorias`
+
+Estas rutas están bajo `app/(public)/` o `app/login/`, `app/signup/` — fuera del route group `(app)` que tiene AppShell con auth guard. No hay middleware.ts root; la protección es client-side.
+
+### Errores de Supabase Auth
+
+Todos los mensajes de error de Supabase se traducen con `getAuthErrorMessage()` (`lib/auth/error-messages.ts`) antes de mostrar al usuario. Aplicar en login, signup, y cualquier página que use Supabase Auth.
+
+### Hydration en landing
+
+Las animaciones CSS de la landing usan `landing.css` (archivo estático importado en `app/(public)/landing/page.tsx`). No usar `<style>` tags dinámicos en componentes "use client" — causan hydration mismatch.

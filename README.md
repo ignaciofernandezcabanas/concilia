@@ -300,6 +300,73 @@ Ver [CLAUDE.md](CLAUDE.md) para detalles del motor de conciliación, 22 escenari
 - **31 divisas** soportadas (ECB)
 - **3 modelos AI** (Haiku/Sonnet/Opus) con 30+ tareas
 
+## Changelog
+
+### 2026-03-26 — Sprint 10: Páginas públicas
+
+- Fix hydration mismatch en landing (CSS extraído a archivo estático)
+- Traducción de errores de Supabase Auth al español (`lib/auth/error-messages.ts`)
+- Página de recuperación de contraseña (`/recuperar-contrasena`)
+- Inputs con name/id/autocomplete en login y signup (accesibilidad + autofill)
+- Validación de formato de email en signup
+- Footer links funcionales (anclas a secciones, mailto, "Blog" deshabilitado)
+- CTA "Habla con nosotros" → mailto:hola@concilia.es
+- Página pública `/para-gestorias` (marketing para gestorías)
+
+### 2026-03-26 — Sprint 6: Lógica condicional en Reporting y bugs menores
+
+- Calendario fiscal con 5 niveles de urgencia cromática (vencido, urgente ≤5d, ≤15d, ≤30d, pendiente) + estado "Presentado" (verde)
+- Nuevo modelo `FiscalObligation` con `presentedAt` — tracking de obligaciones fiscales presentadas
+- Endpoint `GET/PATCH /api/fiscal/obligations` para marcar/desmarcar obligaciones como presentadas
+- Alertas de vencimiento en tabla de instrumentos de deuda (< 30d rojo, < 90d ámbar)
+- Banner sticky rojo en balance descuadrado con enlace a conciliación
+- Fix: key prop faltante en Fragment de inversiones (React rendering bug)
+- Página 404 en español con diseño coherente con login
+
+### 2026-03-26 — Sprint 7 (final QA): Pulido visual transversal
+
+- Fix CRÍTICO: DSO dashboard siempre mostraba "—" — leía `agingData.dso` en vez de `agingData.summary.dso`
+- Fix: cabeceras activos sin separación visual — añadido `overflow-x-auto`, `min-w-[800px]`, `formatTableDate()`
+- Fix: títulos de cards de acción rápida truncados — reemplazado `truncate` por `leading-tight`
+- Fix: "Sin CIF" prominente en contactos — render condicional solo cuando hay CIF
+- Fix: email largo desplaza columna facturas en contactos — `table-fixed`, `max-w-[180px]`, tooltip
+- Fix: fechas relativas sin tooltip en seguimientos — nueva utilidad `formatRelativeWithTitle()`
+- Fix: títulos truncados sin tooltip en seguimientos — añadido `title` a spans con `truncate`
+- Fix: fecha en documentos soporte — cambiado a `formatTableDate()` + `whitespace-nowrap`
+- Fix: columna Estado cortada en documentos soporte — añadido `min-w-[120px]`
+- Fix: tooltip en nombre contacto en cuentas a cobrar
+- Ciclo QA completado. Ver CLAUDE.md → "Convenciones de tablas" para estándares establecidos.
+
+### 2026-03-26 — Sprint 8: Módulo Fiscal
+
+- Fix CRÍTICO: aritmética 303 — normalización de vatRate decimal (0.21→21) en vat-generator.ts, tramos IVA ahora clasifican correctamente
+- Fix CRÍTICO: discrepancia 303/390 resuelta — ambos usan la misma función calculateModel303
+- Fix: Modelo 115 ahora muestra línea "Total a ingresar"
+- Nuevo: cabeceras de columna (Concepto / Base imponible / Cuota IVA) en bloques del 303
+- Fix: ceros en Resumen 390 ahora en gris neutro, no en rojo
+- Fix: selector de Trimestre siempre visible, deshabilitado en tabs anuales (390, IS, Calendario)
+- Nuevo: empty states en Modelos 111 y 115 cuando no hay retenciones
+- Nuevo: IS con campos editables para gastos no deducibles e ingresos exentos (modelo FiscalAdjustment, PATCH endpoint)
+- Nuevo: calendario fiscal interactivo — click navega al modelo/trimestre, badges urgencia (Vencido/Urgente/Próximo/Pendiente)
+- Nuevo: alertas de verificación del 303 con enlace "Ver facturas →" a /facturas?vatRate=X&type=Y
+- Nuevo: filtro vatRate en endpoint /api/invoices y página de facturas
+- Nuevo: deep linking en página fiscal via searchParams (?tab=303&periodo=T1&ejercicio=2026)
+- Nuevo: línea "Tipos no clasificados" como catch-all en el 303
+
+### 2026-03-26 — Sprint 4: Facturas y Documentos Soporte
+
+- Fix: persistencia de documentos soporte (auth token faltaba en fetch)
+- Fix: columna "Concepto" en facturas muestra `lines[0].description` como fallback
+- Nuevo: panel lateral de detalle de factura (líneas, pagos, contacto, conciliaciones)
+- Nuevo: endpoint GET `/api/invoices/[id]` con includes completos
+- Nuevo: endpoint PATCH `/api/supporting-documents/[id]` para avance de estado
+- Nuevo: botones "Contabilizar" y "Conciliar" en documentos soporte
+- Nuevo: contadores en tabs de documentos soporte (groupBy)
+- Nuevo: badge "NC" para notas de crédito en tabla de facturas
+- Nuevo: sumatorio de importes al filtrar facturas (aggregate)
+- Fix: dropdown de estado en facturas incluye todos los estados del enum
+- Nuevo: `api.patch()` en api-client para peticiones PATCH autenticadas
+
 ## Licencia
 
 Privado — Mazinger Ventures.

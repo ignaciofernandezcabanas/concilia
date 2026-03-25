@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import "./landing.css";
 
 // ─── Design System ───
 const colors = {
@@ -477,16 +478,6 @@ function Hero() {
           </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-        @keyframes fadeSlideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
-        @media (max-width: 768px) {
-          section > div > div:first-child { grid-column: 1 / -1 !important; }
-          section > div { grid-template-columns: 1fr !important; }
-          .nav-desktop { display: none !important; }
-        }
-      `}</style>
     </section>
   );
 }
@@ -1662,7 +1653,7 @@ function Pricing() {
                 ))}
               </div>
               <Link
-                href={t.popular ? "/signup" : i === 2 ? "#" : "/signup"}
+                href={i === 2 ? "mailto:hola@concilia.es" : "/signup"}
                 style={{
                   display: "block",
                   width: "100%",
@@ -1696,7 +1687,7 @@ function Pricing() {
           }}
         >
           <Link
-            href="/gestoria"
+            href="/para-gestorias"
             style={{ color: colors.teal, textDecoration: "none", fontWeight: 600 }}
           >
             ¿Eres gestoría? Tenemos un plan específico para ti →
@@ -1941,23 +1932,44 @@ function Footer() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 32 }}>
-          {["Producto", "Precios", "Para gestorías", "Blog", "Contacto"].map((l) => (
-            <a
-              key={l}
-              href="#"
-              style={{
-                color: colors.silver,
-                textDecoration: "none",
-                fontSize: 14,
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
-                transition: "color 0.2s",
-              }}
-              onMouseEnter={(e: any) => (e.target.style.color = colors.white)}
-              onMouseLeave={(e: any) => (e.target.style.color = colors.silver)}
-            >
-              {l}
-            </a>
-          ))}
+          {[
+            { label: "Producto", href: "#como-funciona" },
+            { label: "Precios", href: "#pricing" },
+            { label: "Para gestorías", href: "/para-gestorias" },
+            { label: "Blog", href: null },
+            { label: "Contacto", href: "mailto:hola@concilia.es" },
+          ].map((l) =>
+            l.href ? (
+              <a
+                key={l.label}
+                href={l.href}
+                style={{
+                  color: colors.silver,
+                  textDecoration: "none",
+                  fontSize: 14,
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  transition: "color 0.2s",
+                }}
+                onMouseEnter={(e: any) => (e.target.style.color = colors.white)}
+                onMouseLeave={(e: any) => (e.target.style.color = colors.silver)}
+              >
+                {l.label}
+              </a>
+            ) : (
+              <span
+                key={l.label}
+                style={{
+                  color: colors.steel,
+                  fontSize: 14,
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  cursor: "default",
+                }}
+                title="Próximamente"
+              >
+                {l.label}
+              </span>
+            )
+          )}
         </div>
         <div
           style={{

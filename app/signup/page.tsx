@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { getSupabase } from "@/lib/api-client";
+import { getAuthErrorMessage } from "@/lib/auth/error-messages";
 
 const colors = {
   midnight: "#0f1923",
@@ -67,7 +68,7 @@ export default function SignupPage() {
       provider,
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
-    if (error) setError(error.message);
+    if (error) setError(getAuthErrorMessage(error.message));
   }
 
   async function handleSignup() {
@@ -82,7 +83,7 @@ export default function SignupPage() {
     });
     setSubmitting(false);
     if (error) {
-      setError(error.message);
+      setError(getAuthErrorMessage(error.message));
     } else {
       router.push("/");
     }
@@ -357,9 +358,14 @@ export default function SignupPage() {
             {step === 1 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div>
-                  <label style={labelStyle}>Email</label>
+                  <label htmlFor="signup-email" style={labelStyle}>
+                    Email
+                  </label>
                   <input
+                    id="signup-email"
+                    name="email"
                     type="email"
+                    autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     style={inputStyle}
@@ -369,9 +375,14 @@ export default function SignupPage() {
                   />
                 </div>
                 <div>
-                  <label style={labelStyle}>Contraseña</label>
+                  <label htmlFor="signup-password" style={labelStyle}>
+                    Contraseña
+                  </label>
                   <input
+                    id="signup-password"
+                    name="new-password"
                     type="password"
+                    autoComplete="new-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     style={inputStyle}
@@ -383,8 +394,15 @@ export default function SignupPage() {
 
                 <button
                   onClick={() => {
-                    if (email && password.length >= 8) setStep(2);
-                    else setError("Email y contraseña (mín. 8 caracteres) requeridos");
+                    setError("");
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (!email || !emailRegex.test(email)) {
+                      setError("Introduce un email con formato válido (ej: nombre@empresa.com)");
+                    } else if (password.length < 8) {
+                      setError("La contraseña debe tener al menos 8 caracteres");
+                    } else {
+                      setStep(2);
+                    }
                   }}
                   style={{
                     width: "100%",
@@ -409,9 +427,14 @@ export default function SignupPage() {
             {step === 2 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div>
-                  <label style={labelStyle}>Tu nombre</label>
+                  <label htmlFor="signup-name" style={labelStyle}>
+                    Tu nombre
+                  </label>
                   <input
+                    id="signup-name"
+                    name="name"
                     type="text"
+                    autoComplete="name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     style={inputStyle}
@@ -421,9 +444,14 @@ export default function SignupPage() {
                   />
                 </div>
                 <div>
-                  <label style={labelStyle}>Nombre de la empresa</label>
+                  <label htmlFor="signup-company" style={labelStyle}>
+                    Nombre de la empresa
+                  </label>
                   <input
+                    id="signup-company"
+                    name="organization"
                     type="text"
+                    autoComplete="organization"
                     value={company}
                     onChange={(e) => setCompany(e.target.value)}
                     style={inputStyle}

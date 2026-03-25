@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import { auth, api, getSupabase } from "@/lib/api-client";
+import { getAuthErrorMessage } from "@/lib/auth/error-messages";
 import type { Session, User as SupabaseUser } from "@supabase/supabase-js";
 
 interface OrgContext {
@@ -110,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const sb = getSupabase();
     if (!sb) return { error: "Supabase no configurado" };
     const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
+    if (error) return { error: getAuthErrorMessage(error.message) };
     return {};
   }, []);
 

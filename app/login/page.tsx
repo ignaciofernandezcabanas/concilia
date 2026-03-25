@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { getSupabase } from "@/lib/api-client";
+import { getAuthErrorMessage } from "@/lib/auth/error-messages";
 
 const colors = {
   midnight: "#0f1923",
@@ -79,7 +80,7 @@ export default function LoginPage() {
       provider,
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
-    if (error) setError(error.message);
+    if (error) setError(getAuthErrorMessage(error.message));
   }
 
   if (loading) return null;
@@ -353,9 +354,14 @@ export default function LoginPage() {
               style={{ display: "flex", flexDirection: "column", gap: 16 }}
             >
               <div>
-                <label style={labelStyle}>Email</label>
+                <label htmlFor="login-email" style={labelStyle}>
+                  Email
+                </label>
                 <input
+                  id="login-email"
+                  name="email"
                   type="email"
+                  autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   style={inputStyle}
@@ -366,9 +372,14 @@ export default function LoginPage() {
                 />
               </div>
               <div>
-                <label style={labelStyle}>Contraseña</label>
+                <label htmlFor="login-password" style={labelStyle}>
+                  Contraseña
+                </label>
                 <input
+                  id="login-password"
+                  name="password"
                   type="password"
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   style={inputStyle}
@@ -377,6 +388,19 @@ export default function LoginPage() {
                   onFocus={(e: any) => (e.target.style.borderColor = colors.teal)}
                   onBlur={(e: any) => (e.target.style.borderColor = colors.steel)}
                 />
+              </div>
+              <div style={{ textAlign: "right", marginTop: -8 }}>
+                <Link
+                  href="/recuperar-contrasena"
+                  style={{
+                    fontSize: 13,
+                    color: colors.muted,
+                    textDecoration: "none",
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  }}
+                >
+                  ¿Olvidaste tu contraseña?
+                </Link>
               </div>
 
               {error && (
