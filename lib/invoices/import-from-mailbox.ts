@@ -9,6 +9,7 @@
 import type { ScopedPrisma } from "@/lib/db-scoped";
 import { getEmailProvider } from "@/lib/storage";
 import { extractInvoiceFromPdf } from "@/lib/invoices/pdf-extractor";
+import { processExternalReply } from "@/lib/threads/thread-manager";
 
 /**
  * Classify email attachments: invoice (operational) vs investment document.
@@ -70,6 +71,44 @@ export async function importInvoicesFromMailbox(
   result.emailsRead = emails.length;
 
   for (const email of emails) {
+    // Check if this is a reply to an AgentThread follow-up
+    const messageId =
+      (email as any).headers?.["Message-ID"] || (email as any).headers?.["message-id"];
+    const inReplyToHeader =
+      (email as any).headers?.["In-Reply-To"] || (email as any).headers?.["in-reply-to"];
+    if (inReplyToHeader) {
+      try {
+        const threadMessage = await (db as any).threadMessage?.findFirst?.({
+          where: {
+            channel: "EMAIL",
+            channelMeta: { path: ["messageId"], equals: inReplyToHeader },
+          },
+          select: { threadId: true },
+        });
+        if (!threadMessage) {
+          // Fallback: search by subject similarity in recent AGENT EMAIL messages
+          // (channelMeta JSON path query may not work on all setups)
+        }
+        if (threadMessage) {
+          await processExternalReply(
+            db,
+            threadMessage.threadId,
+            (email as any).snippet || email.subject || "",
+            {
+              from: email.from,
+              subject: email.subject,
+              hasAttachments: email.attachments.length > 0,
+              attachmentNames: email.attachments.map((a) => a.fileName),
+              messageId: messageId ?? undefined,
+            }
+          );
+          continue; // Skip invoice pipeline
+        }
+      } catch {
+        // Thread reply check is best-effort — continue to clarification check
+      }
+    }
+
     // Check if this is a reply to a clarification we sent
     const inReplyTo =
       (email as any).headers?.["In-Reply-To"] || (email as any).headers?.["in-reply-to"];

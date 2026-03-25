@@ -16,6 +16,7 @@ import { detectIntercompany } from "@/lib/reconciliation/detectors/intercompany-
 import { generateForecast } from "@/lib/reports/forecast-generator";
 import { checkCapitalAdequacy } from "@/lib/accounting/capital-adequacy";
 import { callAI } from "@/lib/ai/model-router";
+import { createThread, runAutonomousCycle } from "@/lib/threads/thread-manager";
 import { getCallBuffer, clearCallBuffer } from "@/lib/ai/model-router";
 import {
   EXPLAIN_ANOMALY,
@@ -255,17 +256,58 @@ export async function runDailyAgent(organizationId: string): Promise<AgentRunSum
       })
     );
 
-    // Step 6: Reminders (stub — email sending not implemented yet)
+    // Step 6: Reminders — create AgentThread for overdue invoices without one
     results.push(
       await runStep("reminders", async () => {
-        const overdueForReminder = await prisma.invoice.count({
+        const overdueInvoices = await prisma.invoice.findMany({
           where: {
             companyId: company.id,
             type: "ISSUED",
             status: "OVERDUE",
           },
+          include: {
+            contact: { select: { id: true, name: true, email: true, accountingEmail: true } },
+          },
+          take: 10,
         });
-        return { overdueForReminder };
+
+        let threadsCreated = 0;
+        for (const inv of overdueInvoices) {
+          if (!inv.contact) continue;
+          try {
+            await createThread(companyDb, {
+              organizationId,
+              scenario: "OVERDUE_RECEIVABLE",
+              contactId: inv.contact.id,
+              contactName: inv.contact.name,
+              contactEmail: inv.contact.accountingEmail ?? inv.contact.email ?? undefined,
+              invoiceIds: [inv.id],
+              amount: inv.totalAmount,
+              invoiceNumber: inv.number,
+              companyName: company.name,
+              agentRunId: run.id,
+              sourceStep: "reminders",
+              dueDate: inv.dueDate ?? undefined,
+            });
+            threadsCreated++;
+          } catch {
+            // Thread creation failures are non-critical
+          }
+        }
+        return { overdueForReminder: overdueInvoices.length, threadsCreated };
+      })
+    );
+
+    // Step 6b: Follow-up cycle — auto-resolve, send follow-ups, detect stale
+    results.push(
+      await runStep("followup_cycle", async () => {
+        const cycleStats = await runAutonomousCycle(companyDb, company.id);
+        return {
+          autoResolved: cycleStats.autoResolved,
+          followUpsSent: cycleStats.followUpsSent,
+          staleDetected: cycleStats.staleDetected,
+          reprioritized: cycleStats.reprioritized,
+        };
       })
     );
 

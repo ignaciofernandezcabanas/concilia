@@ -457,6 +457,13 @@ describe("Daily Agent — Gestoría Sync Step", () => {
     clearCallBuffer: vi.fn(),
   }));
 
+  const mockCreateThread = vi.hoisted(() => vi.fn());
+  const mockRunAutonomousCycle = vi.hoisted(() => vi.fn());
+  vi.mock("@/lib/threads/thread-manager", () => ({
+    createThread: mockCreateThread,
+    runAutonomousCycle: mockRunAutonomousCycle,
+  }));
+
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -543,6 +550,13 @@ describe("Daily Agent — Gestoría Sync Step", () => {
       generatedAt: new Date().toISOString(),
     });
     mockCallAI.mockResolvedValue("OK");
+    mockCreateThread.mockResolvedValue("thread_1");
+    mockRunAutonomousCycle.mockResolvedValue({
+      autoResolved: 0,
+      followUpsSent: 0,
+      staleDetected: 0,
+      reprioritized: 0,
+    });
   });
 
   it("gestoria_sync step runs when GestoriaConfig exists", async () => {

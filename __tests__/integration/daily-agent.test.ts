@@ -61,6 +61,13 @@ vi.mock("@/lib/ai/model-router", () => ({
   clearCallBuffer: vi.fn(),
 }));
 
+const mockCreateThread = vi.hoisted(() => vi.fn());
+const mockRunAutonomousCycle = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/threads/thread-manager", () => ({
+  createThread: mockCreateThread,
+  runAutonomousCycle: mockRunAutonomousCycle,
+}));
+
 import { runDailyAgent } from "@/lib/ai/daily-agent";
 
 const ORG_ID = "org_1";
@@ -144,6 +151,13 @@ function setupDefaults() {
     generatedAt: new Date().toISOString(),
   });
   mockCallAI.mockResolvedValue("Briefing generado para Test Org.");
+  mockCreateThread.mockResolvedValue("thread_1");
+  mockRunAutonomousCycle.mockResolvedValue({
+    autoResolved: 0,
+    followUpsSent: 0,
+    staleDetected: 0,
+    reprioritized: 0,
+  });
 }
 
 describe("Daily Agent", () => {
