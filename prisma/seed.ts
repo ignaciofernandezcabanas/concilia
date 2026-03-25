@@ -107,6 +107,17 @@ async function main() {
       const hasInquiries =
         (await p.inquiry?.count?.({ where: { companyId: existing.id } }).catch(() => 0)) ?? 0;
       if (hasInquiries > 0) {
+        // Check if agent threads need seeding
+        const hasThreads =
+          (await p.agentThread?.count?.({ where: { companyId: existing.id } }).catch(() => 0)) ?? 0;
+        if (hasThreads === 0) {
+          console.log("📦 Seeding agent threads...");
+          const orgId = (existing as any).organizationId ?? "";
+          const contacts = await prisma.contact.findMany({ where: { companyId: existing.id } });
+          await seedAgentThreads(existing.id, orgId, contacts);
+          console.log("🌱 Agent threads seed completado.");
+          return;
+        }
         console.log("⚠️  All seed data exists. Run prisma migrate reset to re-seed.");
         return;
       }
@@ -2356,6 +2367,543 @@ async function seedComprehensiveDemo(
   console.log(`  ✅ ${reconCount} reconciliation records`);
 
   console.log("📦 Comprehensive demo data completado.");
+
+  // ── 12. Agent Threads ──
+  await seedAgentThreads(cid, orgId, contacts);
+}
+
+// ── seedAgentThreads — 8 threads (one per scenario) with realistic messages ──
+
+async function seedAgentThreads(
+  cid: string,
+  orgId: string,
+  contacts: Array<{
+    id: string;
+    name: string;
+    email?: string | null;
+    accountingEmail?: string | null;
+  }>
+) {
+  const p = prisma as any;
+
+  // Idempotency: check if threads already exist
+  const existingThreads =
+    (await p.agentThread?.count?.({ where: { companyId: cid } }).catch(() => 0)) ?? 0;
+  if (existingThreads > 0) {
+    console.log(`  ⏭️  AgentThreads already seeded (${existingThreads})`);
+    return;
+  }
+
+  const levante = contacts.find((c) => c.name.includes("Levante")) ?? contacts[0];
+  const costa = contacts.find((c) => c.name.includes("Costa")) ?? contacts[1];
+  const hosteleria = contacts.find((c) => c.name.includes("Hostelería")) ?? contacts[2];
+  const mercados = contacts.find((c) => c.name.includes("Mercados")) ?? contacts[3];
+  const exportadora = contacts.find((c) => c.name.includes("Exportadora")) ?? contacts[4];
+  const transportes = contacts.find((c) => c.name.includes("Transportes")) ?? contacts[5];
+  const envases = contacts.find((c) => c.name.includes("Envases")) ?? contacts[6];
+  const asesoria = contacts.find((c) => c.name.includes("Asesoría")) ?? contacts[7];
+
+  const now = new Date();
+  const daysAgo = (d: number) => new Date(now.getTime() - d * 24 * 60 * 60 * 1000);
+
+  // Helper to create thread + messages in one go
+  async function createThread(data: {
+    scenario: string;
+    status: string;
+    priority: string;
+    subject: string;
+    summary: string;
+    blockedReason?: string;
+    contactId?: string;
+    externalEmail?: string;
+    externalName?: string;
+    followUpCount: number;
+    nextFollowUpAt?: Date;
+    lastFollowUpAt?: Date;
+    resolvedAt?: Date;
+    autoResolved?: boolean;
+    dueDate?: Date;
+    lastActivityAt: Date;
+    messages: Array<{
+      role: string;
+      channel: string;
+      content: string;
+      contentHtml?: string;
+      channelMeta?: object;
+      suggestedActions?: unknown[];
+      actionTaken?: string;
+      createdAt: Date;
+    }>;
+  }) {
+    const thread = await p.agentThread.create({
+      data: {
+        companyId: cid,
+        organizationId: orgId,
+        scenario: data.scenario,
+        status: data.status,
+        priority: data.priority,
+        subject: data.subject,
+        summary: data.summary,
+        blockedReason: data.blockedReason ?? null,
+        contactId: data.contactId ?? null,
+        externalEmail: data.externalEmail ?? null,
+        externalName: data.externalName ?? null,
+        followUpCount: data.followUpCount,
+        nextFollowUpAt: data.nextFollowUpAt ?? null,
+        lastFollowUpAt: data.lastFollowUpAt ?? null,
+        resolvedAt: data.resolvedAt ?? null,
+        autoResolved: data.autoResolved ?? false,
+        dueDate: data.dueDate ?? null,
+        lastActivityAt: data.lastActivityAt,
+        followUpPolicy: {
+          intervalDays: 4,
+          maxAttempts: 3,
+          toneProgression: ["friendly", "firm", "formal"],
+        },
+        autoResolveCondition: { type: "invoice_paid" },
+      },
+    });
+
+    for (const msg of data.messages) {
+      await p.threadMessage.create({
+        data: {
+          threadId: thread.id,
+          role: msg.role,
+          channel: msg.channel,
+          content: msg.content,
+          contentHtml: msg.contentHtml ?? null,
+          channelMeta: msg.channelMeta ?? {},
+          suggestedActions: msg.suggestedActions ?? null,
+          actionTaken: msg.actionTaken ?? null,
+          createdAt: msg.createdAt,
+        },
+      });
+    }
+    return thread;
+  }
+
+  // Thread 1: OVERDUE_RECEIVABLE — 3 follow-ups, WAITING_CONTROLLER
+  await createThread({
+    scenario: "OVERDUE_RECEIVABLE",
+    status: "WAITING_CONTROLLER",
+    priority: "HIGH",
+    subject: `Cobro pendiente FRA-2026-012 — ${levante?.name ?? "Distribuciones Levante"} (4.235,00 EUR)`,
+    summary: "3 follow-ups enviados sin respuesta. El contacto no ha respondido a ningún email.",
+    blockedReason:
+      "3 intentos sin respuesta. Requiere decisión: enviar uno más, provisionar o cerrar.",
+    contactId: levante?.id,
+    externalEmail: levante?.accountingEmail ?? levante?.email ?? "admin@levante.es",
+    externalName: levante?.name ?? "Distribuciones Levante",
+    followUpCount: 3,
+    lastFollowUpAt: daysAgo(2),
+    dueDate: daysAgo(45),
+    lastActivityAt: daysAgo(2),
+    messages: [
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content:
+          "Hilo creado: OVERDUE_RECEIVABLE. Factura FRA-2026-012 vencida hace 45 días. Importe: 4.235,00 EUR.",
+        createdAt: daysAgo(14),
+      },
+      {
+        role: "AGENT",
+        channel: "EMAIL",
+        content:
+          "Estimado/a,\n\nNos ponemos en contacto en relación con la factura FRA-2026-012 por importe de 4.235,00 EUR, con vencimiento el pasado 8 de febrero.\n\nLes rogamos procedan al abono a la mayor brevedad posible. Quedamos a su disposición.\n\nUn cordial saludo,\nDepartamento de Administración",
+        channelMeta: { to: "admin@levante.es", subject: "Recordatorio de pago — FRA-2026-012" },
+        createdAt: daysAgo(14),
+      },
+      {
+        role: "AGENT",
+        channel: "EMAIL",
+        content:
+          "Estimado/a,\n\nEn relación con nuestro email del 11 de marzo, le recordamos que la factura FRA-2026-012 (4.235,00 EUR) continúa pendiente de cobro.\n\n¿Podrían confirmar la fecha prevista de pago, por favor?\n\nUn cordial saludo,\nDepartamento de Administración",
+        channelMeta: { to: "admin@levante.es", subject: "Re: Recordatorio de pago — FRA-2026-012" },
+        createdAt: daysAgo(10),
+      },
+      {
+        role: "AGENT",
+        channel: "EMAIL",
+        content:
+          "Estimado/a,\n\nEs la tercera vez que nos ponemos en contacto. La factura FRA-2026-012 acumula 45 días de retraso. Si no recibimos respuesta en 5 días hábiles, nos veremos obligados a provisionar contablemente la deuda.\n\nQuedamos a su disposición.\n\nDepartamento de Administración",
+        channelMeta: { to: "admin@levante.es", subject: "URGENTE: Factura pendiente FRA-2026-012" },
+        createdAt: daysAgo(6),
+      },
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content: "Máximo de 3 follow-ups alcanzado. Escalado al controller.",
+        suggestedActions: [
+          { type: "extend_followup", label: "Enviar 1 más" },
+          { type: "close", label: "Cerrar sin resolución" },
+          { type: "provision_bad_debt", label: "Provisionar como dudoso cobro" },
+        ],
+        createdAt: daysAgo(2),
+      },
+    ],
+  });
+
+  // Thread 2: OVERDUE_RECEIVABLE — RESOLVED (autoResolved, payment found)
+  await createThread({
+    scenario: "OVERDUE_RECEIVABLE",
+    status: "RESOLVED",
+    priority: "MEDIUM",
+    subject: `Cobro pendiente FRA-2026-008 — ${costa?.name ?? "Costa Distribución"} (1.850,00 EUR)`,
+    summary: "Pago recibido. Factura cobrada tras 1 follow-up.",
+    contactId: costa?.id,
+    externalEmail: costa?.accountingEmail ?? costa?.email ?? "contabilidad@costa.es",
+    externalName: costa?.name ?? "Costa Distribución",
+    followUpCount: 1,
+    lastFollowUpAt: daysAgo(8),
+    resolvedAt: daysAgo(3),
+    autoResolved: true,
+    dueDate: daysAgo(20),
+    lastActivityAt: daysAgo(3),
+    messages: [
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content:
+          "Hilo creado: OVERDUE_RECEIVABLE. Factura FRA-2026-008 vencida hace 20 días. Importe: 1.850,00 EUR.",
+        createdAt: daysAgo(12),
+      },
+      {
+        role: "AGENT",
+        channel: "EMAIL",
+        content:
+          "Estimado/a,\n\nLe recordamos que la factura FRA-2026-008 por 1.850,00 EUR venció el pasado 5 de marzo.\n\nLes rogamos confirmen la fecha de pago.\n\nUn cordial saludo,\nDepartamento de Administración",
+        channelMeta: {
+          to: "contabilidad@costa.es",
+          subject: "Recordatorio de pago — FRA-2026-008",
+        },
+        createdAt: daysAgo(8),
+      },
+      {
+        role: "EXTERNAL",
+        channel: "EMAIL",
+        content:
+          "Buenos días,\n\nDisculpen el retraso. Hemos realizado la transferencia esta mañana. Referencia: TR-20260322-1850.\n\nSaludos,\nContabilidad Costa Distribución",
+        createdAt: daysAgo(5),
+      },
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content:
+          "Respuesta procesada: El contacto confirma pago realizado. Referencia: TR-20260322-1850. Acción: wait_and_verify.",
+        createdAt: daysAgo(5),
+      },
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content: "Hilo auto-resuelto: Todas las facturas cobradas (1)",
+        createdAt: daysAgo(3),
+      },
+    ],
+  });
+
+  // Thread 3: DUPLICATE_OR_OVERPAYMENT — AGENT_WORKING
+  await createThread({
+    scenario: "DUPLICATE_OR_OVERPAYMENT",
+    status: "AGENT_WORKING",
+    priority: "HIGH",
+    subject: `Posible sobrepago — ${hosteleria?.name ?? "Hostelería del Sur"} (duplicado 2.100,00 EUR)`,
+    summary: "Detectado cobro duplicado. Email inicial enviado al contacto.",
+    contactId: hosteleria?.id,
+    externalEmail: hosteleria?.accountingEmail ?? hosteleria?.email ?? "admin@hosteleria.es",
+    externalName: hosteleria?.name ?? "Hostelería del Sur",
+    followUpCount: 1,
+    lastFollowUpAt: daysAgo(1),
+    nextFollowUpAt: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000),
+    lastActivityAt: daysAgo(1),
+    messages: [
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content:
+          "Hilo creado: DUPLICATE_OR_OVERPAYMENT. Cobro de 2.100,00 EUR recibido dos veces del mismo cliente.",
+        createdAt: daysAgo(2),
+      },
+      {
+        role: "AGENT",
+        channel: "EMAIL",
+        content:
+          "Estimado/a,\n\nHemos detectado que hemos recibido dos cobros de 2.100,00 EUR con fecha 23 de marzo. ¿Podrían confirmar si se trata de un pago duplicado?\n\nEn caso afirmativo, procederemos a la devolución.\n\nUn cordial saludo,\nDepartamento de Administración",
+        channelMeta: {
+          to: "admin@hosteleria.es",
+          subject: "Consulta: posible cobro duplicado — 2.100,00 EUR",
+        },
+        createdAt: daysAgo(1),
+      },
+    ],
+  });
+
+  // Thread 4: SUPPLIER_DISCREPANCY — WAITING_CONTROLLER with external reply
+  await createThread({
+    scenario: "SUPPLIER_DISCREPANCY",
+    status: "WAITING_CONTROLLER",
+    priority: "MEDIUM",
+    subject: `Discrepancia proveedor PROV-2026-045 — ${mercados?.name ?? "Mercados Centrales"} (diferencia 127,50 EUR)`,
+    summary:
+      "El proveedor indica que la diferencia corresponde a un recargo por entrega urgente no facturado.",
+    blockedReason: "El proveedor explica la diferencia como recargo urgente. ¿Aceptar o disputar?",
+    contactId: mercados?.id,
+    externalEmail: mercados?.accountingEmail ?? mercados?.email ?? "facturas@mercados.es",
+    externalName: mercados?.name ?? "Mercados Centrales",
+    followUpCount: 1,
+    lastFollowUpAt: daysAgo(4),
+    lastActivityAt: daysAgo(1),
+    messages: [
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content:
+          "Hilo creado: SUPPLIER_DISCREPANCY. Factura PROV-2026-045 por 3.427,50 EUR — pagada 3.300,00 EUR. Diferencia: 127,50 EUR.",
+        createdAt: daysAgo(5),
+      },
+      {
+        role: "AGENT",
+        channel: "EMAIL",
+        content:
+          "Estimado/a,\n\nHemos detectado una diferencia de 127,50 EUR entre la factura PROV-2026-045 (3.427,50 EUR) y el pago realizado (3.300,00 EUR).\n\nLes rogamos nos aclaren el motivo de esta diferencia.\n\nUn cordial saludo,\nDepartamento de Administración",
+        channelMeta: {
+          to: "facturas@mercados.es",
+          subject: "Aclaración diferencia factura PROV-2026-045",
+        },
+        createdAt: daysAgo(4),
+      },
+      {
+        role: "EXTERNAL",
+        channel: "EMAIL",
+        content:
+          "Buenos días,\n\nLa diferencia de 127,50 EUR corresponde al recargo por entrega urgente del pedido del día 15. Enviamos factura complementaria adjunta.\n\nSaludos,\nDpto. Facturación Mercados Centrales",
+        createdAt: daysAgo(1),
+      },
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content:
+          "Respuesta procesada: El proveedor explica diferencia como recargo urgente. Factura complementaria prometida.",
+        createdAt: daysAgo(1),
+      },
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content: "Escalado al controller: requiere decisión sobre aceptación del recargo.",
+        suggestedActions: [
+          { type: "close", label: "Aceptar y cerrar" },
+          { type: "request_more_info", label: "Pedir la factura complementaria" },
+          { type: "escalate_to_controller", label: "Disputar el recargo" },
+        ],
+        createdAt: daysAgo(1),
+      },
+    ],
+  });
+
+  // Thread 5: MISSING_FISCAL_DOCS — CRITICAL, 1 follow-up
+  await createThread({
+    scenario: "MISSING_FISCAL_DOCS",
+    status: "WAITING_EXTERNAL",
+    priority: "CRITICAL",
+    subject: `Docs. fiscales faltantes T4-2025 — ${exportadora?.name ?? "Exportadora Mediterránea"} (modelo 303)`,
+    summary: "Factura de cierre T4-2025 necesaria para modelo 303. Primera solicitud enviada.",
+    contactId: exportadora?.id,
+    externalEmail: exportadora?.accountingEmail ?? exportadora?.email ?? "fiscal@exportadora.es",
+    externalName: exportadora?.name ?? "Exportadora Mediterránea",
+    followUpCount: 1,
+    lastFollowUpAt: daysAgo(2),
+    nextFollowUpAt: new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000),
+    dueDate: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000),
+    lastActivityAt: daysAgo(2),
+    messages: [
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content:
+          "Hilo creado: MISSING_FISCAL_DOCS. Documentación fiscal T4-2025 faltante. Plazo modelo 303: 5 días.",
+        createdAt: daysAgo(3),
+      },
+      {
+        role: "AGENT",
+        channel: "EMAIL",
+        content:
+          "Estimado/a,\n\nNecesitamos la factura de cierre del cuarto trimestre 2025 para completar el modelo 303. El plazo de presentación vence en 5 días hábiles.\n\nLes rogamos nos la envíen con la mayor urgencia posible.\n\nUn cordial saludo,\nDepartamento de Administración",
+        channelMeta: {
+          to: "fiscal@exportadora.es",
+          subject: "URGENTE: Documentación fiscal T4-2025 pendiente",
+        },
+        createdAt: daysAgo(2),
+      },
+    ],
+  });
+
+  // Thread 6: GESTORIA_RECONCILIATION — RESOLVED with conversation
+  await createThread({
+    scenario: "GESTORIA_RECONCILIATION",
+    status: "RESOLVED",
+    priority: "MEDIUM",
+    subject: `Conciliación gestoría febrero 2026 — ${asesoria?.name ?? "Asesoría Fiscal"}`,
+    summary:
+      "Conciliación de febrero completada. Diferencia de 45,00 EUR identificada como comisión bancaria.",
+    contactId: asesoria?.id,
+    externalName: asesoria?.name ?? "Asesoría Fiscal",
+    followUpCount: 0,
+    resolvedAt: daysAgo(5),
+    lastActivityAt: daysAgo(5),
+    messages: [
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content:
+          "Hilo creado: GESTORIA_RECONCILIATION. Diferencia de 45,00 EUR en conciliación de febrero.",
+        createdAt: daysAgo(10),
+      },
+      {
+        role: "CONTROLLER",
+        channel: "APP",
+        content:
+          "La diferencia de 45€ es una comisión del banco que no habíamos clasificado. Clasifica como 626 y cierra.",
+        createdAt: daysAgo(7),
+      },
+      {
+        role: "AGENT",
+        channel: "APP",
+        content:
+          "Entendido. He clasificado los 45,00 EUR como comisión bancaria (cuenta 626). ¿Confirmo el cierre del hilo?",
+        createdAt: daysAgo(7),
+      },
+      { role: "CONTROLLER", channel: "APP", content: "Sí, cierra.", createdAt: daysAgo(5) },
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content: "Hilo resuelto manualmente por el controller.",
+        createdAt: daysAgo(5),
+      },
+    ],
+  });
+
+  // Thread 7: BANK_RETURN — HIGH, WAITING_EXTERNAL, 2 follow-ups
+  await createThread({
+    scenario: "BANK_RETURN",
+    status: "WAITING_EXTERNAL",
+    priority: "HIGH",
+    subject: `Devolución bancaria FRA-2026-019 — ${transportes?.name ?? "Transportes García"} (890,00 EUR)`,
+    summary: "Devolución bancaria del cobro de factura FRA-2026-019. 2 follow-ups enviados.",
+    contactId: transportes?.id,
+    externalEmail: transportes?.accountingEmail ?? transportes?.email ?? "admin@transportes.es",
+    externalName: transportes?.name ?? "Transportes García",
+    followUpCount: 2,
+    lastFollowUpAt: daysAgo(3),
+    nextFollowUpAt: new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000),
+    lastActivityAt: daysAgo(3),
+    messages: [
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content: "Hilo creado: BANK_RETURN. Devolución de 890,00 EUR del cobro de FRA-2026-019.",
+        createdAt: daysAgo(10),
+      },
+      {
+        role: "AGENT",
+        channel: "EMAIL",
+        content:
+          "Estimado/a,\n\nLe informamos que el cobro de 890,00 EUR correspondiente a la factura FRA-2026-019 ha sido devuelto por su banco.\n\nLes rogamos procedan a un nuevo pago por transferencia.\n\nUn cordial saludo,\nDepartamento de Administración",
+        channelMeta: {
+          to: "admin@transportes.es",
+          subject: "Devolución bancaria — FRA-2026-019 (890,00 EUR)",
+        },
+        createdAt: daysAgo(8),
+      },
+      {
+        role: "AGENT",
+        channel: "EMAIL",
+        content:
+          "Estimado/a,\n\nEn relación con nuestro email anterior, la factura FRA-2026-019 (890,00 EUR) sigue pendiente tras la devolución bancaria.\n\n¿Podrían indicarnos cuándo realizarán el pago?\n\nUn cordial saludo,\nDepartamento de Administración",
+        channelMeta: {
+          to: "admin@transportes.es",
+          subject: "Re: Devolución bancaria — FRA-2026-019",
+        },
+        createdAt: daysAgo(3),
+      },
+    ],
+  });
+
+  // Thread 8: UNIDENTIFIED_ADVANCE — WAITING_CONTROLLER
+  await createThread({
+    scenario: "UNIDENTIFIED_ADVANCE",
+    status: "WAITING_CONTROLLER",
+    priority: "MEDIUM",
+    subject: `Anticipo no identificado — ${envases?.name ?? "Envases Plásticos"} (750,00 EUR)`,
+    summary: "Cobro de 750,00 EUR sin factura asociada. No se pudo identificar el concepto.",
+    blockedReason:
+      "Cobro sin factura asociada. ¿Corresponde a un anticipo, un pago parcial, o un error?",
+    contactId: envases?.id,
+    externalEmail: envases?.accountingEmail ?? envases?.email ?? "admin@envases.es",
+    externalName: envases?.name ?? "Envases Plásticos",
+    followUpCount: 1,
+    lastFollowUpAt: daysAgo(3),
+    lastActivityAt: daysAgo(1),
+    messages: [
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content:
+          "Hilo creado: UNIDENTIFIED_ADVANCE. Cobro de 750,00 EUR de Envases Plásticos sin factura asociada.",
+        createdAt: daysAgo(5),
+      },
+      {
+        role: "AGENT",
+        channel: "EMAIL",
+        content:
+          "Estimado/a,\n\nHemos recibido una transferencia de 750,00 EUR a nuestro favor. No hemos podido vincularla a ninguna factura pendiente.\n\n¿Podrían indicarnos a qué corresponde este pago?\n\nUn cordial saludo,\nDepartamento de Administración",
+        channelMeta: {
+          to: "admin@envases.es",
+          subject: "Consulta: transferencia de 750,00 EUR sin referencia",
+        },
+        createdAt: daysAgo(3),
+      },
+      {
+        role: "EXTERNAL",
+        channel: "EMAIL",
+        content:
+          "Hola,\n\nCreo que es un anticipo del pedido que hicimos la semana pasada, pero no estoy seguro. Voy a consultar con mi responsable y les confirmo.\n\nSaludos",
+        createdAt: daysAgo(1),
+      },
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content:
+          "Respuesta procesada: El contacto no está seguro. Posible anticipo de pedido. Promete consultar.",
+        createdAt: daysAgo(1),
+      },
+      {
+        role: "SYSTEM",
+        channel: "APP",
+        content: "Escalado al controller: respuesta ambigua, requiere decisión.",
+        suggestedActions: [
+          { type: "wait_and_verify", label: "Esperar confirmación" },
+          { type: "request_more_info", label: "Pedir referencia del pedido" },
+          { type: "close", label: "Registrar como anticipo (438)" },
+        ],
+        createdAt: daysAgo(1),
+      },
+    ],
+  });
+
+  // FollowUpConfig for the company
+  await p.followUpConfig.create({
+    data: {
+      companyId: cid,
+      scenarioDefaults: {},
+      defaultIntervalDays: 4,
+      defaultMaxAttempts: 3,
+      defaultToneProgression: ["friendly", "firm", "formal"],
+      autoResolveEnabled: true,
+      staleDays: 7,
+    },
+  });
+
+  console.log(`  ✅ 8 agent threads + 1 follow-up config`);
 }
 
 main()
