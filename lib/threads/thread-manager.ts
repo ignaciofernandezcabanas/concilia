@@ -145,6 +145,27 @@ export async function createThread(db: ScopedPrisma, params: CreateThreadParams)
     },
   });
 
+  // Look up invoice PDFs for supportingDocUrls
+  const docUrls: string[] = [];
+  if (invoiceIds.length > 0) {
+    const invoices = await db.invoice.findMany({
+      where: { id: { in: invoiceIds } },
+      select: { id: true, number: true, pdfUrl: true },
+    });
+    for (const inv of invoices) {
+      if (inv.pdfUrl) docUrls.push(inv.pdfUrl);
+      else docUrls.push(`/facturas?search=${inv.number}`); // fallback link to invoice page
+    }
+  }
+
+  // Update thread with doc URLs
+  if (docUrls.length > 0) {
+    await (db as any).agentThread.update({
+      where: { id: thread.id },
+      data: { supportingDocUrls: docUrls },
+    });
+  }
+
   // Create initial SYSTEM message
   await (db as any).threadMessage.create({
     data: {
@@ -374,6 +395,39 @@ export async function processExternalReply(
     controllerOptions: decision?.controllerOptions,
     parsedSummary: parsed.summary,
   });
+
+  // If the response provides a document, ask controller to review the attachment
+  if (parsed.category === "provides_document") {
+    await (db as any).threadMessage.create({
+      data: {
+        threadId,
+        role: "SYSTEM",
+        channel: "APP",
+        content: `El contacto ha enviado un documento adjunto${meta.attachmentNames?.length ? `: ${meta.attachmentNames.join(", ")}` : ""}. Revisa y decide qué hacer con él.`,
+        suggestedActions: JSON.stringify([
+          {
+            label: "Importar como factura",
+            action: "import_as_invoice",
+            description: "Crear factura desde el adjunto",
+          },
+          {
+            label: "Guardar como doc. soporte",
+            action: "save_as_supporting_doc",
+            description: "Guardar sin crear factura",
+          },
+          { label: "Ignorar adjunto", action: "ignore_attachment", description: "No es relevante" },
+        ]),
+      },
+    });
+    // Update thread status to wait for controller decision
+    await (db as any).agentThread.update({
+      where: { id: threadId },
+      data: {
+        status: "WAITING_CONTROLLER",
+        blockedReason: "Documento adjunto recibido — revisar y decidir",
+      },
+    });
+  }
 
   // Create SYSTEM message with decision
   await (db as any).threadMessage.create({

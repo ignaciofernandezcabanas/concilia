@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useFetch } from "@/hooks/useApi";
-import { Bot, Send, Search } from "lucide-react";
+import { Bot, Send, Search, FileText } from "lucide-react";
 import { api } from "@/lib/api-client";
 
 // ── Types ──
@@ -15,6 +15,8 @@ interface ThreadMessage {
   contentHtml?: string;
   suggestedActions?: Array<{ type: string; label: string }>;
   actionTaken?: string;
+  attachmentUrls?: string[];
+  attachmentNames?: string[];
   createdAt: string;
 }
 
@@ -33,6 +35,7 @@ interface AgentThread {
   autoResolved: boolean;
   resolvedAt?: string;
   dueDate?: string;
+  supportingDocUrls?: string[];
   messages: ThreadMessage[];
 }
 
@@ -185,6 +188,20 @@ function ThreadDetailPanel({
             {thread.summary}
           </p>
         )}
+        {thread.supportingDocUrls && thread.supportingDocUrls.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {thread.supportingDocUrls.map((url, i) => (
+              <a
+                key={i}
+                href={url}
+                target={url.startsWith("http") ? "_blank" : undefined}
+                className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100"
+              >
+                <FileText size={12} /> {url.split("/").pop() || `Documento ${i + 1}`}
+              </a>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Messages timeline */}
@@ -211,6 +228,20 @@ function ThreadDetailPanel({
                 />
               ) : (
                 <p className="text-gray-800 whitespace-pre-wrap">{msg.content}</p>
+              )}
+              {msg.attachmentUrls && msg.attachmentUrls.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {msg.attachmentUrls.map((url, i) => (
+                    <a
+                      key={i}
+                      href={url}
+                      target="_blank"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200"
+                    >
+                      <FileText size={12} /> {msg.attachmentNames?.[i] || `Adjunto ${i + 1}`}
+                    </a>
+                  ))}
+                </div>
               )}
               {msg.suggestedActions && Array.isArray(msg.suggestedActions) && (
                 <div className="flex flex-wrap gap-2 mt-2">

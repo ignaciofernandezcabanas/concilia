@@ -2424,6 +2424,7 @@ async function seedAgentThreads(
     autoResolved?: boolean;
     dueDate?: Date;
     lastActivityAt: Date;
+    supportingDocUrls?: string[];
     messages: Array<{
       role: string;
       channel: string;
@@ -2432,6 +2433,8 @@ async function seedAgentThreads(
       channelMeta?: object;
       suggestedActions?: unknown[];
       actionTaken?: string;
+      attachmentUrls?: string[];
+      attachmentNames?: string[];
       createdAt: Date;
     }>;
   }) {
@@ -2455,6 +2458,7 @@ async function seedAgentThreads(
         autoResolved: data.autoResolved ?? false,
         dueDate: data.dueDate ?? null,
         lastActivityAt: data.lastActivityAt,
+        supportingDocUrls: data.supportingDocUrls ?? [],
         followUpPolicy: {
           intervalDays: 4,
           maxAttempts: 3,
@@ -2475,6 +2479,8 @@ async function seedAgentThreads(
           channelMeta: msg.channelMeta ?? {},
           suggestedActions: msg.suggestedActions ?? null,
           actionTaken: msg.actionTaken ?? null,
+          attachmentUrls: msg.attachmentUrls ?? [],
+          attachmentNames: msg.attachmentNames ?? [],
           createdAt: msg.createdAt,
         },
       });
@@ -2487,6 +2493,7 @@ async function seedAgentThreads(
     scenario: "OVERDUE_RECEIVABLE",
     status: "WAITING_CONTROLLER",
     priority: "HIGH",
+    supportingDocUrls: ["/facturas?search=FRA-2026-016"],
     subject: `Cobro pendiente FRA-2026-012 — ${levante?.name ?? "Distribuciones Levante"} (4.235,00 EUR)`,
     summary: "3 follow-ups enviados sin respuesta. El contacto no ha respondido a ningún email.",
     blockedReason:
@@ -2643,6 +2650,7 @@ async function seedAgentThreads(
     scenario: "SUPPLIER_DISCREPANCY",
     status: "WAITING_CONTROLLER",
     priority: "MEDIUM",
+    supportingDocUrls: ["/facturas?search=PROV-2026-001"],
     subject: `Discrepancia proveedor PROV-2026-045 — ${mercados?.name ?? "Mercados Centrales"} (diferencia 127,50 EUR)`,
     summary:
       "El proveedor indica que la diferencia corresponde a un recargo por entrega urgente no facturado.",
@@ -2677,6 +2685,8 @@ async function seedAgentThreads(
         channel: "EMAIL",
         content:
           "Buenos días,\n\nLa diferencia de 127,50 EUR corresponde al recargo por entrega urgente del pedido del día 15. Enviamos factura complementaria adjunta.\n\nSaludos,\nDpto. Facturación Mercados Centrales",
+        attachmentUrls: ["/facturas?search=PROV-2026-001"],
+        attachmentNames: ["Factura_PROV-2026-001_corregida.pdf"],
         createdAt: daysAgo(1),
       },
       {
@@ -2705,6 +2715,7 @@ async function seedAgentThreads(
     scenario: "MISSING_FISCAL_DOCS",
     status: "WAITING_EXTERNAL",
     priority: "CRITICAL",
+    supportingDocUrls: ["/facturas?search=PROV-2026-017"],
     subject: `Docs. fiscales faltantes T4-2025 — ${exportadora?.name ?? "Exportadora Mediterránea"} (modelo 303)`,
     summary: "Factura de cierre T4-2025 necesaria para modelo 303. Primera solicitud enviada.",
     contactId: exportadora?.id,
@@ -2787,6 +2798,7 @@ async function seedAgentThreads(
     scenario: "BANK_RETURN",
     status: "WAITING_EXTERNAL",
     priority: "HIGH",
+    supportingDocUrls: ["/movimientos"],
     subject: `Devolución bancaria FRA-2026-019 — ${transportes?.name ?? "Transportes García"} (890,00 EUR)`,
     summary: "Devolución bancaria del cobro de factura FRA-2026-019. 2 follow-ups enviados.",
     contactId: transportes?.id,
@@ -2889,6 +2901,22 @@ async function seedAgentThreads(
       },
     ],
   });
+
+  // Update existing threads that may lack supportingDocUrls
+  const docsMap: Record<string, string[]> = {
+    OVERDUE_RECEIVABLE: ["/facturas?search=FRA-2026-016"],
+    SUPPLIER_DISCREPANCY: ["/facturas?search=PROV-2026-001"],
+    MISSING_FISCAL_DOCS: ["/facturas?search=PROV-2026-017"],
+    BANK_RETURN: ["/movimientos"],
+  };
+  for (const [scenario, urls] of Object.entries(docsMap)) {
+    await p.agentThread
+      .updateMany({
+        where: { companyId: cid, scenario, supportingDocUrls: { isEmpty: true } },
+        data: { supportingDocUrls: urls },
+      })
+      .catch(() => {});
+  }
 
   // FollowUpConfig for the company
   await p.followUpConfig.create({
