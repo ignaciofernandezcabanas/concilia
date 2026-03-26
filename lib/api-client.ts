@@ -45,10 +45,24 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(path, { ...options, headers });
 
   if (!res.ok) {
-    // Auto-redirect to login on 401 (expired/invalid token)
+    // Auto-redirect on 401: check if user has a valid Supabase session
+    // If yes → user is authenticated but not registered in app → onboarding
+    // If no → session expired → login
     if (res.status === 401 && typeof window !== "undefined") {
       const sb = getSupabase();
-      if (sb) await sb.auth.signOut();
+      if (sb) {
+        const {
+          data: { session },
+        } = await sb.auth.getSession();
+        if (session) {
+          // Authenticated with Supabase but not in app DB → onboarding
+          if (!window.location.pathname.startsWith("/onboarding")) {
+            window.location.href = "/onboarding";
+          }
+          throw new ApiError(401, "User not registered");
+        }
+        await sb.auth.signOut();
+      }
       window.location.href = "/login";
       throw new ApiError(401, "Session expired");
     }
