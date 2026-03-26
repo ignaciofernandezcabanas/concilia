@@ -63,7 +63,12 @@ export async function GET(req: NextRequest) {
       role: m.role,
       organization: m.organization,
       companies:
-        m.role === "MEMBER" ? m.companyScopes.map((s) => ({ ...s.company, role: s.role })) : [], // OWNER/ADMIN see all companies in the org
+        m.role === "MEMBER"
+          ? m.companyScopes.map((s: (typeof m.companyScopes)[number]) => ({
+              ...s.company,
+              role: s.role,
+            }))
+          : [], // OWNER/ADMIN see all companies in the org
     }));
 
     // For OWNER/ADMIN memberships, load all companies in the org
