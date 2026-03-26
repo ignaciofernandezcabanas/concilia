@@ -3,9 +3,13 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { useCompany } from "@/hooks/useApi";
+import { useFetch } from "@/hooks/useApi";
 import Sidebar from "@/components/Sidebar";
 import LoadingSpinner from "@/components/LoadingSpinner";
+
+interface CompanyResponse {
+  company: { id: string; name: string } | null;
+}
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { session, loading, isConfigured } = useAuth();
@@ -13,10 +17,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   // Load company to check if onboarding is needed
-  // Skip for /onboarding path to avoid 401 loop for new OAuth users
+  // Pass null on /onboarding to skip the API call entirely (avoids 401 loop for new OAuth users)
   const isOnboarding = pathname === "/onboarding";
-  const { data: companyData, loading: companyLoading } = useCompany();
-  const effectiveCompanyLoading = isOnboarding ? false : companyLoading;
+  const { data: companyData, loading: companyLoading } = useFetch<CompanyResponse>(
+    isOnboarding ? null : "/api/settings/company"
+  );
 
   useEffect(() => {
     if (!loading && isConfigured && !session) {
@@ -38,7 +43,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [loading, companyLoading, session, companyData, pathname, router]);
 
-  if (loading || (isConfigured && session && effectiveCompanyLoading)) {
+  if (loading || (isConfigured && session && !isOnboarding && companyLoading)) {
     return (
       <div className="flex items-center justify-center h-screen bg-page">
         <LoadingSpinner />
