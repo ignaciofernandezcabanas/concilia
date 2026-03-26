@@ -85,8 +85,8 @@ export function withAuth(handler: AuthenticatedHandler, requiredPermission?: Per
 
       if (!company) {
         return NextResponse.json(
-          { error: "No active company. Please select a company." },
-          { status: 400 }
+          { error: "No active company. Complete onboarding." },
+          { status: 401 }
         );
       }
 

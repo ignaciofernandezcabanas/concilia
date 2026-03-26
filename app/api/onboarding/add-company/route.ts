@@ -22,7 +22,8 @@ const addCompanySchema = z.object({
         alias: z.string().optional(),
       })
     )
-    .min(1, "Al menos una cuenta bancaria es requerida"),
+    .min(0)
+    .default([]),
   loadPgc: z.boolean().default(true),
 });
 

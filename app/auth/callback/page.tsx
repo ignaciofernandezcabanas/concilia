@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/api-client";
 
-/**
- * OAuth callback page.
- *
- * Supabase redirects here after Google/Microsoft login.
- * The URL contains the auth code in the hash fragment,
- * which Supabase JS picks up automatically.
- */
+const colors = {
+  midnight: "#0f1923",
+  teal: "#0d9488",
+  steel: "#2a3f52",
+  muted: "#6b8299",
+  red: "#ef4444",
+};
+
 export default function AuthCallbackPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -18,60 +19,100 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const sb = getSupabase();
     if (!sb) {
-      setError("Supabase no configurado.");
+      setError("Servicio de autenticación no disponible.");
       return;
     }
 
-    // Supabase handles the hash fragment automatically.
-    // We just wait for the session to be established.
-    sb.auth.getSession().then(({ data: { session }, error: sessionError }) => {
-      if (sessionError) {
-        setError(sessionError.message);
+    let cleaned = false;
+
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange((event, session) => {
+      if (cleaned) return;
+
+      if (event === "PASSWORD_RECOVERY") {
+        cleaned = true;
+        clearTimeout(tid);
+        subscription.unsubscribe();
+        router.replace("/nueva-contrasena");
         return;
       }
-      if (session) {
-        router.push("/");
-      } else {
-        // Wait for onAuthStateChange to fire
-        const {
-          data: { subscription },
-        } = sb.auth.onAuthStateChange((event, s) => {
-          if (event === "SIGNED_IN" && s) {
-            subscription.unsubscribe();
-            router.push("/");
-          }
-        });
 
-        // Timeout after 10s
-        setTimeout(() => {
-          subscription.unsubscribe();
-          setError("Tiempo de espera agotado. Inténtalo de nuevo.");
-        }, 10000);
+      if (event === "SIGNED_IN" && session) {
+        cleaned = true;
+        clearTimeout(tid);
+        subscription.unsubscribe();
+        router.replace("/");
+        return;
       }
     });
+
+    // Check if session already established
+    sb.auth.getSession().then(({ data: { session } }) => {
+      if (session && !cleaned) {
+        cleaned = true;
+        clearTimeout(tid);
+        subscription.unsubscribe();
+        router.replace("/");
+      }
+    });
+
+    // Timeout after 15s
+    const tid = setTimeout(() => {
+      if (!cleaned) {
+        cleaned = true;
+        subscription.unsubscribe();
+        setError("La verificación ha expirado. Inténtalo de nuevo.");
+      }
+    }, 15000);
+
+    // Cleanup on unmount
+    return () => {
+      cleaned = true;
+      clearTimeout(tid);
+      subscription.unsubscribe();
+    };
   }, [router]);
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-page flex items-center justify-center">
-        <div className="bg-white rounded-lg border border-subtle p-8 w-full max-w-sm text-center">
-          <p className="text-sm text-red-text mb-4">{error}</p>
-          <button
-            onClick={() => router.push("/login")}
-            className="text-[13px] text-accent hover:underline"
-          >
-            Volver al login
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-page flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-        <p className="text-sm text-text-secondary">Autenticando...</p>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: colors.midnight,
+        fontFamily: "'Plus Jakarta Sans', sans-serif",
+      }}
+    >
+      <div style={{ textAlign: "center", maxWidth: 400 }}>
+        {error ? (
+          <>
+            <p style={{ color: colors.red, fontSize: 16, marginBottom: 24 }}>{error}</p>
+            <a
+              href="/login"
+              style={{ color: colors.teal, textDecoration: "none", fontSize: 14, fontWeight: 600 }}
+            >
+              Volver a iniciar sesión
+            </a>
+          </>
+        ) : (
+          <>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                border: `3px solid ${colors.steel}`,
+                borderTopColor: colors.teal,
+                borderRadius: "50%",
+                animation: "spin 0.8s linear infinite",
+                margin: "0 auto 16px",
+              }}
+            />
+            <p style={{ color: colors.muted, fontSize: 15 }}>Verificando...</p>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </>
+        )}
       </div>
     </div>
   );

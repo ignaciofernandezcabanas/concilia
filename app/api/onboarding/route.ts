@@ -23,7 +23,8 @@ const onboardingSchema = z.object({
         alias: z.string().optional(),
       })
     )
-    .min(1, "Al menos una cuenta bancaria es requerida"),
+    .min(0)
+    .default([]),
   loadPgc: z.boolean().default(true),
 });
 
@@ -53,14 +54,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid token." }, { status: 401 });
     }
 
-    // Check user doesn't already have a company
-    const existingUser = await prisma.user.findFirst({
-      where: { email: supabaseUser.email!, status: "ACTIVE" },
-    });
-    if (existingUser) {
-      return NextResponse.json({ error: "Ya tienes una empresa configurada." }, { status: 400 });
-    }
-
     // Parse body
     const body = await req.json();
     const parsed = onboardingSchema.safeParse(body);
@@ -77,7 +70,16 @@ export async function POST(req: NextRequest) {
     const resolvedOrgName = isGroup && orgName ? orgName : companyData.name;
 
     // Create org + company + user + membership + bank accounts
+    // Check inside transaction to prevent race condition
     const result = await prisma.$transaction(async (tx) => {
+      // Check user doesn't already have a company (inside tx to prevent race)
+      const existingUser = await tx.user.findFirst({
+        where: { email: supabaseUser.email!, status: "ACTIVE" },
+      });
+      if (existingUser) {
+        throw new Error("ALREADY_EXISTS");
+      }
+
       const org = await tx.organization.create({
         data: { name: resolvedOrgName },
       });
@@ -96,7 +98,10 @@ export async function POST(req: NextRequest) {
       const user = await tx.user.create({
         data: {
           email: supabaseUser.email!,
-          name: supabaseUser.user_metadata?.name ?? supabaseUser.email!.split("@")[0],
+          name:
+            supabaseUser.user_metadata?.full_name ??
+            supabaseUser.user_metadata?.name ??
+            supabaseUser.email!.split("@")[0],
           role: "ADMIN",
           status: "ACTIVE",
           companyId: company.id,
@@ -142,6 +147,9 @@ export async function POST(req: NextRequest) {
       pgcLoaded: loadPgc,
     });
   } catch (err) {
+    if (err instanceof Error && err.message === "ALREADY_EXISTS") {
+      return NextResponse.json({ error: "Ya tienes una empresa configurada." }, { status: 400 });
+    }
     console.error("[onboarding] Error:", err);
     return errorResponse("Error en el onboarding.", err, 500);
   }

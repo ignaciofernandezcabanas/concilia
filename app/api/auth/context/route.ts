@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
         });
         m.companies = orgCompanies.map((c: (typeof orgCompanies)[number]) => ({
           ...c,
-          role: m.role === "OWNER" ? "ADMIN" : "ADMIN",
+          role: "ADMIN" as const, // OWNER and ADMIN at org level both map to ADMIN at company level
         }));
       }
     }
@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
         name: user.name,
         activeOrgId: user.activeOrgId,
         activeCompanyId: user.activeCompanyId ?? user.companyId,
+        tourCompletedAt: user.tourCompletedAt,
       },
       memberships,
     });
@@ -130,6 +131,37 @@ export async function PUT(req: NextRequest) {
     }
 
     const body = await req.json();
+
+    // Validate user has access to target company (prevent IDOR)
+    if (body.companyId) {
+      // Check 1: explicit CompanyScope access
+      const scopeAccess = await prisma.companyScope.findFirst({
+        where: {
+          companyId: body.companyId,
+          membership: { userId: user.id, status: "ACTIVE" },
+        },
+      });
+      if (!scopeAccess) {
+        // Check 2: OWNER/ADMIN of the org that owns the company
+        const company = await prisma.company.findUnique({
+          where: { id: body.companyId },
+          select: { organizationId: true },
+        });
+        const orgAccess = company
+          ? await prisma.membership.findFirst({
+              where: {
+                userId: user.id,
+                organizationId: company.organizationId!,
+                status: "ACTIVE",
+                role: { in: ["OWNER", "ADMIN"] },
+              },
+            })
+          : null;
+        if (!orgAccess) {
+          return NextResponse.json({ error: "No tienes acceso a esta empresa." }, { status: 403 });
+        }
+      }
+    }
 
     await prisma.user.update({
       where: { id: user.id },

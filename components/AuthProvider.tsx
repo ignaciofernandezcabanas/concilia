@@ -12,6 +12,8 @@ interface OrgContext {
   userName: string | null;
   /** User's DB id */
   userId: string | null;
+  /** Null if tour not yet completed */
+  tourCompletedAt: string | null;
 }
 
 interface AuthState {
@@ -30,6 +32,7 @@ const defaultOrg: OrgContext = {
   activeCompanyId: null,
   userName: null,
   userId: null,
+  tourCompletedAt: null,
 };
 
 const AuthContext = createContext<AuthState>({
@@ -92,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           activeOrgId: string | null;
           activeCompanyId: string | null;
           name: string | null;
+          tourCompletedAt: string | null;
         };
       }>("/api/auth/context")
       .then((res) => {
@@ -100,10 +104,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           activeCompanyId: res.user.activeCompanyId,
           userName: res.user.name,
           userId: res.user.id,
+          tourCompletedAt: res.user.tourCompletedAt,
         });
       })
-      .catch(() => {
-        // Context endpoint may not exist yet or user has no memberships
+      .catch((err) => {
+        console.error("[AuthProvider] Failed to load context:", err);
       });
   }, [session, ctxTick]);
 

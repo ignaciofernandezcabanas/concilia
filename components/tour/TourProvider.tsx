@@ -41,16 +41,22 @@ export function TourProvider({ children }: { children: ReactNode }) {
   // Mount check (portal needs document.body)
   useEffect(() => setMounted(true), []);
 
-  // Auto-start: on first load, if user hasn't completed tour
+  // Auto-start: on first load, if user hasn't completed tour (check DB first, then localStorage)
   useEffect(() => {
     if (!session || !org.activeCompanyId) return;
+    // DB is the source of truth — if tourCompletedAt is set, tour was completed
+    if (org.tourCompletedAt) {
+      // Sync localStorage so future checks are fast
+      localStorage.setItem("concilia_tour_completed", "true");
+      return;
+    }
     const completed = localStorage.getItem("concilia_tour_completed");
     if (!completed) {
       // Small delay to let the dashboard render
       const t = setTimeout(() => setActive(true), 800);
       return () => clearTimeout(t);
     }
-  }, [session, org.activeCompanyId]);
+  }, [session, org.activeCompanyId, org.tourCompletedAt]);
 
   // Handle page navigation for cross-page steps
   useEffect(() => {
