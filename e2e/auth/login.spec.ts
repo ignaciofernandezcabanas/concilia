@@ -39,7 +39,7 @@ test.describe("Login", () => {
     await page.waitForLoadState("networkidle");
 
     await page.locator("#login-email").fill("admin@example.com");
-    await page.locator("#login-password").fill("1234");
+    await page.locator("#login-password").fill("admin1234");
     await page.getByRole("button", { name: /iniciar sesión/i }).click();
 
     await page.waitForURL("/", { timeout: 15000 });

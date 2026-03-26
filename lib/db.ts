@@ -9,6 +9,8 @@ const globalForPrisma = globalThis as unknown as {
 function createPrismaClient() {
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL || "",
+    max: 15, // Limit connections to avoid exhausting Supabase pool
+    idleTimeoutMillis: 30000,
   });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({

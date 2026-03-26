@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 const DEMO_EMAIL = "admin@example.com";
-const DEMO_PASSWORD = "1234";
+const DEMO_PASSWORD = "admin1234";
 const AUTH_FILE = path.join(__dirname, "playwright/.auth/user.json");
 
 // Ensure the auth file exists (empty valid state) before Playwright reads it

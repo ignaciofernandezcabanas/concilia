@@ -61,13 +61,20 @@ const SCOPED_MODELS = new Set([
 
 export type ScopedPrisma = typeof prisma;
 
+// Cache scoped DB instances to avoid creating new $extends() on every request
+const scopedDbCache = new Map<string, ScopedPrisma>();
+
 /**
  * Returns a Prisma client scoped to a single company.
  * All queries on scoped models automatically filter by companyId.
  * Creates automatically add companyId.
+ * Cached per companyId to avoid connection pool exhaustion.
  */
 export function getScopedDb(companyId: string): ScopedPrisma {
-  return prisma.$extends({
+  const cached = scopedDbCache.get(companyId);
+  if (cached) return cached;
+
+  const scoped = prisma.$extends({
     query: {
       $allModels: {
         async findMany({ model, args, query }) {
@@ -142,6 +149,9 @@ export function getScopedDb(companyId: string): ScopedPrisma {
       },
     },
   }) as unknown as ScopedPrisma;
+
+  scopedDbCache.set(companyId, scoped);
+  return scoped;
 }
 
 /**

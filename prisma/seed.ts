@@ -22,7 +22,7 @@ const supabase = createClient(
 
 // ── Constants ──
 const DEMO_EMAIL = "admin@example.com";
-const DEMO_PASSWORD = "1234";
+const DEMO_PASSWORD = "admin1234";
 const COMPANY_CIF = "B87654321";
 
 const OWN_IBAN_1 = "ES7620770024003102575766";
