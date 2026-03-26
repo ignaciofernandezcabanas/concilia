@@ -338,6 +338,7 @@ Archivos que usan `prisma` global con `// GLOBAL-PRISMA: <razón>`:
 - `lib/auth/middleware.ts` — user lookup before company scoping
 - `lib/reconciliation/resolver.ts` — $transaction requires raw Prisma
 - `lib/reconciliation/detectors/intercompany-detector.ts` — cross-company lookup
+- `app/api/reports/consolidated/route.ts` — cross-company lookup for consolidated reports
 - `lib/ai/daily-agent.ts` — orchestrator creates scoped dbs
 - `app/api/auth/context/route.ts` — no company context yet
 - `app/api/onboarding/route.ts`, `add-company/route.ts` — creates new Org/Company
