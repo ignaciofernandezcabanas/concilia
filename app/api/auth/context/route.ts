@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Build accessible companies from memberships
-    const memberships = user.memberships.map((m) => ({
+    const memberships = user.memberships.map((m: (typeof user.memberships)[number]) => ({
       id: m.id,
       role: m.role,
       organization: m.organization,
