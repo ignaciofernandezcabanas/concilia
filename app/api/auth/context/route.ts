@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
           where: { organizationId: m.organization.id },
           select: { id: true, name: true, shortName: true, cif: true, type: true },
         });
-        m.companies = orgCompanies.map((c) => ({
+        m.companies = orgCompanies.map((c: (typeof orgCompanies)[number]) => ({
           ...c,
           role: m.role === "OWNER" ? "ADMIN" : "ADMIN",
         }));
