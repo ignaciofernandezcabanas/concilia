@@ -109,20 +109,20 @@ export default function Dashboard() {
 
         {/* Header + month selector */}
         <div className="flex items-center justify-between">
+          <h1 className="text-[22px] font-semibold text-text-primary">Resumen</h1>
           <div className="flex items-center gap-3">
-            <h1 className="text-[22px] font-semibold text-text-primary">Resumen</h1>
             <TourRestartLink />
-          </div>
-          <div className="flex items-center gap-2 bg-white border border-subtle rounded-md px-3 h-8">
-            <button onClick={() => shiftMonth(-1)}>
-              <ChevronLeft size={16} className="text-text-secondary" />
-            </button>
-            <span className="text-[13px] font-medium text-text-primary capitalize w-24 text-center">
-              {formatMonth(date)}
-            </span>
-            <button onClick={() => shiftMonth(1)}>
-              <ChevronRight size={16} className="text-text-secondary" />
-            </button>
+            <div className="flex items-center gap-2 bg-white border border-subtle rounded-md px-3 h-8">
+              <button onClick={() => shiftMonth(-1)}>
+                <ChevronLeft size={16} className="text-text-secondary" />
+              </button>
+              <span className="text-[13px] font-medium text-text-primary capitalize w-24 text-center">
+                {formatMonth(date)}
+              </span>
+              <button onClick={() => shiftMonth(1)}>
+                <ChevronRight size={16} className="text-text-secondary" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -267,9 +267,13 @@ function TourRestartLink() {
   return (
     <button
       onClick={restart}
-      className="text-[12px] text-text-tertiary hover:text-accent transition-colors underline underline-offset-2"
+      className="flex items-center gap-1.5 h-8 px-3 bg-white border border-subtle rounded-md text-[12px] font-medium text-text-secondary hover:border-accent hover:text-accent transition-all"
+      title="Ver tour del producto"
     >
-      Repetir tour
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="opacity-70">
+        <path d="M3 1.5v9l7-4.5-7-4.5z" fill="currentColor" />
+      </svg>
+      Tour
     </button>
   );
 }

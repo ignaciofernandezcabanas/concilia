@@ -52,7 +52,6 @@ export default function OnboardingPage() {
   }
 
   function removeAccount(i: number) {
-    if (accounts.length <= 1) return;
     setAccounts((prev) => prev.filter((_, j) => j !== i));
   }
 
@@ -101,7 +100,7 @@ export default function OnboardingPage() {
     name.trim().length > 0 &&
     cifValid &&
     (mode !== "group" || isAddMode || orgName.trim().length > 0);
-  const canAdvance2 = accounts.some((a) => a.iban.trim().length > 0);
+  // Bank accounts are optional — can configure later in Settings
 
   const totalSteps = isAddMode ? 3 : mode === "group" ? 4 : 3;
   const stepLabels = isAddMode
@@ -372,6 +371,9 @@ export default function OnboardingPage() {
               <Plus size={12} /> Añadir otra cuenta
             </button>
 
+            <p className="text-[12px] text-text-tertiary text-center">
+              Puedes configurar tus cuentas bancarias más tarde desde Ajustes.
+            </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setStep(1)}
@@ -381,10 +383,10 @@ export default function OnboardingPage() {
               </button>
               <button
                 onClick={() => setStep(3)}
-                disabled={!canAdvance2}
-                className="flex-1 h-10 bg-accent text-white text-[13px] font-medium rounded-md hover:bg-accent-dark disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 h-10 bg-accent text-white text-[13px] font-medium rounded-md hover:bg-accent-dark flex items-center justify-center gap-2"
               >
-                Siguiente <ArrowRight size={14} />
+                {accounts.some((a) => a.iban.trim()) ? "Siguiente" : "Saltar"}{" "}
+                <ArrowRight size={14} />
               </button>
             </div>
           </div>

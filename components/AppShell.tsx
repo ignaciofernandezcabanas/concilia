@@ -27,7 +27,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       !loading &&
       !companyLoading &&
       session &&
-      !companyData?.company &&
+      companyData &&
+      !companyData.company &&
       pathname !== "/onboarding"
     ) {
       router.push("/onboarding");
