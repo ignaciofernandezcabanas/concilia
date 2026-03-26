@@ -84,7 +84,7 @@ export default function SignupPage() {
       <AuthLayout
         title="Crea tu cuenta"
         subtitle="Empieza a automatizar tu conciliación bancaria"
-        heading="Automatiza tu\nconciliación."
+        heading={"Automatiza tu\nconciliación."}
         headingAccent="Empieza en 2 minutos."
         bullets={[
           { icon: "⚡", text: "Setup en menos de 5 minutos." },
@@ -144,7 +144,7 @@ export default function SignupPage() {
     <AuthLayout
       title="Datos de tu empresa"
       subtitle="Necesitamos algunos datos para configurar tu espacio"
-      heading="Automatiza tu\nconciliación."
+      heading={"Automatiza tu\nconciliación."}
       headingAccent="Empieza en 2 minutos."
     >
       <form onSubmit={handleSignup}>

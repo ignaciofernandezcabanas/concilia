@@ -2,6 +2,11 @@
 const nextConfig = {
   eslint: { ignoreDuringBuilds: false },
   typescript: { ignoreBuildErrors: false },
+  async redirects() {
+    return [
+      { source: "/dashboard", destination: "/", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

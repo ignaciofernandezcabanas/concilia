@@ -75,9 +75,14 @@ export async function POST(req: NextRequest) {
       // Check user doesn't already have a company (inside tx to prevent race)
       const existingUser = await tx.user.findFirst({
         where: { email: supabaseUser.email!, status: "ACTIVE" },
+        include: { company: { select: { id: true, name: true } } },
       });
       if (existingUser) {
-        throw new Error("ALREADY_EXISTS");
+        // User already exists — return their existing company so frontend can proceed
+        throw Object.assign(new Error("ALREADY_EXISTS"), {
+          companyId: existingUser.activeCompanyId ?? existingUser.companyId,
+          userId: existingUser.id,
+        });
       }
 
       const org = await tx.organization.create({
@@ -148,7 +153,14 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     if (err instanceof Error && err.message === "ALREADY_EXISTS") {
-      return NextResponse.json({ error: "Ya tienes una empresa configurada." }, { status: 400 });
+      // User already had a company — return success so frontend can proceed to dashboard
+      const e = err as Error & { companyId?: string; userId?: string };
+      return NextResponse.json({
+        success: true,
+        companyId: e.companyId,
+        userId: e.userId,
+        alreadyExisted: true,
+      });
     }
     console.error("[onboarding] Error:", err);
     return errorResponse("Error en el onboarding.", err, 500);

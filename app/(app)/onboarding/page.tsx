@@ -102,7 +102,7 @@ export default function OnboardingPage() {
     (mode !== "group" || isAddMode || orgName.trim().length > 0);
   // Bank accounts are optional — can configure later in Settings
 
-  const totalSteps = isAddMode ? 3 : mode === "group" ? 4 : 3;
+  const totalSteps = isAddMode ? 3 : 4;
   const stepLabels = isAddMode
     ? ["Empresa", "Cuentas", "Plan contable"]
     : mode === "group"
