@@ -63,32 +63,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     sb.auth.getSession().then(({ data: { session: s } }) => {
-      // Detect corrupted refresh token (e.g. from seed/test data) — sign out silently
-      // but don't redirect here; let onAuthStateChange handle the redirect
-      if (s?.refresh_token && s.refresh_token.length < 20) {
-        console.warn("[auth] Corrupted refresh token detected — clearing session");
-        sb.auth.signOut();
-        return;
-      }
       setSession(s);
       setLoading(false);
     });
 
     const {
       data: { subscription },
-    } = sb.auth.onAuthStateChange((event, s) => {
+    } = sb.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setLoading(false);
-      // Auto-redirect to login when session is lost (expired refresh token, sign out, etc.)
-      if (
-        (event === "SIGNED_OUT" || (!s && event === "TOKEN_REFRESHED")) &&
-        typeof window !== "undefined" &&
-        !window.location.pathname.startsWith("/login") &&
-        !window.location.pathname.startsWith("/signup") &&
-        !window.location.pathname.startsWith("/landing")
-      ) {
-        window.location.href = "/login";
-      }
+      // Note: redirects are handled by AppShell (no session → /login)
+      // and api-client (401 with session → /onboarding, 401 without → /login)
     });
 
     return () => subscription.unsubscribe();
