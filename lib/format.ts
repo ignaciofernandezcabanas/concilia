@@ -87,6 +87,21 @@ function localDateStr(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * Relative date with absolute tooltip.
+ * Returns { relative: "Hoy"|"Ayer"|"5d", absolute: "26/03/2026" }
+ */
+export function formatRelativeWithTitle(date: string | Date): {
+  relative: string;
+  absolute: string;
+} {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  const relative = days === 0 ? "Hoy" : days === 1 ? "Ayer" : `${days}d`;
+  const absolute = formatTableDate(d);
+  return { relative, absolute };
+}
+
 export function getMonthRange(date: Date): { from: string; to: string } {
   const from = new Date(date.getFullYear(), date.getMonth(), 1);
   const to = new Date(date.getFullYear(), date.getMonth() + 1, 0);

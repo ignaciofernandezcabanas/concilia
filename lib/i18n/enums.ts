@@ -131,6 +131,12 @@ export const FOLLOWUP_ACTION: Record<string, string> = {
   wait: "En espera de confirmación",
   request_reference: "Referencia de pedido solicitada",
   register_advance: "Registrado como anticipo",
+  extend_followup: "Seguimiento extendido",
+  provision_bad_debt: "Provisión insolvencia",
+  escalate: "Escalado",
+  reply_request_document: "Documento solicitado",
+  confirm_duplicate: "Duplicado confirmado",
+  dismiss_duplicate: "Duplicado descartado",
 };
 
 // ─── Follow-up Scenario (AgentThread) ───

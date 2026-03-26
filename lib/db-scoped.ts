@@ -52,6 +52,8 @@ const SCOPED_MODELS = new Set([
   "openingBalanceImport",
   "agentThread",
   "followUpConfig",
+  "fiscalAdjustment",
+  "fiscalObligation",
   // NOT scoped (no companyId): InvoiceLine, BudgetLine, JournalEntryLine,
   //   BankTransactionClassification, DuplicateGroup, Payment, CompanyScope
   // NOT scoped (organizationId instead): IntercompanyLink, AgentRun

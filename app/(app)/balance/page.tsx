@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import TopBar from "@/components/TopBar";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import PgcTable from "@/components/PgcTable";
@@ -8,7 +9,8 @@ import PeriodSelector, { usePeriodData, type PeriodType } from "@/components/Per
 import { BALANCE_STRUCTURE } from "@/lib/pgc-structure";
 import { useFetch } from "@/hooks/useApi";
 import { qs } from "@/lib/api-client";
-import { Download } from "lucide-react";
+import { formatAmount } from "@/lib/format";
+import { Download, AlertTriangle } from "lucide-react";
 
 interface BalanceLine {
   code: string;
@@ -85,6 +87,32 @@ export default function BalancePage() {
           <LoadingSpinner />
         ) : (
           <>
+            {data?.totals &&
+              Math.abs((data.totals.totalActivo ?? 0) - (data.totals.totalPasivo ?? 0)) >= 0.01 && (
+                <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 mb-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={16} className="shrink-0" />
+                    <div>
+                      <span className="font-medium">
+                        Balance descuadrado — diferencia de{" "}
+                        {formatAmount(
+                          (data.totals.totalActivo ?? 0) - (data.totals.totalPasivo ?? 0)
+                        )}
+                      </span>
+                      <span className="ml-3 font-mono text-xs">
+                        Activo: {formatAmount(data.totals.totalActivo ?? 0)} | Pasivo + PN:{" "}
+                        {formatAmount(data.totals.totalPasivo ?? 0)}
+                      </span>
+                    </div>
+                  </div>
+                  <Link
+                    href="/conciliacion?filter=pending"
+                    className="flex items-center gap-1 text-[12px] font-medium text-red-700 hover:text-red-900 underline underline-offset-2 whitespace-nowrap ml-4"
+                  >
+                    Revisar conciliación →
+                  </Link>
+                </div>
+              )}
             <PgcTable
               structure={BALANCE_STRUCTURE}
               data={dataMap}

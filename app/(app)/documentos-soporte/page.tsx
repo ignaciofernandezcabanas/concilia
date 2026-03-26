@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useFetch } from "@/hooks/useApi";
+import { api } from "@/lib/api-client";
 import { FileCheck, Plus, RefreshCw, PieChart } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Toast from "@/components/Toast";
-import { formatAmount, formatDate } from "@/lib/format";
+import { formatAmount, formatTableDate } from "@/lib/format";
 
 interface SupportingDoc {
   id: string;
@@ -66,10 +67,13 @@ export default function DocumentosSoportePage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const statusParam = filter === "ALL" ? "" : `&status=${filter}`;
-  const { data, refetch } = useFetch<{ data: SupportingDoc[]; total: number }>(
-    `/api/supporting-documents?limit=50${statusParam}`
-  );
+  const { data, refetch } = useFetch<{
+    data: SupportingDoc[];
+    total: number;
+    counts?: Record<string, number>;
+  }>(`/api/supporting-documents?limit=50${statusParam}`);
   const docs = data?.data ?? [];
+  const counts = data?.counts ?? {};
 
   // Create form state
   const [form, setForm] = useState({
@@ -97,16 +101,12 @@ export default function DocumentosSoportePage() {
     if (!form.description || !form.amount) return;
     setSaving(true);
     try {
-      await fetch("/api/supporting-documents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          amount: parseFloat(form.amount),
-          debitAccountCode: form.debitAccountCode || undefined,
-          creditAccountCode: form.creditAccountCode || undefined,
-          reference: form.reference || undefined,
-        }),
+      await api.post("/api/supporting-documents", {
+        ...form,
+        amount: parseFloat(form.amount),
+        debitAccountCode: form.debitAccountCode || undefined,
+        creditAccountCode: form.creditAccountCode || undefined,
+        reference: form.reference || undefined,
       });
       setShowCreate(false);
       setForm({
@@ -119,6 +119,8 @@ export default function DocumentosSoportePage() {
         creditAccountCode: "",
       });
       refetch();
+    } catch {
+      setToast({ message: "Error al registrar documento", type: "error" });
     } finally {
       setSaving(false);
     }
@@ -127,13 +129,11 @@ export default function DocumentosSoportePage() {
   async function handleRegularization() {
     setSaving(true);
     try {
-      await fetch("/api/supporting-documents/regularization", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fiscalYear: regYear }),
-      });
+      await api.post("/api/supporting-documents/regularization", { fiscalYear: regYear });
       setShowRegularization(false);
       refetch();
+    } catch {
+      setToast({ message: "Error en regularización", type: "error" });
     } finally {
       setSaving(false);
     }
@@ -142,15 +142,11 @@ export default function DocumentosSoportePage() {
   async function handleDistribution() {
     setSaving(true);
     try {
-      await fetch("/api/supporting-documents/distribution", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          toReservaLegal: parseFloat(distForm.toReservaLegal) || 0,
-          toReservasVoluntarias: parseFloat(distForm.toReservasVoluntarias) || 0,
-          toDividendos: parseFloat(distForm.toDividendos) || 0,
-          toCompensarPerdidas: parseFloat(distForm.toCompensarPerdidas) || 0,
-        }),
+      await api.post("/api/supporting-documents/distribution", {
+        toReservaLegal: parseFloat(distForm.toReservaLegal) || 0,
+        toReservasVoluntarias: parseFloat(distForm.toReservasVoluntarias) || 0,
+        toDividendos: parseFloat(distForm.toDividendos) || 0,
+        toCompensarPerdidas: parseFloat(distForm.toCompensarPerdidas) || 0,
       });
       setShowDistribution(false);
       setDistForm({
@@ -160,6 +156,8 @@ export default function DocumentosSoportePage() {
         toCompensarPerdidas: "",
       });
       refetch();
+    } catch {
+      setToast({ message: "Error en distribución", type: "error" });
     } finally {
       setSaving(false);
     }
@@ -169,7 +167,7 @@ export default function DocumentosSoportePage() {
     if (!pendingCancel) return;
     setCancelling(true);
     try {
-      await fetch(`/api/supporting-documents/${pendingCancel.id}`, { method: "DELETE" });
+      await api.delete(`/api/supporting-documents/${pendingCancel.id}`);
       refetch();
       setToast({ message: "Documento cancelado", type: "success" });
     } catch {
@@ -180,12 +178,35 @@ export default function DocumentosSoportePage() {
     }
   }
 
+  async function handleAdvanceStatus(id: string, newStatus: "POSTED" | "RECONCILED") {
+    try {
+      await api.patch(`/api/supporting-documents/${id}`, { status: newStatus });
+      refetch();
+      setToast({
+        message: newStatus === "POSTED" ? "Documento contabilizado" : "Documento conciliado",
+        type: "success",
+      });
+    } catch {
+      setToast({ message: "Error al avanzar estado del documento", type: "error" });
+    }
+  }
+
+  const allCount = Object.values(counts).reduce((a, b) => a + b, 0);
   const filters: { label: string; value: FilterStatus }[] = [
-    { label: "Todos", value: "ALL" },
-    { label: "Registrado", value: "REGISTERED" },
-    { label: "Pendiente", value: "PENDING_APPROVAL" },
-    { label: "Contabilizado", value: "POSTED" },
-    { label: "Conciliado", value: "RECONCILED" },
+    { label: `Todos${allCount ? ` (${allCount})` : ""}`, value: "ALL" },
+    {
+      label: `Registrado${counts.REGISTERED ? ` (${counts.REGISTERED})` : ""}`,
+      value: "REGISTERED",
+    },
+    {
+      label: `Pendiente${counts.PENDING_APPROVAL ? ` (${counts.PENDING_APPROVAL})` : ""}`,
+      value: "PENDING_APPROVAL",
+    },
+    { label: `Contabilizado${counts.POSTED ? ` (${counts.POSTED})` : ""}`, value: "POSTED" },
+    {
+      label: `Conciliado${counts.RECONCILED ? ` (${counts.RECONCILED})` : ""}`,
+      value: "RECONCILED",
+    },
   ];
 
   return (
@@ -248,7 +269,7 @@ export default function DocumentosSoportePage() {
               <th className="px-4 py-2 font-semibold">Referencia</th>
               <th className="px-4 py-2 font-semibold">Descripci&oacute;n</th>
               <th className="px-4 py-2 font-semibold text-right">Importe</th>
-              <th className="px-4 py-2 font-semibold">Estado</th>
+              <th className="px-4 py-2 font-semibold min-w-[120px]">Estado</th>
               <th className="px-4 py-2 font-semibold">Acciones</th>
             </tr>
           </thead>
@@ -262,7 +283,7 @@ export default function DocumentosSoportePage() {
             ) : (
               docs.map((doc) => (
                 <tr key={doc.id} className="border-b border-subtle hover:bg-hover/50">
-                  <td className="px-4 py-2.5">{formatDate(doc.date)}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap">{formatTableDate(doc.date)}</td>
                   <td className="px-4 py-2.5">
                     <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue/10 text-blue-700">
                       {TYPE_LABELS[doc.type] ?? doc.type}
@@ -281,16 +302,37 @@ export default function DocumentosSoportePage() {
                     </span>
                   </td>
                   <td className="px-4 py-2.5">
-                    {doc.status !== "CANCELLED" && doc.status !== "RECONCILED" && (
-                      <button
-                        onClick={() =>
-                          setPendingCancel({ id: doc.id, description: doc.description || doc.type })
-                        }
-                        className="text-[11px] text-red hover:underline"
-                      >
-                        Cancelar
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {(doc.status === "REGISTERED" || doc.status === "PENDING_APPROVAL") && (
+                        <button
+                          onClick={() => handleAdvanceStatus(doc.id, "POSTED")}
+                          className="text-[11px] text-accent hover:underline"
+                        >
+                          Contabilizar
+                        </button>
+                      )}
+                      {doc.status === "POSTED" && (
+                        <button
+                          onClick={() => handleAdvanceStatus(doc.id, "RECONCILED")}
+                          className="text-[11px] text-accent hover:underline"
+                        >
+                          Conciliar
+                        </button>
+                      )}
+                      {doc.status !== "CANCELLED" && doc.status !== "RECONCILED" && (
+                        <button
+                          onClick={() =>
+                            setPendingCancel({
+                              id: doc.id,
+                              description: doc.description || doc.type,
+                            })
+                          }
+                          className="text-[11px] text-red hover:underline"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))

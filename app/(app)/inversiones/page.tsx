@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { Briefcase, Plus, ChevronDown, ChevronRight } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { api } from "@/lib/api-client";
@@ -263,9 +263,8 @@ export default function InversionesPage() {
               const isExp = expanded.has(inv.id);
               const gl = (inv.currentValue ?? inv.acquisitionCost) - inv.acquisitionCost;
               return (
-                <>
+                <Fragment key={inv.id}>
                   <tr
-                    key={inv.id}
                     className="border-b border-border hover:bg-hover cursor-pointer row-hover"
                     onClick={() => toggleExpand(inv.id)}
                   >
@@ -344,7 +343,7 @@ export default function InversionesPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
             {investments.length === 0 && (

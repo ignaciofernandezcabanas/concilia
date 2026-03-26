@@ -121,6 +121,8 @@ model Company {
   openingBalanceImport     OpeningBalanceImport?
   agentThreads             AgentThread[]
   followUpConfig           FollowUpConfig?
+  fiscalAdjustments        FiscalAdjustment[]
+  fiscalObligations        FiscalObligation[]
 }
 
 model AccountingPeriod {
@@ -1872,4 +1874,31 @@ model FollowUpConfig {
   company                Company  @relation(fields: [companyId], references: [id])
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
+}
+
+model FiscalAdjustment {
+  id                 String   @id @default(cuid())
+  year               Int
+  gastosNoDeducibles Float    @default(0)
+  ingresosExentos    Float    @default(0)
+  companyId          String
+  company            Company  @relation(fields: [companyId], references: [id])
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([companyId, year])
+}
+
+model FiscalObligation {
+  id          String    @id @default(cuid())
+  model       String    // "303", "111", "115", "390", "IS"
+  quarter     Int?      // 1-4 for quarterly, null for annual
+  year        Int
+  presentedAt DateTime?
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([companyId, model, quarter, year])
 }

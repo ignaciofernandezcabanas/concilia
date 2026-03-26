@@ -7,7 +7,7 @@ import EmptyState from "@/components/EmptyState";
 import Badge from "@/components/Badge";
 import { useFetch } from "@/hooks/useApi";
 import { api } from "@/lib/api-client";
-import { formatAmount } from "@/lib/format";
+import { formatAmount, formatTableDate } from "@/lib/format";
 import { Package, Plus, X } from "lucide-react";
 
 interface FixedAsset {
@@ -82,8 +82,8 @@ export default function ActivosPage() {
             description="Registra tu primer activo fijo."
           />
         ) : (
-          <div className="bg-white rounded-lg border border-subtle overflow-hidden">
-            <div className="flex items-center h-10 px-5 border-b border-subtle text-xs font-semibold text-text-secondary">
+          <div className="bg-white rounded-lg border border-subtle overflow-x-auto">
+            <div className="flex items-center h-10 px-5 border-b border-subtle text-xs font-semibold text-text-secondary min-w-[800px]">
               <span className="flex-1">Nombre</span>
               <span className="w-24">Fecha alta</span>
               <span className="w-24 text-right">Coste</span>
@@ -104,7 +104,7 @@ export default function ActivosPage() {
               return (
                 <div
                   key={asset.id}
-                  className="flex items-center h-12 px-5 border-b border-border-light text-[13px] hover:bg-page transition-colors"
+                  className="flex items-center h-12 px-5 border-b border-border-light text-[13px] hover:bg-page transition-colors min-w-[800px]"
                 >
                   <div className="flex-1">
                     <span className="text-text-primary font-medium">{asset.name}</span>
@@ -113,7 +113,7 @@ export default function ActivosPage() {
                     </span>
                   </div>
                   <span className="w-24 text-text-secondary">
-                    {new Date(asset.acquisitionDate).toLocaleDateString("es-ES")}
+                    {formatTableDate(asset.acquisitionDate)}
                   </span>
                   <span className="w-24 text-right font-mono">
                     {formatAmount(asset.acquisitionCost)}

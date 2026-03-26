@@ -27,11 +27,13 @@ export interface Model303 {
     general21: { base: number; cuota: number };
     reducido10: { base: number; cuota: number };
     superReducido4: { base: number; cuota: number };
+    otrosNoClasificados: { base: number; cuota: number };
     total: number;
   };
   deducible: {
     interiores: { base: number; cuota: number };
     importaciones: { base: number; cuota: number };
+    otrosNoClasificados: { base: number; cuota: number };
     total: number;
   };
   resultado: number;
@@ -103,6 +105,21 @@ export async function calculateModel303(
     }
   }
 
+  // Calculate unclassified remainder (catch-all for devengado)
+  const classifiedDevBase = r2((rep21?.base ?? 0) + (rep10?.base ?? 0) + (rep4?.base ?? 0));
+  const classifiedDevVat = r2((rep21?.vat ?? 0) + (rep10?.vat ?? 0) + (rep4?.vat ?? 0));
+  const unclassifiedDevBase = r2(vat.ivaRepercutido.totalBase - classifiedDevBase);
+  const unclassifiedDevVat = r2(devengadoTotal - classifiedDevVat);
+
+  // Unclassified for deducible
+  const ded21 = findRate(vat.ivaSoportado.byRate, 21);
+  const ded10 = findRate(vat.ivaSoportado.byRate, 10);
+  const ded4 = findRate(vat.ivaSoportado.byRate, 4);
+  const classifiedDedBase = r2((ded21?.base ?? 0) + (ded10?.base ?? 0) + (ded4?.base ?? 0));
+  const classifiedDedVat = r2((ded21?.vat ?? 0) + (ded10?.vat ?? 0) + (ded4?.vat ?? 0));
+  const unclassifiedDedBase = r2(vat.ivaSoportado.totalBase - classifiedDedBase);
+  const unclassifiedDedVat = r2(deducibleTotal - classifiedDedVat);
+
   const resultado = r2(devengadoTotal - deducibleTotal);
   const compensacion = 0; // Future: read from prior period negative balances
   const totalIngresar = r2(resultado - compensacion);
@@ -125,14 +142,22 @@ export async function calculateModel303(
         base: r2(rep4?.base ?? 0),
         cuota: r2(rep4?.vat ?? 0),
       },
+      otrosNoClasificados: {
+        base: unclassifiedDevBase,
+        cuota: unclassifiedDevVat,
+      },
       total: r2(devengadoTotal),
     },
     deducible: {
       interiores: {
-        base: r2(vat.ivaSoportado.totalBase),
-        cuota: r2(deducibleTotal),
+        base: r2(classifiedDedBase),
+        cuota: r2(classifiedDedVat),
       },
       importaciones: { base: 0, cuota: 0 },
+      otrosNoClasificados: {
+        base: unclassifiedDedBase,
+        cuota: unclassifiedDedVat,
+      },
       total: r2(deducibleTotal),
     },
     resultado,
@@ -425,15 +450,25 @@ export interface ModelIS {
   cuotaDiferencial: number;
 }
 
-export async function calculateModelIS(db: ScopedPrisma, year: number): Promise<ModelIS> {
+export async function calculateModelIS(
+  db: ScopedPrisma,
+  companyId: string,
+  year: number
+): Promise<ModelIS> {
   // 1. Get PyG resultado antes de impuestos for the full year
   const from = new Date(year, 0, 1);
   const to = new Date(year, 11, 31);
   const pyg = await generatePyG(db, from, to, "titles", false);
   const baseImponible = pyg.results.resultadoAntesImpuestos;
 
-  // 2. Adjustments (structure ready, values 0 for now)
-  const ajustes = { gastosNoDeducibles: 0, ingresosExentos: 0 };
+  // 2. Read persisted adjustments (or default to 0)
+  const adj = await (db as any).fiscalAdjustment.findFirst({
+    where: { year },
+  });
+  const ajustes = {
+    gastosNoDeducibles: adj?.gastosNoDeducibles ?? 0,
+    ingresosExentos: adj?.ingresosExentos ?? 0,
+  };
   const baseAjustada = baseImponible + ajustes.gastosNoDeducibles - ajustes.ingresosExentos;
 
   // 3. Tax rate: 25% general (Spain). Could be 23% for small companies.

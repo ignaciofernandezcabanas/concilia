@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useFetch } from "@/hooks/useApi";
 import { Bot, Send, Search, FileText } from "lucide-react";
 import { api } from "@/lib/api-client";
 import {
+  FOLLOWUP_ACTION,
   FOLLOWUP_SCENARIO,
   THREAD_STATUS,
   THREAD_PRIORITY,
   MESSAGE_ROLE,
   t,
 } from "@/lib/i18n/enums";
+import { formatRelativeWithTitle } from "@/lib/format";
 
 // ── Types ──
 
@@ -81,12 +83,7 @@ type FilterKey = "all" | "decision" | "active" | "resolved";
 
 // ── Helpers ──
 
-function daysAgoLabel(date: string): string {
-  const d = Math.floor((Date.now() - new Date(date).getTime()) / 86400000);
-  if (d === 0) return "Hoy";
-  if (d === 1) return "Ayer";
-  return `${d}d`;
-}
+// daysAgoLabel replaced by formatRelativeWithTitle from lib/format.ts
 
 // ── ThreadCard ──
 
@@ -113,14 +110,26 @@ function ThreadCard({
           <span className="text-[10px] uppercase tracking-wide text-gray-500">
             {t(FOLLOWUP_SCENARIO, thread.scenario)}
           </span>
-          <p className="font-medium text-sm text-gray-900 truncate">{thread.subject}</p>
-          <p className="text-xs text-gray-500 mt-0.5 truncate">
+          <p className="font-medium text-sm text-gray-900 truncate" title={thread.subject}>
+            {thread.subject}
+          </p>
+          <p
+            className="text-xs text-gray-500 mt-0.5 truncate"
+            title={thread.summary ?? lastMsg?.content?.slice(0, 80) ?? ""}
+          >
             {thread.summary ?? lastMsg?.content?.slice(0, 80) ?? ""}
           </p>
         </div>
         <div className="text-right shrink-0">
           <span className={`text-[10px] font-medium ${statusCfg.color}`}>{statusCfg.label}</span>
-          <p className="text-[10px] text-gray-400 mt-0.5">{daysAgoLabel(thread.lastActivityAt)}</p>
+          {(() => {
+            const { relative, absolute } = formatRelativeWithTitle(thread.lastActivityAt);
+            return (
+              <p className="text-[10px] text-gray-400 mt-0.5" title={absolute}>
+                {relative}
+              </p>
+            );
+          })()}
         </div>
       </div>
       {thread.followUpCount > 0 && (
@@ -140,12 +149,14 @@ function ThreadDetailPanel({
   onChat,
   onResolve,
   acting,
+  bottomRef,
 }: {
   thread: AgentThread;
   onAction: (threadId: string, action: string) => void;
   onChat: (threadId: string, message: string) => void;
   onResolve: (threadId: string) => void;
   acting: boolean;
+  bottomRef: React.RefObject<HTMLDivElement>;
 }) {
   const [chatInput, setChatInput] = useState("");
   const priorityCfg = PRIORITY_BADGE[thread.priority] ?? PRIORITY_BADGE.MEDIUM;
@@ -255,12 +266,13 @@ function ThreadDetailPanel({
               )}
               {msg.actionTaken && (
                 <span className="text-[10px] text-green-600 mt-1 inline-block">
-                  Acción: {msg.actionTaken}
+                  Acción: {t(FOLLOWUP_ACTION, msg.actionTaken)}
                 </span>
               )}
             </div>
           );
         })}
+        <div ref={bottomRef} />
       </div>
 
       {/* Actions bar (if WAITING_CONTROLLER) */}
@@ -355,7 +367,7 @@ function FilterButton({
       }`}
     >
       {label}
-      {count > 0 && <span className="ml-1 opacity-80">({count})</span>}
+      <span className="ml-1 opacity-80">({count})</span>
     </button>
   );
 }
@@ -367,6 +379,7 @@ export default function SeguimientosPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [acting, setActing] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null!);
 
   // Fetch ALL threads (no status filter — client filters)
   const {
@@ -407,10 +420,12 @@ export default function SeguimientosPage() {
     return new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime();
   });
 
-  // Counts
-  const decisionCount = allThreads.filter((t) => t.status === "WAITING_CONTROLLER").length;
-  const activeCount = allThreads.filter((t) => !["RESOLVED", "STALE"].includes(t.status)).length;
-  const resolvedCount = allThreads.filter((t) => t.status === "RESOLVED").length;
+  // Counts (from search-filtered list so searching narrows counters)
+  const decisionCount = searchedThreads.filter((t) => t.status === "WAITING_CONTROLLER").length;
+  const activeCount = searchedThreads.filter(
+    (t) => !["RESOLVED", "STALE"].includes(t.status)
+  ).length;
+  const resolvedCount = searchedThreads.filter((t) => t.status === "RESOLVED").length;
 
   // Selected thread detail (full messages)
   const { data: detailData, refetch: refetchDetail } = useFetch<{ data: AgentThread }>(
@@ -418,6 +433,18 @@ export default function SeguimientosPage() {
     [selectedId]
   );
   const selectedThread = detailData?.data ?? null;
+
+  // Auto-scroll chat when detail loads
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [detailData]);
+
+  // Clear detail when filters yield no results
+  useEffect(() => {
+    if (sortedThreads.length === 0) {
+      setSelectedId(null);
+    }
+  }, [sortedThreads.length]);
 
   // Action handler
   async function handleAction(threadId: string, action: string) {
@@ -488,7 +515,7 @@ export default function SeguimientosPage() {
           <div className="flex gap-2 mt-3 flex-wrap">
             <FilterButton
               label="Todos"
-              count={allThreads.length}
+              count={searchedThreads.length}
               active={filter === "all"}
               onClick={() => setFilter("all")}
             />
@@ -561,6 +588,7 @@ export default function SeguimientosPage() {
             onChat={handleChat}
             onResolve={handleResolve}
             acting={acting}
+            bottomRef={bottomRef}
           />
         ) : (
           <EmptyDetailState />

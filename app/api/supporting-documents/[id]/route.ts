@@ -60,6 +60,58 @@ export const PUT = withAuth(async (req: NextRequest, ctx: AuthContext) => {
 }, "resolve:reconciliation");
 
 /**
+ * PATCH /api/supporting-documents/[id]
+ * Advance document status: REGISTERED → POSTED → RECONCILED
+ */
+const VALID_TRANSITIONS: Record<string, string> = {
+  REGISTERED: "POSTED",
+  PENDING_APPROVAL: "POSTED",
+  POSTED: "RECONCILED",
+};
+
+const patchSchema = z.object({
+  status: z.enum(["POSTED", "RECONCILED"]),
+});
+
+export const PATCH = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+  try {
+    const id = req.nextUrl.pathname.split("/").pop()!;
+    const body = await req.json();
+    const parsed = patchSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid input", details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const existing = await (ctx.db as any).supportingDocument.findUnique({
+      where: { id },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "Document not found" }, { status: 404 });
+    }
+
+    const expectedNext = VALID_TRANSITIONS[existing.status];
+    if (!expectedNext || expectedNext !== parsed.data.status) {
+      return NextResponse.json(
+        { error: `Cannot transition from ${existing.status} to ${parsed.data.status}` },
+        { status: 400 }
+      );
+    }
+
+    const updated = await (ctx.db as any).supportingDocument.update({
+      where: { id },
+      data: { status: parsed.data.status },
+    });
+
+    return NextResponse.json(updated);
+  } catch (err) {
+    return errorResponse("Failed to advance document status", err);
+  }
+}, "resolve:reconciliation");
+
+/**
  * DELETE /api/supporting-documents/[id]
  */
 export const DELETE = withAuth(async (req: NextRequest, ctx: AuthContext) => {

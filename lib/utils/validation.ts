@@ -84,6 +84,7 @@ export const invoiceFiltersSchema = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   search: z.string().max(200).optional(),
+  vatRate: z.coerce.number().optional(),
   sortBy: z.enum(["issueDate", "dueDate", "totalAmount", "number"]).default("issueDate"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });

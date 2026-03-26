@@ -101,7 +101,9 @@ export async function generateVatReport(
   const groupByRate = (lines: typeof issuedLines): VatRateGroup[] => {
     const groups = new Map<number, { base: number; vat: number; count: number }>();
     for (const line of lines) {
-      const rate = line.vatRate ?? 0;
+      const rawRate = line.vatRate ?? 0;
+      // Normalize: DB may store as decimal (0.21) or percentage (21)
+      const rate = rawRate > 0 && rawRate < 1 ? r2(rawRate * 100) : rawRate;
       const existing = groups.get(rate);
       const base = line.totalAmount / (1 + rate / 100);
       const vatAmount = line.totalAmount - base;

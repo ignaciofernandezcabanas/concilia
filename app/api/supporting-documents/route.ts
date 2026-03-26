@@ -30,7 +30,7 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       };
     }
 
-    const [data, total] = await Promise.all([
+    const [data, total, countsByStatus] = await Promise.all([
       (db as any).supportingDocument.findMany({
         where,
         include: {
@@ -42,9 +42,18 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
         take: limit,
       }),
       (db as any).supportingDocument.count({ where }),
+      (db as any).supportingDocument.groupBy({
+        by: ["status"],
+        _count: { status: true },
+      }),
     ]);
 
-    return NextResponse.json({ data, total, page, limit });
+    const counts: Record<string, number> = {};
+    for (const row of countsByStatus) {
+      counts[row.status] = row._count.status;
+    }
+
+    return NextResponse.json({ data, total, page, limit, counts });
   } catch (err) {
     return errorResponse("Failed to fetch supporting documents", err);
   }

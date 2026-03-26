@@ -181,7 +181,10 @@ export default function CuentasCobrarPage() {
                         {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <span className="text-[13px] font-medium text-text-primary truncate block">
+                        <span
+                          className="text-[13px] font-medium text-text-primary truncate block"
+                          title={c.contactName}
+                        >
                           {c.contactName}
                         </span>
                         {c.cif && (

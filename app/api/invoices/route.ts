@@ -48,6 +48,10 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     if (filters.to) where.issueDate.lte = filters.to;
   }
 
+  if (filters.vatRate != null) {
+    where.lines = { some: { vatRate: filters.vatRate } };
+  }
+
   if (filters.search) {
     const search = filters.search.trim();
     where.OR = [
@@ -61,12 +65,16 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
     ];
   }
 
-  const [data, total] = await Promise.all([
+  const [data, total, aggregate] = await Promise.all([
     db.invoice.findMany({
       where,
       include: {
         contact: {
           select: { id: true, name: true, cif: true },
+        },
+        lines: {
+          select: { description: true },
+          take: 1,
         },
         _count: {
           select: { reconciliations: true, payments: true },
@@ -77,7 +85,16 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
       take: filters.pageSize,
     }),
     db.invoice.count({ where }),
+    db.invoice.aggregate({
+      where,
+      _sum: { totalAmount: true },
+    }),
   ]);
 
-  return NextResponse.json(paginatedResponse(data, total, filters.page, filters.pageSize));
+  return NextResponse.json({
+    ...paginatedResponse(data, total, filters.page, filters.pageSize),
+    aggregate: {
+      totalAmount: aggregate._sum.totalAmount ?? 0,
+    },
+  });
 }, "read:invoices");

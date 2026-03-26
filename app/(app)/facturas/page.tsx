@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import TopBar from "@/components/TopBar";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import EmptyState from "@/components/EmptyState";
@@ -14,9 +15,11 @@ import { INVOICE_STATUS, INVOICE_TYPE, t } from "@/lib/i18n/enums";
 import { Download, Upload, FileText, X, FolderOpen, Eye, Trash2 } from "lucide-react";
 
 export default function Facturas() {
-  const [type, setType] = useState<string>("");
+  const searchParams = useSearchParams();
+  const [type, setType] = useState<string>(searchParams.get("type") ?? "");
   const [status, setStatus] = useState<string>("");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const vatRateParam = searchParams.get("vatRate") ?? "";
   const [page, setPage] = useState(1);
   const [showImport, setShowImport] = useState(false);
   const [viewingPdf, setViewingPdf] = useState<{ id: string; number: string } | null>(null);
@@ -24,11 +27,13 @@ export default function Facturas() {
   const [deleting, setDeleting] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<string[] | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
 
   const { data, loading, refetch } = useInvoices({
     type: type || undefined,
     status: status || undefined,
     search: search || undefined,
+    vatRate: vatRateParam || undefined,
     page,
     pageSize: 25,
   });
@@ -36,6 +41,10 @@ export default function Facturas() {
   const invoices = data?.data ?? [];
   const total = data?.pagination?.total ?? 0;
   const totalPages = data?.pagination?.totalPages ?? 1;
+  const aggregateTotal =
+    (data as unknown as { aggregate?: { totalAmount: number } } | null)?.aggregate?.totalAmount ??
+    0;
+  const hasActiveFilter = !!(status || type || search);
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
@@ -93,9 +102,12 @@ export default function Facturas() {
   const statuses = [
     { value: "", label: "Todos" },
     { value: "PENDING", label: t(INVOICE_STATUS, "PENDING") },
-    { value: "PAID", label: "Cobrada" },
+    { value: "PAID", label: t(INVOICE_STATUS, "PAID") },
     { value: "OVERDUE", label: t(INVOICE_STATUS, "OVERDUE") },
     { value: "PARTIAL", label: t(INVOICE_STATUS, "PARTIAL") },
+    { value: "PROVISIONED", label: t(INVOICE_STATUS, "PROVISIONED") },
+    { value: "WRITTEN_OFF", label: t(INVOICE_STATUS, "WRITTEN_OFF") },
+    { value: "CANCELLED", label: t(INVOICE_STATUS, "CANCELLED") },
   ];
 
   return (
@@ -221,7 +233,10 @@ export default function Facturas() {
         </div>
 
         <div className="flex items-center justify-between">
-          <p className="text-xs text-text-tertiary">{total} facturas</p>
+          <p className="text-xs text-text-tertiary">
+            {total} facturas
+            {hasActiveFilter && aggregateTotal ? ` · Total: ${formatAmount(aggregateTotal)}` : ""}
+          </p>
           {selected.size > 0 && (
             <button
               onClick={() => requestDelete(Array.from(selected))}
@@ -257,7 +272,7 @@ export default function Facturas() {
                 <span className="w-24">Nº Factura</span>
                 <span className="w-24">Fecha</span>
                 <span className="w-[160px]">Cliente/Proveedor</span>
-                <span className="flex-1">Descripción</span>
+                <span className="flex-1">Concepto</span>
                 <span className="w-[110px] text-right">Importe</span>
                 <span className="w-20 text-center">Estado</span>
                 <span className="w-20 text-center">Acciones</span>
@@ -275,13 +290,29 @@ export default function Facturas() {
                       className="rounded border-subtle cursor-pointer"
                     />
                   </span>
-                  <span className="w-24 font-medium text-accent">{inv.number}</span>
+                  <span
+                    className="w-24 font-medium text-accent cursor-pointer hover:underline"
+                    onClick={() => setSelectedInvoiceId(inv.id)}
+                  >
+                    {inv.number}
+                    {(inv.type === "CREDIT_ISSUED" || inv.type === "CREDIT_RECEIVED") && (
+                      <span className="ml-1 inline-flex px-1 py-0 rounded text-[9px] font-bold bg-purple-100 text-purple-700">
+                        NC
+                      </span>
+                    )}
+                  </span>
                   <span className="w-24 text-text-secondary">{formatDate(inv.issueDate)}</span>
                   <span className="w-[160px] text-text-primary truncate">
                     {inv.contact?.name ?? "—"}
                   </span>
                   <span className="flex-1 text-text-secondary truncate">
-                    {inv.description ?? "—"}
+                    {inv.description ||
+                      (
+                        (inv as Record<string, unknown>).lines as
+                          | { description?: string }[]
+                          | undefined
+                      )?.[0]?.description ||
+                      "—"}
                   </span>
                   <span className="w-[110px] text-right font-mono font-medium text-text-primary">
                     {formatAmount(inv.totalAmount)}
@@ -335,6 +366,12 @@ export default function Facturas() {
           </>
         )}
       </div>
+      {selectedInvoiceId && (
+        <InvoiceDetailPanel
+          invoiceId={selectedInvoiceId}
+          onClose={() => setSelectedInvoiceId(null)}
+        />
+      )}
       <ConfirmDialog
         open={pendingDelete !== null}
         title={
@@ -356,6 +393,263 @@ export default function Facturas() {
       {toast && (
         <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
       )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// Invoice Detail Panel
+// ══════════════════════════════════════════════════════════════
+
+interface InvoiceDetail {
+  id: string;
+  number: string;
+  type: string;
+  status: string;
+  issueDate: string;
+  dueDate: string | null;
+  totalAmount: number;
+  netAmount: number | null;
+  vatAmount: number | null;
+  currency: string;
+  description: string | null;
+  amountPaid: number;
+  amountPending: number | null;
+  pdfUrl: string | null;
+  contact: {
+    id: string;
+    name: string;
+    cif?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  } | null;
+  lines: {
+    id: string;
+    description: string | null;
+    quantity: number;
+    unitPrice: number;
+    totalAmount: number;
+    vatRate: number | null;
+  }[];
+  payments: { id: string; date: string; amount: number }[];
+  reconciliations: {
+    id: string;
+    status: string;
+    confidenceScore: number;
+    bankTransaction: { id: string; concept: string; amount: number; valueDate: string } | null;
+  }[];
+}
+
+function InvoiceDetailPanel({ invoiceId, onClose }: { invoiceId: string; onClose: () => void }) {
+  const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api
+      .get<InvoiceDetail>(`/api/invoices/${invoiceId}`)
+      .then((data) => {
+        if (!cancelled) setInvoice(data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [invoiceId]);
+
+  useEffect(() => {
+    function handleEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-40 flex justify-end">
+      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
+      <div className="relative w-[480px] bg-white shadow-xl border-l border-subtle overflow-y-auto">
+        <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-5 border-b border-subtle">
+          <div className="flex items-center gap-2">
+            <h2 className="text-[15px] font-semibold text-text-primary">
+              {invoice?.number ?? "Cargando..."}
+            </h2>
+            {invoice && (
+              <>
+                <Badge value={invoice.type} />
+                <Badge value={invoice.status} />
+              </>
+            )}
+          </div>
+          <button onClick={onClose} className="text-text-tertiary hover:text-text-primary">
+            <X size={18} />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center h-40">
+            <LoadingSpinner />
+          </div>
+        ) : !invoice ? (
+          <div className="p-5 text-center text-text-tertiary text-[13px]">
+            Error al cargar factura
+          </div>
+        ) : (
+          <div className="p-5 flex flex-col gap-5">
+            {/* Invoice data grid */}
+            <div className="grid grid-cols-2 gap-3 text-[13px]">
+              <div>
+                <span className="text-[11px] text-text-tertiary block">Fecha emisión</span>
+                <span className="text-text-primary">{formatDate(invoice.issueDate)}</span>
+              </div>
+              <div>
+                <span className="text-[11px] text-text-tertiary block">Fecha vencimiento</span>
+                <span className="text-text-primary">
+                  {invoice.dueDate ? formatDate(invoice.dueDate) : "—"}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-text-tertiary block">Contacto</span>
+                <span className="text-text-primary">{invoice.contact?.name ?? "—"}</span>
+                {invoice.contact?.cif && (
+                  <span className="text-[11px] text-text-tertiary ml-1">
+                    ({invoice.contact.cif})
+                  </span>
+                )}
+              </div>
+              <div>
+                <span className="text-[11px] text-text-tertiary block">Moneda</span>
+                <span className="text-text-primary">{invoice.currency}</span>
+              </div>
+              <div>
+                <span className="text-[11px] text-text-tertiary block">Base imponible</span>
+                <span className="text-text-primary font-mono">
+                  {invoice.netAmount != null ? formatAmount(invoice.netAmount) : "—"}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-text-tertiary block">IVA</span>
+                <span className="text-text-primary font-mono">
+                  {invoice.vatAmount != null ? formatAmount(invoice.vatAmount) : "—"}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-text-tertiary block">Total</span>
+                <span className="text-text-primary font-mono font-semibold">
+                  {formatAmount(invoice.totalAmount)}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-text-tertiary block">Cobrado</span>
+                <span className="text-text-primary font-mono">
+                  {formatAmount(invoice.amountPaid)}
+                </span>
+              </div>
+            </div>
+
+            {/* Lines table */}
+            {invoice.lines.length > 0 && (
+              <div>
+                <h3 className="text-[12px] font-semibold text-text-secondary mb-2 uppercase">
+                  Líneas
+                </h3>
+                <div className="border border-subtle rounded-lg overflow-x-auto">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="bg-context border-b border-subtle text-text-secondary">
+                        <th className="px-3 py-1.5 text-left font-medium">Descripción</th>
+                        <th className="px-3 py-1.5 text-right font-medium">Cant.</th>
+                        <th className="px-3 py-1.5 text-right font-medium">Precio</th>
+                        <th className="px-3 py-1.5 text-right font-medium">IVA</th>
+                        <th className="px-3 py-1.5 text-right font-medium">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoice.lines.map((line) => (
+                        <tr key={line.id} className="border-b border-subtle">
+                          <td className="px-3 py-1.5 text-text-primary max-w-[180px] truncate">
+                            {line.description ?? "—"}
+                          </td>
+                          <td className="px-3 py-1.5 text-right font-mono">{line.quantity}</td>
+                          <td className="px-3 py-1.5 text-right font-mono">
+                            {formatAmount(line.unitPrice)}
+                          </td>
+                          <td className="px-3 py-1.5 text-right font-mono">
+                            {line.vatRate != null ? `${line.vatRate}%` : "—"}
+                          </td>
+                          <td className="px-3 py-1.5 text-right font-mono font-medium">
+                            {formatAmount(line.totalAmount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Payments table */}
+            {invoice.payments.length > 0 && (
+              <div>
+                <h3 className="text-[12px] font-semibold text-text-secondary mb-2 uppercase">
+                  Pagos
+                </h3>
+                <div className="border border-subtle rounded-lg overflow-hidden">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="bg-context border-b border-subtle text-text-secondary">
+                        <th className="px-3 py-1.5 text-left font-medium">Fecha</th>
+                        <th className="px-3 py-1.5 text-right font-medium">Importe</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoice.payments.map((pay) => (
+                        <tr key={pay.id} className="border-b border-subtle">
+                          <td className="px-3 py-1.5">{formatDate(pay.date)}</td>
+                          <td className="px-3 py-1.5 text-right font-mono font-medium">
+                            {formatAmount(pay.amount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Reconciliations */}
+            {invoice.reconciliations.length > 0 && (
+              <div>
+                <h3 className="text-[12px] font-semibold text-text-secondary mb-2 uppercase">
+                  Conciliaciones
+                </h3>
+                <div className="flex flex-col gap-2">
+                  {invoice.reconciliations.map((r) => (
+                    <div key={r.id} className="border border-subtle rounded-lg p-3 text-[12px]">
+                      <div className="flex items-center justify-between">
+                        <Badge value={r.status} />
+                        <span className="font-mono text-text-secondary">
+                          {Math.round(r.confidenceScore * 100)}%
+                        </span>
+                      </div>
+                      {r.bankTransaction && (
+                        <p className="mt-1 text-text-secondary truncate">
+                          {formatDate(r.bankTransaction.valueDate)} ·{" "}
+                          {formatAmount(r.bankTransaction.amount)} · {r.bankTransaction.concept}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

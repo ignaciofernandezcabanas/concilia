@@ -696,7 +696,31 @@ function InstrumentRow({
               ? fmt(nextInstallment.totalAmount)
               : "\u2014"}
         </td>
-        <td className="px-3 py-2 text-center text-xs">{fmtDate(inst.maturityDate)}</td>
+        <td className="px-3 py-2 text-center text-xs">
+          {fmtDate(inst.maturityDate)}
+          {(() => {
+            const days = Math.ceil((new Date(inst.maturityDate).getTime() - Date.now()) / 86400000);
+            if (days < 0)
+              return (
+                <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                  Vencido
+                </span>
+              );
+            if (days <= 30)
+              return (
+                <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                  Vence en {days}d
+                </span>
+              );
+            if (days <= 90)
+              return (
+                <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                  Vence en {days}d
+                </span>
+              );
+            return null;
+          })()}
+        </td>
         <td className="px-3 py-2 text-center">
           <span
             className={`text-[10px] px-2 py-0.5 rounded ${

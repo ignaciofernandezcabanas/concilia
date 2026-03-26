@@ -38,8 +38,10 @@ export default function Dashboard() {
     `/api/reports/dashboard${qs({ from, to })}`
   );
 
-  const { data: agingData } = useFetch<{ dso?: number }>(`/api/reports/aging?type=receivable`);
-  const dsoValue = agingData?.dso;
+  const { data: agingData } = useFetch<{ summary?: { dso?: number } }>(
+    `/api/reports/aging?type=receivable`
+  );
+  const dsoValue = agingData?.summary?.dso;
   const dsoDisplay = dsoValue != null ? `${Math.round(dsoValue)}` : "—";
   const dsoColor =
     dsoValue == null
@@ -298,7 +300,9 @@ function QuickAction({
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        <span className="text-[13px] font-medium text-text-primary block truncate">{label}</span>
+        <span className="text-[13px] font-medium text-text-primary block leading-tight">
+          {label}
+        </span>
         <span className="text-[11px] text-text-tertiary">{description}</span>
       </div>
       <ArrowRight

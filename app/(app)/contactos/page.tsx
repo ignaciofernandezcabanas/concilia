@@ -5,6 +5,7 @@ import { useFetch } from "@/hooks/useApi";
 import { api } from "@/lib/api-client";
 import { formatAmount, formatDate } from "@/lib/format";
 import Badge from "@/components/Badge";
+import Toast from "@/components/Toast";
 import {
   Search,
   Plus,
@@ -121,14 +122,17 @@ function ContactRow({
     >
       <td className="px-4 py-3">
         <div className="font-medium text-sm text-gray-900">{contact.name}</div>
-        <div className="text-xs text-gray-400">{contact.cif ?? "Sin CIF"}</div>
+        {contact.cif && <div className="text-xs text-gray-400">{contact.cif}</div>}
       </td>
       <td className="px-4 py-3">
         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${typeCfg.className}`}>
           {typeCfg.label}
         </span>
       </td>
-      <td className="px-4 py-3 text-xs text-gray-500 max-w-[140px] truncate">
+      <td
+        className="px-4 py-3 text-xs text-gray-500 max-w-[180px] truncate"
+        title={contact.email ?? undefined}
+      >
         {contact.email ?? "—"}
       </td>
       <td className="px-4 py-3">
@@ -475,6 +479,7 @@ function ContactModal({
   saving: boolean;
 }) {
   const isEdit = !!initial?.name;
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState<ContactFormData>(
     initial ?? {
       name: "",
@@ -512,10 +517,14 @@ function ContactModal({
             </label>
             <input
               value={form.name}
-              onChange={(e) => set("name", e.target.value)}
-              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(e) => {
+                set("name", e.target.value);
+                setFormErrors({});
+              }}
+              className={`w-full text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.name ? "border-red" : "border-subtle"}`}
               placeholder="Empresa S.L."
             />
+            {formErrors.name && <p className="text-[11px] text-red mt-1">{formErrors.name}</p>}
           </div>
 
           {/* CIF + Type */}
@@ -634,7 +643,14 @@ function ContactModal({
             Cancelar
           </button>
           <button
-            onClick={() => onSave(form)}
+            onClick={() => {
+              if (!form.name.trim()) {
+                setFormErrors({ name: "El nombre es obligatorio" });
+                return;
+              }
+              setFormErrors({});
+              onSave(form);
+            }}
             disabled={saving || !form.name.trim()}
             className="px-4 py-2 text-sm bg-accent text-white rounded-lg hover:opacity-90 disabled:opacity-50"
           >
@@ -657,6 +673,8 @@ export default function ContactosPage() {
   const [editData, setEditData] = useState<ContactFormData | null>(null);
   const [saving, setSaving] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   // Build query string
   const params = new URLSearchParams();
@@ -762,22 +780,28 @@ export default function ContactosPage() {
                 </button>
                 {actionsOpen && (
                   <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1 w-40">
-                    <a
-                      href="/ajustes"
-                      className="flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
-                      onClick={() => setActionsOpen(false)}
+                    <button
+                      disabled
+                      className="flex items-center gap-2 px-3 py-2 text-xs text-gray-400 w-full text-left cursor-not-allowed"
+                      title="Próximamente"
                     >
                       <Upload size={12} /> Importar
-                    </a>
+                      <span className="ml-auto text-[10px] text-text-tertiary">Próximamente</span>
+                    </button>
                     <button
                       className="flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 w-full text-left"
+                      disabled={actionLoading === "dedup"}
                       onClick={async () => {
                         setActionsOpen(false);
+                        setActionLoading("dedup");
                         try {
                           await api.post("/api/contacts/deduplicate");
                           refetch();
+                          setToast({ message: "Contactos deduplicados", type: "success" });
                         } catch {
-                          /* handled */
+                          setToast({ message: "Error al deduplicar contactos", type: "error" });
+                        } finally {
+                          setActionLoading(null);
                         }
                       }}
                     >
@@ -785,13 +809,18 @@ export default function ContactosPage() {
                     </button>
                     <button
                       className="flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 w-full text-left"
+                      disabled={actionLoading === "enrich"}
                       onClick={async () => {
                         setActionsOpen(false);
+                        setActionLoading("enrich");
                         try {
                           await api.post("/api/contacts/enrich");
                           refetch();
+                          setToast({ message: "Contactos enriquecidos", type: "success" });
                         } catch {
-                          /* handled */
+                          setToast({ message: "Error al enriquecer contactos", type: "error" });
+                        } finally {
+                          setActionLoading(null);
                         }
                       }}
                     >
@@ -876,14 +905,14 @@ export default function ContactosPage() {
               </button>
             </div>
           ) : (
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead className="sticky top-0 bg-gray-50 z-10">
                 <tr className="text-left text-[10px] uppercase text-gray-400 tracking-wider">
                   <th className="px-4 py-2 font-semibold">Nombre</th>
                   <th className="px-4 py-2 font-semibold">Tipo</th>
                   <th className="px-4 py-2 font-semibold">Email</th>
                   <th className="px-4 py-2 font-semibold">Riesgo</th>
-                  <th className="px-4 py-2 font-semibold text-right">Facturas</th>
+                  <th className="px-4 py-2 font-semibold text-right min-w-[80px]">Facturas</th>
                 </tr>
               </thead>
               <tbody>
@@ -928,6 +957,7 @@ export default function ContactosPage() {
       <div className="flex-1 overflow-hidden">
         {detailData ? (
           <ContactDetailPanel
+            key={selectedId}
             contact={detailData}
             onEdit={handleOpenEdit}
             onEnrich={handleEnrich}
@@ -946,6 +976,10 @@ export default function ContactosPage() {
           onSave={handleSave}
           saving={saving}
         />
+      )}
+
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
       )}
     </div>
   );
