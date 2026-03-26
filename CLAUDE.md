@@ -925,3 +925,34 @@ Todos los mensajes de error de Supabase se traducen con `getAuthErrorMessage()` 
 ### Hydration en landing
 
 Las animaciones CSS de la landing usan `landing.css` (archivo estático importado en `app/(public)/landing/page.tsx`). No usar `<style>` tags dinámicos en componentes "use client" — causan hydration mismatch.
+
+## Tour Interactivo
+
+### Arquitectura
+
+Custom tour component (sin dependencias externas) en `components/tour/`:
+
+- `TourProvider.tsx` — Context + orchestrator. Gestiona step index, navegación cross-page, keyboard shortcuts.
+- `TourOverlay.tsx` — SVG spotlight con mask cutout + glow teal.
+- `TourTooltip.tsx` — Card posicionada junto al target. Diseño: accent bar teal, step counter, Next/Skip/Back.
+- `tour-steps.ts` — 5 pasos definidos con `{ id, path, selector, title, body, placement }`.
+- `useTourTarget.ts` — Hook que busca `[data-tour="X"]`, calcula rect, observa scroll/resize/DOM mutations.
+
+### Trigger
+
+Se activa automáticamente en el primer login tras signup (si `localStorage.concilia_tour_completed` no existe). Se persiste como `tourCompletedAt` en el modelo User via `PATCH /api/user/tour`.
+
+### data-tour selectors
+
+| Selector             | Archivo                           | Elemento              |
+| -------------------- | --------------------------------- | --------------------- |
+| `dashboard-kpis`     | `app/(app)/page.tsx`              | Grid de 6 KPIs        |
+| `conciliacion-table` | `app/(app)/conciliacion/page.tsx` | Sección de bandeja    |
+| `seguimientos-list`  | `app/(app)/seguimientos/page.tsx` | Lista de threads      |
+| `tesoreria-chart`    | `app/(app)/tesoreria/page.tsx`    | Card de saldo + chart |
+| `context-switcher`   | `components/ContextSwitcher.tsx`  | Dropdown de empresas  |
+
+### Re-trigger
+
+- Dashboard: link "Repetir tour" junto al título "Resumen" (solo si tour completado).
+- Usa `useTour().restart()` del TourProvider context.

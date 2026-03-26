@@ -60,7 +60,10 @@ export default function TesoreriaPage() {
         ) : (
           <>
             {/* Current balance card */}
-            <div className="bg-white rounded-lg border border-subtle p-5 flex items-center gap-4">
+            <div
+              data-tour="tesoreria-chart"
+              className="bg-white rounded-lg border border-subtle p-5 flex items-center gap-4"
+            >
               <div className="w-11 h-11 rounded-lg bg-accent/10 flex items-center justify-center">
                 <Wallet size={20} className="text-accent" />
               </div>

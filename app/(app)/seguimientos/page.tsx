@@ -563,7 +563,7 @@ export default function SeguimientosPage() {
               )}
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div data-tour="seguimientos-list" className="divide-y divide-gray-100">
               {sortedThreads.map((thread) => (
                 <ThreadCard
                   key={thread.id}

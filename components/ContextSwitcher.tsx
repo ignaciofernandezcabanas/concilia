@@ -108,7 +108,7 @@ export default function ContextSwitcher() {
   }
 
   return (
-    <div ref={ref} className="relative px-3 mb-3">
+    <div ref={ref} data-tour="context-switcher" className="relative px-3 mb-3">
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg bg-surface border border-subtle hover:border-border-secondary transition-colors text-left"

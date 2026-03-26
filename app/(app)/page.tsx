@@ -7,6 +7,7 @@ import BankConnectionBanner from "@/components/BankConnectionBanner";
 import { useFetch } from "@/hooks/useApi";
 import { qs } from "@/lib/api-client";
 import { formatAmount, formatMonth, getMonthRange } from "@/lib/format";
+import { useTour } from "@/components/tour/TourProvider";
 import {
   ChevronLeft,
   ChevronRight,
@@ -108,7 +109,10 @@ export default function Dashboard() {
 
         {/* Header + month selector */}
         <div className="flex items-center justify-between">
-          <h1 className="text-[22px] font-semibold text-text-primary">Resumen</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-[22px] font-semibold text-text-primary">Resumen</h1>
+            <TourRestartLink />
+          </div>
           <div className="flex items-center gap-2 bg-white border border-subtle rounded-md px-3 h-8">
             <button onClick={() => shiftMonth(-1)}>
               <ChevronLeft size={16} className="text-text-secondary" />
@@ -135,7 +139,7 @@ export default function Dashboard() {
         ) : (
           <>
             {/* KPIs — 2 rows of 3 */}
-            <div className="grid grid-cols-3 gap-4">
+            <div data-tour="dashboard-kpis" className="grid grid-cols-3 gap-4">
               <KPICard
                 label="Ingresos"
                 value={formatAmount(d.income)}
@@ -252,6 +256,21 @@ export default function Dashboard() {
         )}
       </div>
     </div>
+  );
+}
+
+function TourRestartLink() {
+  const { restart } = useTour();
+  const completed =
+    typeof window !== "undefined" && localStorage.getItem("concilia_tour_completed");
+  if (!completed) return null;
+  return (
+    <button
+      onClick={restart}
+      className="text-[12px] text-text-tertiary hover:text-accent transition-colors underline underline-offset-2"
+    >
+      Repetir tour
+    </button>
   );
 }
 

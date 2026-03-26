@@ -80,6 +80,16 @@ body {
   animation: modalIn 0.15s ease-out;
 }
 
+/* Tour spotlight */
+.tour-overlay {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Tour tooltip */
+.tour-tooltip {
+  animation: fadeIn 0.2s ease-out;
+}
+
 /* Table row hover transition */
 @layer utilities {
   .row-hover {

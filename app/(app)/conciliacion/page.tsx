@@ -153,7 +153,7 @@ export default function Conciliacion() {
         {/* ═══════════════════════════════════════════════════════ */}
         {/* SECCIÓN 1: Bandeja de conciliación                    */}
         {/* ═══════════════════════════════════════════════════════ */}
-        <section>
+        <section data-tour="conciliacion-table">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-[22px] font-semibold text-text-primary">Conciliación</h1>
             <button

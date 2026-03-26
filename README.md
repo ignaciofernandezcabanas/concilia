@@ -302,6 +302,15 @@ Ver [CLAUDE.md](CLAUDE.md) para detalles del motor de conciliación, 22 escenari
 
 ## Changelog
 
+### 2026-03-26 — Sprint 11: Tour interactivo
+
+- Tour guiado post-signup: 5 pasos (Dashboard → Conciliación → Seguimientos → Tesorería → Consolidado)
+- Custom tour component (spotlight SVG + tooltip posicionado, sin dependencias externas)
+- Cross-page navigation via React context + useRouter
+- Persistencia: `tourCompletedAt` en User model + localStorage
+- Re-trigger desde dashboard ("Repetir tour")
+- API: `PATCH /api/user/tour`
+
 ### 2026-03-26 — Sprint 10: Páginas públicas
 
 - Fix hydration mismatch en landing (CSS extraído a archivo estático)
