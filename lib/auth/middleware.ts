@@ -120,7 +120,12 @@ export function withAuth(handler: AuthenticatedHandler, requiredPermission?: Per
         params: routeCtx?.params,
       });
     } catch (error) {
-      console.error("[withAuth] Unexpected error:", error instanceof Error ? error.message : error);
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error("[withAuth] Unexpected error:", msg);
+      // Auth/token errors → 401, not 500
+      if (/token|jwt|auth|refresh|session/i.test(msg)) {
+        return NextResponse.json({ error: "Invalid or expired token." }, { status: 401 });
+      }
       return NextResponse.json({ error: "Internal authentication error." }, { status: 500 });
     }
   };

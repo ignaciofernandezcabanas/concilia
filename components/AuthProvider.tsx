@@ -69,9 +69,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = sb.auth.onAuthStateChange((_event, s) => {
+    } = sb.auth.onAuthStateChange((event, s) => {
       setSession(s);
       setLoading(false);
+      // Auto-redirect to login when session is lost (expired refresh token, sign out, etc.)
+      if (
+        (event === "SIGNED_OUT" || (!s && event === "TOKEN_REFRESHED")) &&
+        typeof window !== "undefined" &&
+        !window.location.pathname.startsWith("/login") &&
+        !window.location.pathname.startsWith("/signup") &&
+        !window.location.pathname.startsWith("/landing")
+      ) {
+        window.location.href = "/login";
+      }
     });
 
     return () => subscription.unsubscribe();

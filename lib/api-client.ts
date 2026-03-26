@@ -45,6 +45,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(path, { ...options, headers });
 
   if (!res.ok) {
+    // Auto-redirect to login on 401 (expired/invalid token)
+    if (res.status === 401 && typeof window !== "undefined") {
+      const sb = getSupabase();
+      if (sb) await sb.auth.signOut();
+      window.location.href = "/login";
+      throw new ApiError(401, "Session expired");
+    }
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new ApiError(res.status, body.error || res.statusText, body);
   }
