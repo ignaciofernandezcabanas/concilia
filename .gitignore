@@ -6,10 +6,6 @@
 
 # testing
 /coverage
-/e2e-report/
-/e2e-results/
-/e2e/playwright/.auth/
-/test-results/
 
 # next.js
 /.next/
