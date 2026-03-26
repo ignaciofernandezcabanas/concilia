@@ -1,9 +1,11 @@
 import { test, expect } from "../fixtures";
+import { waitForPageContent } from "../helpers/assertions";
 
 test.describe("Periodificaciones", () => {
   test("page loads and renders content", async ({ page }) => {
     await page.goto("/periodificaciones");
-    await page.waitForLoadState("networkidle");
-    await expect(page.locator("main")).not.toBeEmpty();
+    await waitForPageContent(page);
+    const text = await page.locator("main").textContent();
+    expect(text?.length).toBeGreaterThan(5);
   });
 });

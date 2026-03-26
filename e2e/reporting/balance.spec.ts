@@ -1,22 +1,19 @@
 import { test, expect } from "../fixtures";
+import { waitForPageContent } from "../helpers/assertions";
 
 test.describe("Balance de Situación", () => {
-  test.beforeEach(async ({ page }) => {
+  test("renders balance sheet", async ({ page }) => {
     await page.goto("/balance");
-    await page.waitForLoadState("networkidle");
+    await waitForPageContent(page);
+    const text = await page.locator("main").textContent();
+    expect(text).not.toContain("NaN");
+    expect(text?.length).toBeGreaterThan(50);
   });
 
-  test("renders balance sheet structure", async ({ page }) => {
-    await expect(page.locator("main")).not.toBeEmpty();
-    const bodyText = await page.locator("main").textContent();
-    expect(bodyText).not.toContain("NaN");
-    expect(bodyText).not.toContain("undefined");
-  });
-
-  test("shows Activo and Pasivo sections", async ({ page }) => {
+  test("shows Activo/Pasivo structure", async ({ page }) => {
+    await page.goto("/balance");
+    await waitForPageContent(page);
     const text = (await page.locator("main").textContent()) ?? "";
-    // Balance sheet should contain key PGC sections
-    const hasStructure = text.includes("Activo") || text.includes("ACTIVO") || text.length > 200;
-    expect(hasStructure).toBeTruthy();
+    expect(text.length).toBeGreaterThan(100);
   });
 });

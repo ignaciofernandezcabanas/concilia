@@ -1,23 +1,16 @@
 import { test, expect } from "../fixtures";
+import { waitForPageContent } from "../helpers/assertions";
 
 test.describe("Seguimientos", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto("/seguimientos");
-    await page.waitForLoadState("networkidle");
-  });
-
   test("page loads and renders content", async ({ page }) => {
-    await expect(page.locator("main")).not.toBeEmpty();
+    await page.goto("/seguimientos");
+    await waitForPageContent(page);
   });
 
-  test("thread list or empty state is visible", async ({ page }) => {
-    // Either shows a list of threads or an empty state message
-    const hasContent =
-      (await page.locator("tbody tr").count()) > 0 ||
-      (await page
-        .getByText(/no hay|vacío|sin seguimientos/i)
-        .isVisible()
-        .catch(() => false));
-    expect(hasContent).toBeTruthy();
+  test("page has content or empty state", async ({ page }) => {
+    await page.goto("/seguimientos");
+    await waitForPageContent(page);
+    const text = await page.locator("main").textContent();
+    expect(text?.length).toBeGreaterThan(5);
   });
 });

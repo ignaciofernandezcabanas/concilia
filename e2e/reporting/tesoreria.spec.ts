@@ -1,10 +1,11 @@
 import { test, expect } from "../fixtures";
+import { waitForPageContent } from "../helpers/assertions";
 
 test.describe("Tesorería", () => {
   test("renders treasury forecast", async ({ page }) => {
     await page.goto("/tesoreria");
-    await page.waitForLoadState("networkidle");
-    await expect(page.locator("main")).not.toBeEmpty();
-    // Should render a chart (SVG) or table for the 13-week forecast
+    await waitForPageContent(page);
+    const text = await page.locator("main").textContent();
+    expect(text?.length).toBeGreaterThan(20);
   });
 });

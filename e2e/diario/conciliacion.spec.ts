@@ -1,45 +1,44 @@
 import { test, expect } from "../fixtures";
-import { expectTableHasRows } from "../helpers/assertions";
+import { expectTableHasRows, getDataRows, waitForPageContent } from "../helpers/assertions";
 
 test.describe("Conciliación", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/conciliacion");
-    await page.waitForLoadState("networkidle");
+    await waitForPageContent(page);
   });
 
-  test("renders transaction table with seed data", async ({ page }) => {
+  test("renders transaction list with seed data", async ({ page }) => {
     await expectTableHasRows(page, 1);
   });
 
-  test("table has expected columns (Fecha, Concepto, Importe)", async ({ page }) => {
-    const headers = page.locator("thead th");
-    const headerTexts = await headers.allTextContents();
-    const joined = headerTexts.join(" ").toLowerCase();
-    expect(joined).toContain("fecha");
-    expect(joined).toContain("concepto");
-    expect(joined).toContain("importe");
+  test("header has expected columns (Fecha, Concepto, Importe)", async ({ page }) => {
+    // Header is a flex div with spans, not <thead>
+    const headerText = await page.locator("main").first().textContent();
+    expect(headerText?.toLowerCase()).toContain("fecha");
+    expect(headerText?.toLowerCase()).toContain("concepto");
+    expect(headerText?.toLowerCase()).toContain("importe");
   });
 
-  test("status filter dropdown is visible", async ({ page }) => {
-    const filter = page.locator("select, [role='combobox']").first();
-    await expect(filter).toBeVisible({ timeout: 5000 });
+  test("status filter buttons are visible", async ({ page }) => {
+    const todosBtn = page.getByRole("button", { name: "Todos" }).first();
+    await expect(todosBtn).toBeVisible({ timeout: 5000 });
   });
 
   test("clicking a row opens reconciliation panel", async ({ page }) => {
     await expectTableHasRows(page);
-    await page.locator("tbody tr").first().click();
+    const rows = getDataRows(page);
+    await rows.first().click();
 
-    // Panel should appear — look for a side panel or detail section
-    const panel = page
-      .locator('[class*="panel"], [class*="Panel"], aside, [class*="detail"]')
-      .first();
+    // Panel should appear
+    const panel = page.locator('[class*="w-\\[400px\\]"]').first();
     await expect(panel).toBeVisible({ timeout: 5000 });
   });
 
-  test("amounts display in Spanish number format", async ({ page }) => {
+  test("amounts display with comma as decimal separator", async ({ page }) => {
     await expectTableHasRows(page);
-    // Check that at least one amount cell contains comma as decimal separator
-    const amountCells = page.locator("tbody td").filter({ hasText: /\d+,\d{2}/ });
-    expect(await amountCells.count()).toBeGreaterThan(0);
+    // Look for formatted amounts anywhere in the data rows
+    const text = await page.locator("main").textContent();
+    // Spanish format uses comma for decimals
+    expect(text).toMatch(/\d+,\d{2}/);
   });
 });

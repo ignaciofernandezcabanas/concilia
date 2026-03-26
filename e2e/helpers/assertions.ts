@@ -10,19 +10,42 @@ export async function expectPageLoads(page: Page, path: string) {
   const response = await page.goto(path, { waitUntil: "networkidle" });
   expect(response?.status(), `${path} returned ${response?.status()}`).toBeLessThan(500);
 
-  // Give client-side JS a moment to throw
   await page.waitForTimeout(500);
   expect(errors, `JS errors on ${path}: ${errors.join(", ")}`).toHaveLength(0);
 }
 
 /**
- * Verify a table has at least `minRows` visible rows.
+ * Verify a data list has at least `minRows` visible rows.
+ * Works with both <table> and flex-div layouts.
  */
 export async function expectTableHasRows(page: Page, minRows = 1) {
-  const rows = page.locator("tbody tr");
-  await expect(rows.first()).toBeVisible({ timeout: 10000 });
-  const count = await rows.count();
-  expect(count, `Expected >= ${minRows} rows, got ${count}`).toBeGreaterThanOrEqual(minRows);
+  // Try actual table rows first, then flex-div rows
+  const tableRows = page.locator("tbody tr");
+  const flexRows = page.locator(
+    'div.border-b.cursor-pointer, div[class*="border-b"][class*="h-12"], div[class*="border-b"][class*="h-11"]'
+  );
+
+  const tableCount = await tableRows.count();
+  if (tableCount > 0) {
+    expect(tableCount).toBeGreaterThanOrEqual(minRows);
+    return;
+  }
+
+  // Wait for flex rows to appear
+  await expect(flexRows.first()).toBeVisible({ timeout: 10000 });
+  const flexCount = await flexRows.count();
+  expect(flexCount, `Expected >= ${minRows} rows, got ${flexCount}`).toBeGreaterThanOrEqual(
+    minRows
+  );
+}
+
+/**
+ * Get data rows (works with both table and flex-div layouts).
+ */
+export function getDataRows(page: Page) {
+  return page.locator(
+    'div[class*="flex"][class*="items-center"][class*="h-12"][class*="border-b"], div[class*="flex"][class*="items-center"][class*="h-11"][class*="border-b"]'
+  );
 }
 
 /**
@@ -58,14 +81,10 @@ export async function cancelDialog(page: Page) {
 }
 
 /**
- * Assert a side panel is visible (detail, reconciliation, etc.).
+ * Assert a side panel is visible.
  */
 export async function expectPanelOpen(page: Page) {
-  const panel = page
-    .locator(
-      '[class*="panel"], [class*="Panel"], aside, [class*="w-\\[400px\\]"], [class*="w-\\[480px\\]"]'
-    )
-    .first();
+  const panel = page.locator('[class*="w-\\[400px\\]"], [class*="w-\\[480px\\]"], aside').first();
   await expect(panel).toBeVisible({ timeout: 5000 });
 }
 
@@ -83,4 +102,12 @@ export async function expectButtonDisabled(page: Page, text: string | RegExp) {
 export async function expectButtonEnabled(page: Page, text: string | RegExp) {
   const btn = page.getByRole("button", { name: text });
   await expect(btn).toBeEnabled();
+}
+
+/**
+ * Wait for page content to load (networkidle + main has content).
+ */
+export async function waitForPageContent(page: Page) {
+  await page.waitForLoadState("networkidle");
+  await expect(page.locator("main")).toBeVisible({ timeout: 10000 });
 }

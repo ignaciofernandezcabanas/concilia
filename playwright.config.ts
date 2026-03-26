@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
   retries: 1,
-  workers: 4,
+  workers: 2,
   reporter: [
     ["html", { open: "never", outputFolder: "e2e-report" }],
     ["json", { outputFile: "e2e-results/results.json" }],
@@ -30,10 +30,14 @@ export default defineConfig({
       dependencies: ["setup"],
     },
   ],
-  webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: true,
-    timeout: 30000,
-  },
+  // Start dev server manually before running tests: npm run dev
+  // webServer disabled — the app's root may return 500 when DB is not connected,
+  // which causes Playwright's health check to fail.
+  // To re-enable: uncomment and ensure the root URL returns 200.
+  // webServer: {
+  //   command: "npm run dev",
+  //   url: "http://localhost:3000",
+  //   reuseExistingServer: true,
+  //   timeout: 30000,
+  // },
 });
