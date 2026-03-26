@@ -19,9 +19,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Load company to check if onboarding is needed
   // Pass null on /onboarding to skip the API call entirely (avoids 401 loop for new OAuth users)
   const isOnboarding = pathname === "/onboarding";
-  const { data: companyData, loading: companyLoading } = useFetch<CompanyResponse>(
-    isOnboarding ? null : "/api/settings/company"
-  );
+  const {
+    data: companyData,
+    loading: companyLoading,
+    error: companyError,
+  } = useFetch<CompanyResponse>(isOnboarding ? null : "/api/settings/company");
 
   useEffect(() => {
     if (!loading && isConfigured && !session) {
@@ -29,19 +31,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [loading, session, isConfigured, router]);
 
-  // Redirect to onboarding if no company exists (but user is authenticated)
+  // Redirect to onboarding if:
+  // 1. API returned data but no company (user exists, no company)
+  // 2. API returned error (user not in DB — 401 from withAuth)
   useEffect(() => {
-    if (
-      !loading &&
-      !companyLoading &&
-      session &&
-      companyData &&
-      !companyData.company &&
-      pathname !== "/onboarding"
-    ) {
-      router.push("/onboarding");
+    if (!loading && !companyLoading && session && !isOnboarding) {
+      if ((companyData && !companyData.company) || (companyError && !companyData)) {
+        router.push("/onboarding");
+      }
     }
-  }, [loading, companyLoading, session, companyData, pathname, router]);
+  }, [loading, companyLoading, session, companyData, companyError, isOnboarding, pathname, router]);
 
   if (loading || (isConfigured && session && !isOnboarding && companyLoading)) {
     return (
