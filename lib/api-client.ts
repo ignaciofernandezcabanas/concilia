@@ -45,8 +45,34 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(path, { ...options, headers });
 
   if (!res.ok) {
-    // On 401, don't auto-redirect — let AppShell handle the redirect logic.
-    // Just throw the error so useFetch captures it and AppShell can react.
+    // On 401: redirect to onboarding (if Supabase session exists) or login
+    if (res.status === 401 && typeof window !== "undefined") {
+      const currentPath = window.location.pathname;
+      // Don't redirect if already on login/onboarding/signup/public pages
+      if (
+        !currentPath.startsWith("/login") &&
+        !currentPath.startsWith("/onboarding") &&
+        !currentPath.startsWith("/signup") &&
+        !currentPath.startsWith("/landing") &&
+        !currentPath.startsWith("/auth")
+      ) {
+        const sb = getSupabase();
+        if (sb) {
+          const {
+            data: { session: currentSession },
+          } = await sb.auth.getSession();
+          if (currentSession) {
+            // Valid Supabase session but no app User → onboarding
+            window.location.href = "/onboarding";
+            throw new ApiError(401, "User not registered");
+          }
+          // No session → login
+          await sb.auth.signOut();
+        }
+        window.location.href = "/login";
+        throw new ApiError(401, "Session expired");
+      }
+    }
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new ApiError(res.status, body.error || res.statusText, body);
   }
