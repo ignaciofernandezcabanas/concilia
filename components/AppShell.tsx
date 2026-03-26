@@ -13,7 +13,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   // Load company to check if onboarding is needed
+  // Skip for /onboarding path to avoid 401 loop for new OAuth users
+  const isOnboarding = pathname === "/onboarding";
   const { data: companyData, loading: companyLoading } = useCompany();
+  const effectiveCompanyLoading = isOnboarding ? false : companyLoading;
 
   useEffect(() => {
     if (!loading && isConfigured && !session) {
@@ -35,7 +38,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [loading, companyLoading, session, companyData, pathname, router]);
 
-  if (loading || (isConfigured && session && companyLoading)) {
+  if (loading || (isConfigured && session && effectiveCompanyLoading)) {
     return (
       <div className="flex items-center justify-center h-screen bg-page">
         <LoadingSpinner />

@@ -63,13 +63,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     sb.auth.getSession().then(({ data: { session: s } }) => {
-      // Detect corrupted refresh token (e.g. from seed/test data)
+      // Detect corrupted refresh token (e.g. from seed/test data) — sign out silently
+      // but don't redirect here; let onAuthStateChange handle the redirect
       if (s?.refresh_token && s.refresh_token.length < 20) {
-        console.warn("[auth] Corrupted refresh token detected — forcing re-login");
+        console.warn("[auth] Corrupted refresh token detected — clearing session");
         sb.auth.signOut();
-        if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-          window.location.href = "/login";
-        }
         return;
       }
       setSession(s);

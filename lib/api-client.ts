@@ -49,6 +49,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     // If yes → user is authenticated but not registered in app → onboarding
     // If no → session expired → login
     if (res.status === 401 && typeof window !== "undefined") {
+      const currentPath = window.location.pathname;
+      // Don't redirect if already on login, onboarding, or public pages
+      if (
+        currentPath.startsWith("/login") ||
+        currentPath.startsWith("/onboarding") ||
+        currentPath.startsWith("/signup") ||
+        currentPath.startsWith("/landing")
+      ) {
+        throw new ApiError(401, "Unauthorized");
+      }
       const sb = getSupabase();
       if (sb) {
         const {
@@ -56,9 +66,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         } = await sb.auth.getSession();
         if (session) {
           // Authenticated with Supabase but not in app DB → onboarding
-          if (!window.location.pathname.startsWith("/onboarding")) {
-            window.location.href = "/onboarding";
-          }
+          window.location.href = "/onboarding";
           throw new ApiError(401, "User not registered");
         }
         await sb.auth.signOut();
